@@ -1,12 +1,15 @@
 pub mod value;
 pub mod evaluator;
 pub mod executor;
+pub mod library_loader;
 
 use crate::ast::{Program, Expression, Statement, BinaryOperator, Type, Namespace, CompareOperator, LogicalOperator, Function};
 use std::collections::HashMap;
 use value::Value;
 use evaluator::{Evaluator, perform_binary_operation, evaluate_compare_operation};
 use executor::{Executor, ExecutionResult, update_variable_value, handle_increment, handle_decrement, execute_if_else};
+use library_loader::{load_library, call_library_function};
+use std::sync::Arc;
 
 pub fn interpret(program: &Program) -> Value {
     let mut interpreter = Interpreter::new(program);
@@ -20,6 +23,8 @@ struct Interpreter<'a> {
     namespaced_functions: HashMap<String, &'a crate::ast::Function>,
     // 导入的命名空间，键是函数名，值是完整路径
     imported_namespaces: HashMap<String, Vec<String>>,
+    // 导入的库，键是库名
+    imported_libraries: HashMap<String, Arc<HashMap<String, library_loader::LibraryFunction>>>,
     // 全局变量环境
     global_env: HashMap<String, Value>,
     // 局部变量环境（函数内）
@@ -46,6 +51,7 @@ impl<'a> Interpreter<'a> {
             functions,
             namespaced_functions,
             imported_namespaces: HashMap::new(),
+            imported_libraries: HashMap::new(),
             global_env: HashMap::new(),
             local_env: HashMap::new(),
         }
@@ -573,6 +579,24 @@ impl<'a> Executor for Interpreter<'a> {
                 
                 // 记录导入的命名空间，用于后续查找嵌套命名空间
                 self.imported_namespaces.insert("__NAMESPACE__".to_string() + &imported_namespace, vec![imported_namespace]);
+                ExecutionResult::None
+            },
+            Statement::LibraryImport(lib_name) => {
+                // 导入动态库
+                println!("导入动态库: {}", lib_name);
+                
+                // 尝试加载库
+                match load_library(&lib_name) {
+                    Ok(functions) => {
+                        // 库加载成功，将其添加到已导入库列表
+                        self.imported_libraries.insert(lib_name.clone(), functions);
+                        println!("库 '{}' 加载成功", lib_name);
+                    },
+                    Err(err) => {
+                        panic!("无法加载库 '{}': {}", lib_name, err);
+                    }
+                }
+                
                 ExecutionResult::None
             },
             Statement::IfElse(condition, if_block, else_blocks) => {
