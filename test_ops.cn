@@ -1,0 +1,15 @@
+fn main() : int {
+    a : int = 20;
+    b : int = 6;
+    
+    sum : int = a + b;      // 加法：20 + 6 = 26
+    diff : int = a - b;     // 减法：20 - 6 = 14
+    prod : int = a * b;     // 乘法：20 * 6 = 120
+    quot : int = a / b;     // 除法：20 / 6 = 3
+    rem : int = a % b;      // 取模：20 % 6 = 2
+    
+    // 复杂表达式：(20 + 6) * (20 - 6) / 2 = 26 * 14 / 2 = 364 / 2 = 182
+    result : int = (a + b) * (a - b) / 2;
+    
+    return result;
+}; 

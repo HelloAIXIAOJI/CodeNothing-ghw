@@ -1,0 +1,12 @@
+fn main() : int {
+    result : int = add(10, 20);
+    return result;
+};
+
+fn add(a : int, b : int) : int {
+    return a + b;
+};
+
+fn test(te1 : int, te2 : string, te3 : int) : int {
+    return te1 + te3;
+}; 
