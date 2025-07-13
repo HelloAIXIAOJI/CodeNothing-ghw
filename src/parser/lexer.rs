@@ -3,36 +3,35 @@
 // 移除注释
 pub fn remove_comments(source: &str) -> String {
     let mut result = String::new();
-    let mut in_single_line_comment = false;
-    let mut in_multi_line_comment = false;
     let mut i = 0;
     
     let chars: Vec<char> = source.chars().collect();
     
     while i < chars.len() {
-        if i + 1 < chars.len() && chars[i] == '/' && chars[i + 1] == '/' && !in_multi_line_comment {
-            // 找到单行注释开始
-            in_single_line_comment = true;
+        if i + 1 < chars.len() && chars[i] == '/' && chars[i + 1] == '/' {
+            // 单行注释：跳过到行尾
             i += 2;
-        } else if i + 1 < chars.len() && chars[i] == '/' && chars[i + 1] == '!' && !in_single_line_comment {
-            // 找到多行注释开始
-            in_multi_line_comment = true;
+            while i < chars.len() && chars[i] != '\n' {
+                i += 1;
+            }
+            // 保留换行符
+            if i < chars.len() && chars[i] == '\n' {
+                result.push(chars[i]);
+                i += 1;
+            }
+        } else if i + 1 < chars.len() && chars[i] == '/' && chars[i + 1] == '!' {
+            // 多行注释：跳过直到找到 !/
             i += 2;
-        } else if in_single_line_comment && chars[i] == '\n' {
-            // 单行注释结束
-            in_single_line_comment = false;
-            result.push(chars[i]);
-            i += 1;
-        } else if in_multi_line_comment && i + 1 < chars.len() && chars[i] == '!' && chars[i + 1] == '/' {
-            // 多行注释结束
-            in_multi_line_comment = false;
-            i += 2;
-        } else if !in_single_line_comment && !in_multi_line_comment {
+            while i + 1 < chars.len() && !(chars[i] == '!' && chars[i + 1] == '/') {
+                i += 1;
+            }
+            // 跳过结束标记
+            if i + 1 < chars.len() {
+                i += 2;
+            }
+        } else {
             // 非注释内容
             result.push(chars[i]);
-            i += 1;
-        } else {
-            // 在注释内，跳过
             i += 1;
         }
     }
