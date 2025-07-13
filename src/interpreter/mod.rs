@@ -497,6 +497,62 @@ impl<'a> Executor for Interpreter<'a> {
                 }
                 
                 None
+            },
+            Statement::ForLoop(variable_name, range_start, range_end, loop_body) => {
+                // 计算范围的起始值和结束值
+                let start_value = self.evaluate_expression(&range_start);
+                let end_value = self.evaluate_expression(&range_end);
+                
+                // 获取起始和结束的整数值
+                let (start, end) = match (&start_value, &end_value) {
+                    (Value::Int(s), Value::Int(e)) => (*s, *e),
+                    _ => panic!("for循环的范围必须是整数类型"),
+                };
+                
+                // 在局部环境中声明循环变量
+                self.local_env.insert(variable_name.clone(), Value::Int(start));
+                
+                // 执行循环
+                for i in start..=end {
+                    // 更新循环变量的值
+                    self.local_env.insert(variable_name.clone(), Value::Int(i));
+                    
+                    // 执行循环体
+                    for stmt in &loop_body {
+                        if let Some(value) = self.execute_statement(stmt.clone()) {
+                            return Some(value); // 如果有返回值，则提前返回
+                        }
+                    }
+                }
+                
+                None
+            },
+            
+            Statement::WhileLoop(condition, loop_body) => {
+                // 循环执行，直到条件为假
+                loop {
+                    // 计算条件表达式
+                    let condition_value = self.evaluate_expression(&condition);
+                    
+                    // 检查条件是否为真
+                    let is_true = match condition_value {
+                        Value::Bool(b) => b,
+                        _ => panic!("while循环的条件必须是布尔类型"),
+                    };
+                    
+                    if !is_true {
+                        break; // 条件为假，退出循环
+                    }
+                    
+                    // 执行循环体
+                    for stmt in &loop_body {
+                        if let Some(value) = self.execute_statement(stmt.clone()) {
+                            return Some(value); // 如果有返回值，则提前返回
+                        }
+                    }
+                }
+                
+                None
             }
         }
     }

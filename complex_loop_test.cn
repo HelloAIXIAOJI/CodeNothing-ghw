@@ -1,0 +1,50 @@
+fn main() : int {
+    // 计算1到10中偶数的和
+    even_sum : int = sum_even_numbers();
+    
+    // 计算斐波那契数列的第10个数
+    fib10 : int = fibonacci(10);
+    
+    // 返回结果
+    return even_sum + fib10;
+};
+
+// 计算1到10中偶数的和
+fn sum_even_numbers() : int {
+    sum : int = 0;
+    
+    // 使用for循环遍历1到10
+    for (i : 1..10) {
+        // 使用if-else判断是否为偶数
+        if (i % 2 == 0) {
+            sum += i;  // 如果是偶数，则累加
+        };
+    };
+    
+    return sum;  // 返回偶数和，应为2+4+6+8+10=30
+};
+
+// 使用while循环计算斐波那契数列的第n个数
+fn fibonacci(n : int) : int {
+    if (n <= 0) {
+        return 0;
+    };
+    
+    if (n == 1 || n == 2) {
+        return 1;
+    };
+    
+    a : int = 1;  // 第一个数
+    b : int = 1;  // 第二个数
+    result : int = 0;  // 结果
+    count : int = 3;  // 计数器，从3开始
+    
+    while (count <= n) {
+        result = a + b;  // 计算下一个斐波那契数
+        a = b;           // 更新a为b
+        b = result;      // 更新b为新计算的结果
+        count++;         // 增加计数器
+    };
+    
+    return result;  // 返回第n个斐波那契数
+};

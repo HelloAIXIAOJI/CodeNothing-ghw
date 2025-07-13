@@ -67,6 +67,9 @@ pub fn tokenize(source: &str, debug: bool) -> Vec<String> {
     // 特殊处理命名空间分隔符，确保它被当作一个整体处理
     processed_source = processed_source.replace("::", " __NS_SEP__ ");
     
+    // 特殊处理范围操作符，确保它被当作一个整体处理
+    processed_source = processed_source.replace("..", " __RANGE_OP__ ");
+    
     // 特殊处理复合操作符，必须在处理单个符号之前
     processed_source = processed_source
         .replace("++", " __INC_OP__ ")
@@ -110,6 +113,8 @@ pub fn tokenize(source: &str, debug: bool) -> Vec<String> {
                 format!("\"{}\"", string_placeholders[idx])
             } else if s == "__NS_SEP__" {
                 "::".to_string()
+            } else if s == "__RANGE_OP__" {
+                "..".to_string()
             } else if s == "__INC_OP__" {
                 "++".to_string()
             } else if s == "__DEC_OP__" {

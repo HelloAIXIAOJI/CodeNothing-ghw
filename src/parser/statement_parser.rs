@@ -92,6 +92,57 @@ impl<'a> StatementParser for ParserBase<'a> {
                 self.expect(";")?;
                 Ok(Statement::IfElse(condition, if_block, else_blocks))
             },
+            Some(token) if token == "for" => {
+                self.consume(); // 消费 "for"
+                
+                // 解析 for 循环结构: for (variable : range_start..range_end) { ... }
+                self.expect("(")?;
+                
+                // 解析变量名
+                let variable_name = self.consume().ok_or_else(|| "期望变量名".to_string())?;
+                
+                self.expect(":")?;
+                
+                // 解析范围起始值
+                let range_start = self.parse_expression()?;
+                
+                self.expect("..")?;
+                
+                // 解析范围结束值
+                let range_end = self.parse_expression()?;
+                
+                self.expect(")")?;
+                
+                // 解析循环体
+                self.expect("{")?;
+                let mut loop_body = Vec::new();
+                while self.peek() != Some(&"}".to_string()) {
+                    loop_body.push(self.parse_statement()?);
+                }
+                self.expect("}")?;
+                self.expect(";")?;
+                
+                Ok(Statement::ForLoop(variable_name, range_start, range_end, loop_body))
+            },
+            Some(token) if token == "while" => {
+                self.consume(); // 消费 "while"
+                
+                // 解析条件
+                self.expect("(")?;
+                let condition = self.parse_expression()?;
+                self.expect(")")?;
+                
+                // 解析循环体
+                self.expect("{")?;
+                let mut loop_body = Vec::new();
+                while self.peek() != Some(&"}".to_string()) {
+                    loop_body.push(self.parse_statement()?);
+                }
+                self.expect("}")?;
+                self.expect(";")?;
+                
+                Ok(Statement::WhileLoop(condition, loop_body))
+            },
             Some(_) => {
                 // 检查是否是变量声明或赋值
                 let var_name = self.consume().unwrap();
