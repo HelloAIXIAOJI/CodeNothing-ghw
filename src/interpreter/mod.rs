@@ -429,6 +429,51 @@ impl<'a> Evaluator for Interpreter<'a> {
                 
                 // 返回原值
                 value
+            },
+            Expression::LibraryFunctionCall(lib_name, func_name, args) => {
+                // 先计算所有参数值
+                let mut arg_values = Vec::new();
+                for arg_expr in args {
+                    let value = self.evaluate_expression(arg_expr);
+                    // 将Value转换为String
+                    arg_values.push(value.to_string());
+                }
+                
+                println!("调用库函数: {}::{}", lib_name, func_name);
+                
+                // 检查库是否已加载
+                if !self.imported_libraries.contains_key(lib_name) {
+                    // 尝试加载库
+                    match load_library(lib_name) {
+                        Ok(functions) => {
+                            self.imported_libraries.insert(lib_name.clone(), functions);
+                        },
+                        Err(err) => {
+                            panic!("无法加载库 '{}': {}", lib_name, err);
+                        }
+                    }
+                }
+                
+                // 调用库函数
+                match call_library_function(lib_name, func_name, arg_values) {
+                    Ok(result) => {
+                        // 尝试将结果转换为适当的值类型
+                        if let Ok(int_val) = result.parse::<i32>() {
+                            Value::Int(int_val)
+                        } else if let Ok(float_val) = result.parse::<f64>() {
+                            Value::Float(float_val)
+                        } else if result == "true" {
+                            Value::Bool(true)
+                        } else if result == "false" {
+                            Value::Bool(false)
+                        } else {
+                            Value::String(result)
+                        }
+                    },
+                    Err(err) => {
+                        panic!("调用库函数失败: {}", err);
+                    }
+                }
             }
         }
     }
