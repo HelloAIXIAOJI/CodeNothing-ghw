@@ -85,7 +85,7 @@ impl<'a> Interpreter<'a> {
     }
     
     // 辅助函数：调用函数并处理参数
-    fn call_function(&mut self, function: &'a crate::ast::Function, arg_values: Vec<Value>) -> Value {
+    fn call_function_impl(&mut self, function: &'a crate::ast::Function, arg_values: Vec<Value>) -> Value {
         // 检查参数数量是否匹配
         if arg_values.len() != function.parameters.len() {
             panic!("函数 '{}' 需要 {} 个参数，但提供了 {} 个", 
@@ -157,7 +157,7 @@ impl<'a> Evaluator for Interpreter<'a> {
                         // 只有一个匹配的函数，直接调用
                         let full_path = &paths[0];
                         if let Some(function) = self.namespaced_functions.get(full_path) {
-                            return self.call_function(function, arg_values);
+                            return self.call_function_impl(function, arg_values);
                         } else {
                             panic!("未找到函数: {}", full_path);
                         }
@@ -171,7 +171,7 @@ impl<'a> Evaluator for Interpreter<'a> {
                 if let Some(function) = self.functions.get(name) {
                     println!("找到全局函数: {}", name);
                     // 执行全局函数
-                    self.call_function(function, arg_values)
+                    self.call_function_impl(function, arg_values)
                 } else {
                     panic!("未定义的函数: {}", name);
                 }
@@ -187,7 +187,7 @@ impl<'a> Evaluator for Interpreter<'a> {
                 
                 // 只在全局函数表中查找
                 if let Some(function) = self.functions.get(name) {
-                    self.call_function(function, arg_values)
+                    self.call_function_impl(function, arg_values)
                 } else {
                     panic!("未定义的全局函数: {}", name);
                 }
@@ -206,7 +206,7 @@ impl<'a> Evaluator for Interpreter<'a> {
                 
                 // 查找命名空间函数
                 if let Some(function) = self.namespaced_functions.get(&full_path) {
-                    self.call_function(function, arg_values)
+                    self.call_function_impl(function, arg_values)
                 } else {
                     // 检查是否是导入命名空间的嵌套命名空间函数
                     let mut found = false;
@@ -219,7 +219,7 @@ impl<'a> Evaluator for Interpreter<'a> {
                             
                             if let Some(function) = self.namespaced_functions.get(&potential_path) {
                                 found = true;
-                                return self.call_function(function, arg_values);
+                                return self.call_function_impl(function, arg_values);
                             }
                         }
                     }
@@ -328,14 +328,14 @@ impl<'a> Evaluator for Interpreter<'a> {
                 // 只有一个匹配的函数，直接调用
                 let full_path = &paths[0];
                 if let Some(function) = self.namespaced_functions.get(full_path) {
-                    return self.call_function(function, args);
+                    return self.call_function_impl(function, args);
                 }
             }
         }
         
         // 如果不是导入的函数，再检查全局函数
         if let Some(function) = self.functions.get(function_name) {
-            self.call_function(function, args)
+            self.call_function_impl(function, args)
         } else {
             panic!("未定义的函数: {}", function_name);
         }
