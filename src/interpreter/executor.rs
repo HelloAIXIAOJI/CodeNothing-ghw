@@ -3,8 +3,17 @@ use crate::interpreter::value::Value;
 use crate::interpreter::evaluator::{Evaluator, evaluate_compare_operation};
 use std::collections::HashMap;
 
+// 执行结果枚举，用于表示语句执行的结果
+#[derive(Debug, Clone)]
+pub enum ExecutionResult {
+    None,                // 无返回值
+    Return(Value),       // 返回值
+    Break,               // break语句
+    Continue,            // continue语句
+}
+
 pub trait Executor: Evaluator {
-    fn execute_statement(&mut self, statement: Statement) -> Option<Value>;
+    fn execute_statement(&mut self, statement: Statement) -> ExecutionResult;
     fn execute_function(&mut self, function: &Function) -> Value;
     fn update_variable(&mut self, name: &str, value: Value) -> Result<(), String>;
 }
@@ -93,14 +102,13 @@ pub fn handle_decrement(
 
 // 执行if-else语句
 pub fn execute_if_else<E: Evaluator>(
-    evaluator: &mut E,
+    executor: &mut E,
     condition: &Expression,
     if_block: &[Statement],
-    else_blocks: &[(Option<Expression>, Vec<Statement>)],
-    executor: &mut impl Executor
-) -> Option<Value> {
-    // 计算条件表达式
-    let condition_value = evaluator.evaluate_expression(condition);
+    else_blocks: &[(Option<Expression>, Vec<Statement>)]
+) -> ExecutionResult {
+    // 计算条件
+    let condition_value = executor.evaluate_expression(condition);
     
     // 检查条件是否为真
     let is_true = match condition_value {
@@ -111,8 +119,9 @@ pub fn execute_if_else<E: Evaluator>(
     if is_true {
         // 执行 if 块
         for stmt in if_block {
-            if let Some(value) = executor.execute_statement(stmt.clone()) {
-                return Some(value); // 如果有返回值，则提前返回
+            match executor.execute_statement(stmt.clone()) {
+                ExecutionResult::None => {},
+                result => return result, // 如果有特殊结果，则传递给上层
             }
         }
     } else {
@@ -121,7 +130,7 @@ pub fn execute_if_else<E: Evaluator>(
             match maybe_condition {
                 Some(else_if_condition) => {
                     // 这是 else-if 块，需要计算条件
-                    let else_if_value = evaluator.evaluate_expression(else_if_condition);
+                    let else_if_value = executor.evaluate_expression(else_if_condition);
                     let else_if_is_true = match else_if_value {
                         Value::Bool(b) => b,
                         _ => panic!("else-if 条件表达式必须是布尔类型"),
@@ -130,8 +139,9 @@ pub fn execute_if_else<E: Evaluator>(
                     if else_if_is_true {
                         // 条件为真，执行这个 else-if 块
                         for stmt in block {
-                            if let Some(value) = executor.execute_statement(stmt.clone()) {
-                                return Some(value); // 如果有返回值，则提前返回
+                            match executor.execute_statement(stmt.clone()) {
+                                ExecutionResult::None => {},
+                                result => return result, // 如果有特殊结果，则传递给上层
                             }
                         }
                         // 执行完一个 else-if 块后，不再执行后续块
@@ -142,8 +152,9 @@ pub fn execute_if_else<E: Evaluator>(
                 None => {
                     // 这是 else 块，直接执行
                     for stmt in block {
-                        if let Some(value) = executor.execute_statement(stmt.clone()) {
-                            return Some(value); // 如果有返回值，则提前返回
+                        match executor.execute_statement(stmt.clone()) {
+                            ExecutionResult::None => {},
+                            result => return result, // 如果有特殊结果，则传递给上层
                         }
                     }
                     // else 块是最后一个块，执行完后退出
@@ -153,5 +164,5 @@ pub fn execute_if_else<E: Evaluator>(
         }
     }
     
-    None
+    ExecutionResult::None
 } 

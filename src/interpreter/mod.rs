@@ -6,7 +6,7 @@ use crate::ast::{Program, Expression, Statement, BinaryOperator, Type, Namespace
 use std::collections::HashMap;
 use value::Value;
 use evaluator::{Evaluator, perform_binary_operation, evaluate_compare_operation};
-use executor::{Executor, update_variable_value, handle_increment, handle_decrement, execute_if_else};
+use executor::{Executor, ExecutionResult, update_variable_value, handle_increment, handle_decrement, execute_if_else};
 
 pub fn interpret(program: &Program) -> Value {
     let mut interpreter = Interpreter::new(program);
@@ -463,16 +463,16 @@ impl<'a> Evaluator for Interpreter<'a> {
 }
 
 impl<'a> Executor for Interpreter<'a> {
-    fn execute_statement(&mut self, statement: Statement) -> Option<Value> {
+    fn execute_statement(&mut self, statement: Statement) -> ExecutionResult {
         match statement {
             Statement::Return(expr) => {
                 // 返回语句，计算表达式值并返回
-                Some(self.evaluate_expression(&expr))
+                ExecutionResult::Return(self.evaluate_expression(&expr))
             },
             Statement::VariableDeclaration(name, _type, expr) => {
                 let value = self.evaluate_expression(&expr);
                 self.local_env.insert(name, value);
-                None
+                ExecutionResult::None
             },
             Statement::VariableAssignment(name, expr) => {
                 let value = self.evaluate_expression(&expr);
@@ -484,35 +484,35 @@ impl<'a> Executor for Interpreter<'a> {
                 } else {
                     panic!("未定义的变量: {}", name);
                 }
-                None
+                ExecutionResult::None
             },
             Statement::Increment(name) => {
                 // 使用辅助函数处理后置自增操作
                 if let Err(err) = handle_increment(&mut self.local_env, &mut self.global_env, &name) {
                     panic!("{}", err);
                 }
-                None
+                ExecutionResult::None
             },
             Statement::Decrement(name) => {
                 // 使用辅助函数处理后置自减操作
                 if let Err(err) = handle_decrement(&mut self.local_env, &mut self.global_env, &name) {
                     panic!("{}", err);
                 }
-                None
+                ExecutionResult::None
             },
             Statement::PreIncrement(name) => {
                 // 使用辅助函数处理前置自增操作
                 if let Err(err) = handle_increment(&mut self.local_env, &mut self.global_env, &name) {
                     panic!("{}", err);
                 }
-                None
+                ExecutionResult::None
             },
             Statement::PreDecrement(name) => {
                 // 使用辅助函数处理前置自减操作
                 if let Err(err) = handle_decrement(&mut self.local_env, &mut self.global_env, &name) {
                     panic!("{}", err);
                 }
-                None
+                ExecutionResult::None
             },
             Statement::CompoundAssignment(name, op, expr) => {
                 // 复合赋值操作 (+=, -=, *=, /=, %=)
@@ -536,7 +536,7 @@ impl<'a> Executor for Interpreter<'a> {
                 } else {
                     self.global_env.insert(name, new_value);
                 }
-                None
+                ExecutionResult::None
             },
             Statement::UsingNamespace(path) => {
                 // 导入命名空间，将命名空间中的函数添加到导入表中
@@ -573,7 +573,7 @@ impl<'a> Executor for Interpreter<'a> {
                 
                 // 记录导入的命名空间，用于后续查找嵌套命名空间
                 self.imported_namespaces.insert("__NAMESPACE__".to_string() + &imported_namespace, vec![imported_namespace]);
-                None
+                ExecutionResult::None
             },
             Statement::IfElse(condition, if_block, else_blocks) => {
                 // 修复借用问题：不直接传递self，而是分别计算条件和执行语句块
@@ -588,8 +588,9 @@ impl<'a> Executor for Interpreter<'a> {
                 if is_true {
                     // 执行 if 块
                     for stmt in if_block {
-                        if let Some(value) = self.execute_statement(stmt.clone()) {
-                            return Some(value); // 如果有返回值，则提前返回
+                        match self.execute_statement(stmt.clone()) {
+                            ExecutionResult::None => {},
+                            result => return result, // 如果有特殊结果（返回值、break、continue），则传递给上层
                         }
                     }
                 } else {
@@ -607,8 +608,9 @@ impl<'a> Executor for Interpreter<'a> {
                                 if else_if_is_true {
                                     // 条件为真，执行这个 else-if 块
                                     for stmt in block {
-                                        if let Some(value) = self.execute_statement(stmt.clone()) {
-                                            return Some(value); // 如果有返回值，则提前返回
+                                        match self.execute_statement(stmt.clone()) {
+                                            ExecutionResult::None => {},
+                                            result => return result, // 如果有特殊结果，则传递给上层
                                         }
                                     }
                                     // 执行完一个 else-if 块后，不再执行后续块
@@ -619,8 +621,9 @@ impl<'a> Executor for Interpreter<'a> {
                             None => {
                                 // 这是 else 块，直接执行
                                 for stmt in block {
-                                    if let Some(value) = self.execute_statement(stmt.clone()) {
-                                        return Some(value); // 如果有返回值，则提前返回
+                                    match self.execute_statement(stmt.clone()) {
+                                        ExecutionResult::None => {},
+                                        result => return result, // 如果有特殊结果，则传递给上层
                                     }
                                 }
                                 // else 块是最后一个块，执行完后退出
@@ -630,7 +633,7 @@ impl<'a> Executor for Interpreter<'a> {
                     }
                 }
                 
-                None
+                ExecutionResult::None
             },
             Statement::ForLoop(variable_name, range_start, range_end, loop_body) => {
                 // 计算范围的起始值和结束值
@@ -653,13 +656,16 @@ impl<'a> Executor for Interpreter<'a> {
                     
                     // 执行循环体
                     for stmt in &loop_body {
-                        if let Some(value) = self.execute_statement(stmt.clone()) {
-                            return Some(value); // 如果有返回值，则提前返回
+                        match self.execute_statement(stmt.clone()) {
+                            ExecutionResult::None => {},
+                            ExecutionResult::Return(value) => return ExecutionResult::Return(value),
+                            ExecutionResult::Break => return ExecutionResult::None, // 跳出循环，但不向上传递break
+                            ExecutionResult::Continue => break, // 跳过当前迭代的剩余语句，继续下一次迭代
                         }
                     }
                 }
                 
-                None
+                ExecutionResult::None
             },
             
             Statement::WhileLoop(condition, loop_body) => {
@@ -680,13 +686,24 @@ impl<'a> Executor for Interpreter<'a> {
                     
                     // 执行循环体
                     for stmt in &loop_body {
-                        if let Some(value) = self.execute_statement(stmt.clone()) {
-                            return Some(value); // 如果有返回值，则提前返回
+                        match self.execute_statement(stmt.clone()) {
+                            ExecutionResult::None => {},
+                            ExecutionResult::Return(value) => return ExecutionResult::Return(value),
+                            ExecutionResult::Break => return ExecutionResult::None, // 跳出循环，但不向上传递break
+                            ExecutionResult::Continue => break, // 跳过当前迭代的剩余语句，继续下一次迭代
                         }
                     }
                 }
                 
-                None
+                ExecutionResult::None
+            },
+            Statement::Break => {
+                // 返回Break结果，由循环处理
+                ExecutionResult::Break
+            },
+            Statement::Continue => {
+                // 返回Continue结果，由循环处理
+                ExecutionResult::Continue
             }
         }
     }
@@ -694,8 +711,11 @@ impl<'a> Executor for Interpreter<'a> {
     fn execute_function(&mut self, function: &Function) -> Value {
         // 执行函数体
         for statement in &function.body {
-            if let Some(value) = self.execute_statement(statement.clone()) {
-                return value;
+            match self.execute_statement(statement.clone()) {
+                ExecutionResult::Return(value) => return value,
+                ExecutionResult::None => {},
+                ExecutionResult::Break => panic!("break语句只能在循环内部使用"),
+                ExecutionResult::Continue => panic!("continue语句只能在循环内部使用"),
             }
         }
         

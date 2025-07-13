@@ -99,6 +99,14 @@ if (!condition) {
 // 遍历范围从1到5的整数
 for (i : 1..5) {
     // 代码块，i的值依次为1, 2, 3, 4, 5
+    
+    if (i == 3) {
+        break;    // 跳出循环
+    };
+    
+    if (i % 2 == 0) {
+        continue; // 跳过当前迭代，继续下一次迭代
+    };
 };
 ```
 
@@ -108,6 +116,14 @@ for (i : 1..5) {
 // 当条件为真时，重复执行代码块
 while (condition) {
     // 代码块
+    
+    if (someCondition) {
+        break;    // 跳出循环
+    };
+    
+    if (anotherCondition) {
+        continue; // 跳过当前迭代，继续下一次迭代
+    };
 };
 ```
 

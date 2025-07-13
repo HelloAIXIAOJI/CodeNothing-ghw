@@ -143,6 +143,16 @@ impl<'a> StatementParser for ParserBase<'a> {
                 
                 Ok(Statement::WhileLoop(condition, loop_body))
             },
+            Some(token) if token == "break" => {
+                self.consume(); // 消费 "break"
+                self.expect(";")?;
+                Ok(Statement::Break)
+            },
+            Some(token) if token == "continue" => {
+                self.consume(); // 消费 "continue"
+                self.expect(";")?;
+                Ok(Statement::Continue)
+            },
             // 添加对前置自增/自减的支持
             Some(token) if token == "++" => {
                 self.consume(); // 消费 "++"
