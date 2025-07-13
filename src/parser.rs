@@ -1,4 +1,4 @@
-use crate::ast::{Program, Function, Statement, Expression, Type, BinaryOperator, Parameter};
+use crate::ast::{Program, Function, Statement, Expression, Type, BinaryOperator, Parameter, Namespace};
 
 pub fn parse(source: &str, debug: bool) -> Result<Program, String> {
     // 预处理：移除注释
@@ -55,6 +55,7 @@ impl Parser {
         let mut current_string = String::new();
         let mut string_placeholders = Vec::new();
         
+        // 先处理字符串
         for c in source.chars() {
             if in_string {
                 if escape {
@@ -78,8 +79,21 @@ impl Parser {
             }
         }
         
+        // 特殊处理命名空间分隔符，确保它被当作一个整体处理
+        processed_source = processed_source.replace("::", " __NS_SEP__ ");
+        
+        // 特殊处理复合操作符，必须在处理单个符号之前
+        processed_source = processed_source
+            .replace("++", " __INC_OP__ ")
+            .replace("--", " __DEC_OP__ ")
+            .replace("+=", " __ADD_ASSIGN__ ")
+            .replace("-=", " __SUB_ASSIGN__ ")
+            .replace("*=", " __MUL_ASSIGN__ ")
+            .replace("/=", " __DIV_ASSIGN__ ")
+            .replace("%=", " __MOD_ASSIGN__ ");
+        
         // 处理其他分隔符
-        let processed = processed_source
+        let mut processed = processed_source
             .replace(";", " ; ")
             .replace("(", " ( ")
             .replace(")", " ) ")
@@ -102,11 +116,27 @@ impl Parser {
                 if s.starts_with("__STRING_") {
                     let idx = s.trim_start_matches("__STRING_").parse::<usize>().unwrap();
                     format!("\"{}\"", string_placeholders[idx])
+                } else if s == "__NS_SEP__" {
+                    "::".to_string()
+                } else if s == "__INC_OP__" {
+                    "++".to_string()
+                } else if s == "__DEC_OP__" {
+                    "--".to_string()
+                } else if s == "__ADD_ASSIGN__" {
+                    "+=".to_string()
+                } else if s == "__SUB_ASSIGN__" {
+                    "-=".to_string()
+                } else if s == "__MUL_ASSIGN__" {
+                    "*=".to_string()
+                } else if s == "__DIV_ASSIGN__" {
+                    "/=".to_string()
+                } else if s == "__MOD_ASSIGN__" {
+                    "%=".to_string()
                 } else {
                     s.to_string()
                 }
             })
-            .collect();
+            .collect::<Vec<String>>();
         
         if debug {
             println!("词法分析结果: {:?}", processed);
@@ -148,12 +178,50 @@ impl Parser {
     
     fn parse_program(&mut self) -> Result<Program, String> {
         let mut functions = Vec::new();
+        let mut namespaces = Vec::new();
         
         while self.position < self.tokens.len() {
-            functions.push(self.parse_function()?);
+            if self.peek() == Some(&"ns".to_string()) {
+                namespaces.push(self.parse_namespace()?);
+            } else if self.peek() == Some(&"fn".to_string()) {
+                functions.push(self.parse_function()?);
+            } else {
+                return Err(format!("期望 'fn' 或 'ns', 但得到了 '{:?}'", self.peek()));
+            }
         }
         
-        Ok(Program { functions })
+        Ok(Program { functions, namespaces })
+    }
+    
+    fn parse_namespace(&mut self) -> Result<Namespace, String> {
+        self.expect("ns")?;
+        
+        let name = match self.consume() {
+            Some(name) => name,
+            None => return Err("期望命名空间名".to_string()),
+        };
+        
+        self.expect("{")?;
+        
+        let mut functions = Vec::new();
+        let mut namespaces = Vec::new();
+        
+        while let Some(token) = self.peek() {
+            if token == "}" {
+                break;
+            } else if token == "fn" {
+                functions.push(self.parse_function()?);
+            } else if token == "ns" {
+                namespaces.push(self.parse_namespace()?);
+            } else {
+                return Err(format!("期望 'fn', 'ns' 或 '}}', 但得到了 '{}'", token));
+            }
+        }
+        
+        self.expect("}")?;
+        self.expect(";")?;
+        
+        Ok(Namespace { name, functions, namespaces })
     }
     
     fn parse_function(&mut self) -> Result<Function, String> {
@@ -251,6 +319,25 @@ impl Parser {
                 self.expect(";")?;
                 Ok(Statement::Return(expr))
             },
+            Some(token) if token == "using" => {
+                self.consume(); // 消费 "using"
+                self.expect("ns")?; // 期望 "ns" 关键字
+                
+                // 解析命名空间路径
+                let mut path = Vec::new();
+                let first_name = self.consume().ok_or_else(|| "期望命名空间名".to_string())?;
+                path.push(first_name);
+                
+                // 解析嵌套命名空间路径
+                while self.peek() == Some(&"::".to_string()) {
+                    self.consume(); // 消费 "::"
+                    let name = self.consume().ok_or_else(|| "期望命名空间名".to_string())?;
+                    path.push(name);
+                }
+                
+                self.expect(";")?;
+                Ok(Statement::UsingNamespace(path))
+            },
             Some(_) => {
                 // 检查是否是变量声明或赋值
                 let var_name = self.consume().unwrap();
@@ -301,6 +388,31 @@ impl Parser {
                         let value_expr = self.parse_expression()?;
                         self.expect(";")?;
                         Ok(Statement::VariableAssignment(var_name, value_expr))
+                    } else if next_token == "+=" || next_token == "-=" || next_token == "*=" || next_token == "/=" || next_token == "%=" {
+                        // 复合赋值
+                        let op_token = self.consume().unwrap();
+                        let operator = match op_token.as_str() {
+                            "+=" => BinaryOperator::Add,
+                            "-=" => BinaryOperator::Subtract,
+                            "*=" => BinaryOperator::Multiply,
+                            "/=" => BinaryOperator::Divide,
+                            "%=" => BinaryOperator::Modulo,
+                            _ => unreachable!(),
+                        };
+                        
+                        let value_expr = self.parse_expression()?;
+                        self.expect(";")?;
+                        Ok(Statement::CompoundAssignment(var_name, operator, value_expr))
+                    } else if next_token == "++" {
+                        // 自增操作
+                        self.consume(); // 消费 "++"
+                        self.expect(";")?;
+                        Ok(Statement::Increment(var_name))
+                    } else if next_token == "--" {
+                        // 自减操作
+                        self.consume(); // 消费 "--"
+                        self.expect(";")?;
+                        Ok(Statement::Decrement(var_name))
                     } else {
                         Err(format!("不支持的语句: {} {}", var_name, next_token))
                     }
@@ -415,6 +527,30 @@ impl Parser {
                     
                     self.expect("}")?;
                     Ok(Expression::MapLiteral(entries))
+                } else if token == "::" {
+                    // 解析全局函数调用
+                    self.consume(); // 消费 "::"
+                    
+                    // 获取函数名
+                    let func_name = self.consume().ok_or_else(|| "期望函数名".to_string())?;
+                    
+                    self.expect("(")?;
+                    
+                    // 解析函数调用参数
+                    let mut args = Vec::new();
+                    if self.peek() != Some(&")".to_string()) {
+                        // 至少有一个参数
+                        args.push(self.parse_expression()?);
+                        
+                        // 解析剩余参数
+                        while self.peek() == Some(&",".to_string()) {
+                            self.consume(); // 消费逗号
+                            args.push(self.parse_expression()?);
+                        }
+                    }
+                    
+                    self.expect(")")?;
+                    Ok(Expression::GlobalFunctionCall(func_name, args))
                 } else if token == "true" {
                     self.consume();
                     Ok(Expression::BoolLiteral(true))
@@ -462,6 +598,48 @@ impl Parser {
                         
                         self.expect(")")?;
                         Ok(Expression::FunctionCall(func_name, args))
+                    } else if next_token == "::" {
+                        // 解析命名空间函数调用
+                        let mut path = Vec::new();
+                        path.push(self.consume().unwrap()); // 第一个命名空间名
+                        
+                        // 解析命名空间路径
+                        while self.peek() == Some(&"::".to_string()) {
+                            self.consume(); // 消费 "::"
+                            if let Some(name) = self.consume() {
+                                path.push(name);
+                            } else {
+                                return Err("期望标识符".to_string());
+                            }
+                            
+                            // 如果下一个不是 "::" 或 "("，则结束路径解析
+                            if self.peek() != Some(&"::".to_string()) && self.peek() != Some(&"(".to_string()) {
+                                break;
+                            }
+                        }
+                        
+                        // 最后一个是函数名
+                        if self.peek() == Some(&"(".to_string()) {
+                            self.consume(); // 消费 "("
+                            
+                            // 解析函数调用参数
+                            let mut args = Vec::new();
+                            if self.peek() != Some(&")".to_string()) {
+                                // 至少有一个参数
+                                args.push(self.parse_expression()?);
+                                
+                                // 解析剩余参数
+                                while self.peek() == Some(&",".to_string()) {
+                                    self.consume(); // 消费逗号
+                                    args.push(self.parse_expression()?);
+                                }
+                            }
+                            
+                            self.expect(")")?;
+                            Ok(Expression::NamespacedFunctionCall(path, args))
+                        } else {
+                            Err("期望 '('".to_string())
+                        }
                     } else {
                         // 变量引用
                         let var_name = self.consume().unwrap();

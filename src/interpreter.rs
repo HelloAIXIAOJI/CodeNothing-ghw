@@ -1,4 +1,4 @@
-use crate::ast::{Program, Expression, Statement, BinaryOperator, Type};
+use crate::ast::{Program, Expression, Statement, BinaryOperator, Type, Namespace};
 use std::collections::HashMap;
 use std::fmt;
 
@@ -54,6 +54,10 @@ pub fn interpret(program: &Program) -> Value {
 struct Interpreter<'a> {
     program: &'a Program,
     functions: HashMap<String, &'a crate::ast::Function>,
+    // 命名空间函数映射，键是完整路径，如 "math::add"
+    namespaced_functions: HashMap<String, &'a crate::ast::Function>,
+    // 导入的命名空间，键是函数名，值是完整路径
+    imported_namespaces: HashMap<String, Vec<String>>,
     // 全局变量环境
     global_env: HashMap<String, Value>,
     // 局部变量环境（函数内）
@@ -63,15 +67,49 @@ struct Interpreter<'a> {
 impl<'a> Interpreter<'a> {
     fn new(program: &'a Program) -> Self {
         let mut functions = HashMap::new();
+        let mut namespaced_functions = HashMap::new();
+        
+        // 注册全局函数
         for function in &program.functions {
             functions.insert(function.name.clone(), function);
+        }
+        
+        // 注册命名空间函数
+        for namespace in &program.namespaces {
+            Self::register_namespace_functions(namespace, &mut namespaced_functions, "");
         }
         
         Interpreter {
             program,
             functions,
+            namespaced_functions,
+            imported_namespaces: HashMap::new(),
             global_env: HashMap::new(),
             local_env: HashMap::new(),
+        }
+    }
+    
+    // 递归注册命名空间中的所有函数
+    fn register_namespace_functions(
+        namespace: &'a Namespace, 
+        map: &mut HashMap<String, &'a crate::ast::Function>,
+        prefix: &str
+    ) {
+        let current_prefix = if prefix.is_empty() {
+            namespace.name.clone()
+        } else {
+            format!("{}::{}", prefix, namespace.name)
+        };
+        
+        // 注册当前命名空间中的函数
+        for function in &namespace.functions {
+            let full_path = format!("{}::{}", current_prefix, function.name);
+            map.insert(full_path, function);
+        }
+        
+        // 递归注册子命名空间中的函数
+        for sub_namespace in &namespace.namespaces {
+            Self::register_namespace_functions(sub_namespace, map, &current_prefix);
         }
     }
     
@@ -107,6 +145,212 @@ impl<'a> Interpreter<'a> {
                     } else {
                         panic!("未定义的变量: {}", name);
                     }
+                },
+                Statement::Increment(name) => {
+                    // 自增操作
+                    let value = if self.local_env.contains_key(name) {
+                        self.local_env.get(name).unwrap().clone()
+                    } else if self.global_env.contains_key(name) {
+                        self.global_env.get(name).unwrap().clone()
+                    } else {
+                        panic!("未定义的变量: {}", name);
+                    };
+                    
+                    // 根据变量类型执行自增
+                    let new_value = match value {
+                        Value::Int(i) => Value::Int(i + 1),
+                        Value::Float(f) => Value::Float(f + 1.0),
+                        Value::Long(l) => Value::Long(l + 1),
+                        _ => panic!("不能对类型 {:?} 执行自增操作", value),
+                    };
+                    
+                    // 更新变量值
+                    if self.local_env.contains_key(name) {
+                        self.local_env.insert(name.clone(), new_value);
+                    } else {
+                        self.global_env.insert(name.clone(), new_value);
+                    }
+                },
+                Statement::Decrement(name) => {
+                    // 自减操作
+                    let value = if self.local_env.contains_key(name) {
+                        self.local_env.get(name).unwrap().clone()
+                    } else if self.global_env.contains_key(name) {
+                        self.global_env.get(name).unwrap().clone()
+                    } else {
+                        panic!("未定义的变量: {}", name);
+                    };
+                    
+                    // 根据变量类型执行自减
+                    let new_value = match value {
+                        Value::Int(i) => Value::Int(i - 1),
+                        Value::Float(f) => Value::Float(f - 1.0),
+                        Value::Long(l) => Value::Long(l - 1),
+                        _ => panic!("不能对类型 {:?} 执行自减操作", value),
+                    };
+                    
+                    // 更新变量值
+                    if self.local_env.contains_key(name) {
+                        self.local_env.insert(name.clone(), new_value);
+                    } else {
+                        self.global_env.insert(name.clone(), new_value);
+                    }
+                },
+                Statement::CompoundAssignment(name, op, expr) => {
+                    // 复合赋值操作 (+=, -=, *=, /=, %=)
+                    let right_value = self.evaluate_expression(expr);
+                    
+                    // 获取变量当前值
+                    let left_value = if self.local_env.contains_key(name) {
+                        self.local_env.get(name).unwrap().clone()
+                    } else if self.global_env.contains_key(name) {
+                        self.global_env.get(name).unwrap().clone()
+                    } else {
+                        panic!("未定义的变量: {}", name);
+                    };
+                    
+                    // 执行对应的二元运算
+                    let new_value = match (left_value, op, &right_value) {
+                        // 整数运算
+                        (Value::Int(l), BinaryOperator::Add, Value::Int(r)) => Value::Int(l + r),
+                        (Value::Int(l), BinaryOperator::Subtract, Value::Int(r)) => Value::Int(l - r),
+                        (Value::Int(l), BinaryOperator::Multiply, Value::Int(r)) => Value::Int(l * r),
+                        (Value::Int(l), BinaryOperator::Divide, Value::Int(r)) => {
+                            if *r == 0 {
+                                panic!("除以零错误");
+                            }
+                            Value::Int(l / r)
+                        },
+                        (Value::Int(l), BinaryOperator::Modulo, Value::Int(r)) => {
+                            if *r == 0 {
+                                panic!("除以零错误");
+                            }
+                            Value::Int(l % r)
+                        },
+                        
+                        // 浮点数运算
+                        (Value::Float(l), BinaryOperator::Add, Value::Float(r)) => Value::Float(l + r),
+                        (Value::Float(l), BinaryOperator::Subtract, Value::Float(r)) => Value::Float(l - r),
+                        (Value::Float(l), BinaryOperator::Multiply, Value::Float(r)) => Value::Float(l * r),
+                        (Value::Float(l), BinaryOperator::Divide, Value::Float(r)) => {
+                            if *r == 0.0 {
+                                panic!("除以零错误");
+                            }
+                            Value::Float(l / r)
+                        },
+                        
+                        // 整数和浮点数混合运算
+                        (Value::Int(l), BinaryOperator::Add, Value::Float(r)) => Value::Float(l as f64 + r),
+                        (Value::Float(l), BinaryOperator::Add, Value::Int(r)) => Value::Float(l + *r as f64),
+                        (Value::Int(l), BinaryOperator::Subtract, Value::Float(r)) => Value::Float(l as f64 - r),
+                        (Value::Float(l), BinaryOperator::Subtract, Value::Int(r)) => Value::Float(l - *r as f64),
+                        (Value::Int(l), BinaryOperator::Multiply, Value::Float(r)) => Value::Float(l as f64 * r),
+                        (Value::Float(l), BinaryOperator::Multiply, Value::Int(r)) => Value::Float(l * *r as f64),
+                        (Value::Int(l), BinaryOperator::Divide, Value::Float(r)) => {
+                            if *r == 0.0 {
+                                panic!("除以零错误");
+                            }
+                            Value::Float(l as f64 / r)
+                        },
+                        (Value::Float(l), BinaryOperator::Divide, Value::Int(r)) => {
+                            if *r == 0 {
+                                panic!("除以零错误");
+                            }
+                            Value::Float(l / *r as f64)
+                        },
+                        
+                        // 长整型运算
+                        (Value::Long(l), BinaryOperator::Add, Value::Long(r)) => Value::Long(l + r),
+                        (Value::Long(l), BinaryOperator::Subtract, Value::Long(r)) => Value::Long(l - r),
+                        (Value::Long(l), BinaryOperator::Multiply, Value::Long(r)) => Value::Long(l * r),
+                        (Value::Long(l), BinaryOperator::Divide, Value::Long(r)) => {
+                            if *r == 0 {
+                                panic!("除以零错误");
+                            }
+                            Value::Long(l / r)
+                        },
+                        (Value::Long(l), BinaryOperator::Modulo, Value::Long(r)) => {
+                            if *r == 0 {
+                                panic!("除以零错误");
+                            }
+                            Value::Long(l % r)
+                        },
+                        
+                        // 整数和长整型混合运算
+                        (Value::Int(l), BinaryOperator::Add, Value::Long(r)) => Value::Long(l as i64 + r),
+                        (Value::Long(l), BinaryOperator::Add, Value::Int(r)) => Value::Long(l + *r as i64),
+                        (Value::Int(l), BinaryOperator::Subtract, Value::Long(r)) => Value::Long(l as i64 - r),
+                        (Value::Long(l), BinaryOperator::Subtract, Value::Int(r)) => Value::Long(l - *r as i64),
+                        (Value::Int(l), BinaryOperator::Multiply, Value::Long(r)) => Value::Long(l as i64 * r),
+                        (Value::Long(l), BinaryOperator::Multiply, Value::Int(r)) => Value::Long(l * *r as i64),
+                        (Value::Int(l), BinaryOperator::Divide, Value::Long(r)) => {
+                            if *r == 0 {
+                                panic!("除以零错误");
+                            }
+                            Value::Long(l as i64 / r)
+                        },
+                        (Value::Long(l), BinaryOperator::Divide, Value::Int(r)) => {
+                            if *r == 0 {
+                                panic!("除以零错误");
+                            }
+                            Value::Long(l / *r as i64)
+                        },
+                        
+                        // 字符串连接
+                        (Value::String(l), BinaryOperator::Add, Value::String(r)) => Value::String(l + r),
+                        
+                        // 字符串和其他类型的连接
+                        (Value::String(l), BinaryOperator::Add, Value::Int(r)) => Value::String(l + &r.to_string()),
+                        (Value::String(l), BinaryOperator::Add, Value::Float(r)) => Value::String(l + &r.to_string()),
+                        (Value::String(l), BinaryOperator::Add, Value::Bool(r)) => Value::String(l + &r.to_string()),
+                        (Value::String(l), BinaryOperator::Add, Value::Long(r)) => Value::String(l + &r.to_string()),
+                        
+                        // 不支持的操作
+                        (l, op, r) => panic!("不支持的复合赋值操作: {:?} {:?} {:?}", l, op, r),
+                    };
+                    
+                    // 更新变量值
+                    if self.local_env.contains_key(name) {
+                        self.local_env.insert(name.clone(), new_value);
+                    } else {
+                        self.global_env.insert(name.clone(), new_value);
+                    }
+                },
+                Statement::UsingNamespace(path) => {
+                    // 导入命名空间，将命名空间中的函数添加到导入表中
+                    let namespace_path = path.join("::");
+                    println!("导入命名空间: {}", namespace_path);
+                    
+                    // 记录导入的命名空间前缀，用于后续查找嵌套命名空间
+                    let imported_namespace = namespace_path.clone();
+                    
+                    // 查找命名空间中的所有函数
+                    let mut found_functions = false;
+                    for (full_path, _) in &self.namespaced_functions {
+                        if full_path.starts_with(&namespace_path) && full_path.len() > namespace_path.len() {
+                            // 确保是该命名空间下的函数，而不是子命名空间
+                            let remaining = &full_path[namespace_path.len() + 2..]; // +2 是为了跳过"::"
+                            if !remaining.contains("::") {
+                                // 这是命名空间直接包含的函数
+                                let func_name = remaining.to_string();
+                                println!("导入函数: {} -> {}", func_name, full_path);
+                                
+                                // 将函数名和完整路径添加到导入表
+                                self.imported_namespaces.entry(func_name)
+                                    .or_insert_with(Vec::new)
+                                    .push(full_path.clone());
+                                
+                                found_functions = true;
+                            }
+                        }
+                    }
+                    
+                    if !found_functions {
+                        panic!("未找到命名空间: {}", namespace_path);
+                    }
+                    
+                    // 记录导入的命名空间，用于后续查找嵌套命名空间
+                    self.imported_namespaces.insert("__NAMESPACE__".to_string() + &imported_namespace, vec![imported_namespace]);
                 }
             }
         }
@@ -148,35 +392,88 @@ impl<'a> Interpreter<'a> {
                     arg_values.push(self.evaluate_expression(arg_expr));
                 }
                 
-                // 然后查找函数并执行
+                println!("调用函数: {}", name);
+                
+                // 先检查是否是导入的命名空间函数
+                if let Some(paths) = self.imported_namespaces.get(name) {
+                    println!("找到导入的函数: {} -> {:?}", name, paths);
+                    if paths.len() == 1 {
+                        // 只有一个匹配的函数，直接调用
+                        let full_path = &paths[0];
+                        if let Some(function) = self.namespaced_functions.get(full_path) {
+                            return self.call_function(function, arg_values);
+                        } else {
+                            panic!("未找到函数: {}", full_path);
+                        }
+                    } else {
+                        // 有多个匹配的函数，需要解决歧义
+                        panic!("函数名 '{}' 有多个匹配: {:?}", name, paths);
+                    }
+                }
+                
+                // 如果不是导入的函数，再检查全局函数
                 if let Some(function) = self.functions.get(name) {
-                    // 检查参数数量是否匹配
-                    if arg_values.len() != function.parameters.len() {
-                        panic!("函数 '{}' 需要 {} 个参数，但提供了 {} 个", 
-                            name, function.parameters.len(), arg_values.len());
-                    }
-                    
-                    // 保存当前的局部环境
-                    let old_local_env = self.local_env.clone();
-                    
-                    // 清空局部环境，为新函数调用准备
-                    self.local_env.clear();
-                    
-                    // 绑定参数值到参数名
-                    for (i, arg_value) in arg_values.into_iter().enumerate() {
-                        let param_name = &function.parameters[i].name;
-                        self.local_env.insert(param_name.clone(), arg_value);
-                    }
-                    
-                    // 执行函数体
-                    let result = self.execute_function(function);
-                    
-                    // 恢复之前的局部环境
-                    self.local_env = old_local_env;
-                    
-                    result
+                    println!("找到全局函数: {}", name);
+                    // 执行全局函数
+                    self.call_function(function, arg_values)
                 } else {
                     panic!("未定义的函数: {}", name);
+                }
+            },
+            Expression::GlobalFunctionCall(name, args) => {
+                // 先计算所有参数值
+                let mut arg_values = Vec::new();
+                for arg_expr in args {
+                    arg_values.push(self.evaluate_expression(arg_expr));
+                }
+                
+                println!("调用全局函数: {}", name);
+                
+                // 只在全局函数表中查找
+                if let Some(function) = self.functions.get(name) {
+                    self.call_function(function, arg_values)
+                } else {
+                    panic!("未定义的全局函数: {}", name);
+                }
+            },
+            Expression::NamespacedFunctionCall(path, args) => {
+                // 构建完整的函数路径
+                let full_path = path.join("::");
+                
+                // 先计算所有参数值
+                let mut arg_values = Vec::new();
+                for arg_expr in args {
+                    arg_values.push(self.evaluate_expression(arg_expr));
+                }
+                
+                println!("调用命名空间函数: {}", full_path);
+                
+                // 查找命名空间函数
+                if let Some(function) = self.namespaced_functions.get(&full_path) {
+                    self.call_function(function, arg_values)
+                } else {
+                    // 检查是否是导入命名空间的嵌套命名空间函数
+                    let mut found = false;
+                    for (key, value) in &self.imported_namespaces {
+                        if key.starts_with("__NAMESPACE__") {
+                            let imported_namespace = &key[13..]; // 跳过"__NAMESPACE__"前缀
+                            let potential_path = format!("{}::{}", imported_namespace, full_path);
+                            
+                            println!("尝试查找导入的嵌套命名空间函数: {}", potential_path);
+                            
+                            if let Some(function) = self.namespaced_functions.get(&potential_path) {
+                                found = true;
+                                return self.call_function(function, arg_values);
+                            }
+                        }
+                    }
+                    
+                    if !found {
+                        panic!("未定义的命名空间函数: {}", full_path);
+                    }
+                    
+                    // 这里不会执行到，只是为了编译通过
+                    unreachable!();
                 }
             },
             Expression::Variable(name) => {
@@ -299,5 +596,34 @@ impl<'a> Interpreter<'a> {
                 }
             }
         }
+    }
+    
+    // 辅助函数：调用函数并处理参数
+    fn call_function(&mut self, function: &'a crate::ast::Function, arg_values: Vec<Value>) -> Value {
+        // 检查参数数量是否匹配
+        if arg_values.len() != function.parameters.len() {
+            panic!("函数 '{}' 需要 {} 个参数，但提供了 {} 个", 
+                function.name, function.parameters.len(), arg_values.len());
+        }
+        
+        // 保存当前的局部环境
+        let old_local_env = self.local_env.clone();
+        
+        // 清空局部环境，为新函数调用准备
+        self.local_env.clear();
+        
+        // 绑定参数值到参数名
+        for (i, arg_value) in arg_values.into_iter().enumerate() {
+            let param_name = &function.parameters[i].name;
+            self.local_env.insert(param_name.clone(), arg_value);
+        }
+        
+        // 执行函数体
+        let result = self.execute_function(function);
+        
+        // 恢复之前的局部环境
+        self.local_env = old_local_env;
+        
+        result
     }
 } 
