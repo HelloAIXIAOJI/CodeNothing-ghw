@@ -442,25 +442,75 @@ impl<'a> Executor for Interpreter<'a> {
                 None
             },
             Statement::IfElse(condition, if_block, else_blocks) => {
-                execute_if_else(self, &condition, &if_block, &else_blocks, self)
+                // 修复借用问题：不直接传递self，而是分别计算条件和执行语句块
+                let condition_value = self.evaluate_expression(&condition);
+                
+                // 检查条件是否为真
+                let is_true = match condition_value {
+                    Value::Bool(b) => b,
+                    _ => panic!("条件表达式必须是布尔类型"),
+                };
+                
+                if is_true {
+                    // 执行 if 块
+                    for stmt in if_block {
+                        if let Some(value) = self.execute_statement(stmt.clone()) {
+                            return Some(value); // 如果有返回值，则提前返回
+                        }
+                    }
+                } else {
+                    // 尝试执行 else-if 或 else 块
+                    for (maybe_condition, block) in else_blocks {
+                        match maybe_condition {
+                            Some(else_if_condition) => {
+                                // 这是 else-if 块，需要计算条件
+                                let else_if_value = self.evaluate_expression(else_if_condition);
+                                let else_if_is_true = match else_if_value {
+                                    Value::Bool(b) => b,
+                                    _ => panic!("else-if 条件表达式必须是布尔类型"),
+                                };
+                                
+                                if else_if_is_true {
+                                    // 条件为真，执行这个 else-if 块
+                                    for stmt in block {
+                                        if let Some(value) = self.execute_statement(stmt.clone()) {
+                                            return Some(value); // 如果有返回值，则提前返回
+                                        }
+                                    }
+                                    // 执行完一个 else-if 块后，不再执行后续块
+                                    break;
+                                }
+                                // 条件为假，继续检查下一个块
+                            },
+                            None => {
+                                // 这是 else 块，直接执行
+                                for stmt in block {
+                                    if let Some(value) = self.execute_statement(stmt.clone()) {
+                                        return Some(value); // 如果有返回值，则提前返回
+                                    }
+                                }
+                                // else 块是最后一个块，执行完后退出
+                                break;
+                            }
+                        }
+                    }
+                }
+                
+                None
             }
         }
     }
     
-    fn execute_function(&mut self, function_name: &str) -> Value {
-        if let Some(function) = self.functions.get(function_name) {
-            // 执行函数体
-            for statement in &function.body {
-                if let Some(value) = self.execute_statement(statement.clone()) {
-                    return value;
-                }
+    fn execute_function(&mut self, function: &Function) -> Value {
+        // 执行函数体
+        for statement in &function.body {
+            if let Some(value) = self.execute_statement(statement.clone()) {
+                return value;
             }
-            
-            // 如果没有返回语句，默认返回0
-            Value::Int(0)
-        } else {
-            panic!("未找到函数: {}", function_name);
         }
+        
+        // 如果没有返回语句，默认返回0
+        Value::Int(0)
     }
     
     fn update_variable(&mut self, name: &str, value: Value) -> Result<(), String> {
