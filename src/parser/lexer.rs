@@ -3,22 +3,59 @@
 // 移除注释
 pub fn remove_comments(source: &str) -> String {
     let mut result = String::new();
-    let mut in_comment = false;
+    let mut in_single_line_comment = false;
+    let mut multi_line_comment_depth = 0; // 使用计数器跟踪多行注释的嵌套深度
+    let mut in_string = false; // 标记是否在字符串内
+    let mut escape = false; // 标记是否是转义字符
     let mut i = 0;
     
     let chars: Vec<char> = source.chars().collect();
     
     while i < chars.len() {
-        if i + 1 < chars.len() && chars[i] == '/' && chars[i + 1] == '/' {
-            // 找到注释开始
-            in_comment = true;
-            i += 2;
-        } else if in_comment && chars[i] == '\n' {
-            // 注释结束
-            in_comment = false;
+        // 处理字符串
+        if in_string {
+            result.push(chars[i]);
+            if escape {
+                // 转义字符后的字符直接添加
+                escape = false;
+            } else if chars[i] == '\\' {
+                // 转义字符标记
+                escape = true;
+            } else if chars[i] == '"' {
+                // 字符串结束
+                in_string = false;
+            }
+            i += 1;
+            continue;
+        } else if chars[i] == '"' {
+            // 字符串开始
+            in_string = true;
             result.push(chars[i]);
             i += 1;
-        } else if !in_comment {
+            continue;
+        }
+        
+        // 处理注释
+        if i + 1 < chars.len() && chars[i] == '/' && chars[i + 1] == '/' && multi_line_comment_depth == 0 {
+            // 单行注释开始（仅当不在多行注释中时）
+            in_single_line_comment = true;
+            i += 2;
+        } else if i + 1 < chars.len() && chars[i] == '/' && chars[i + 1] == '!' && !in_single_line_comment {
+            // 多行注释开始
+            multi_line_comment_depth += 1;
+            i += 2;
+        } else if in_single_line_comment && chars[i] == '\n' {
+            // 单行注释结束
+            in_single_line_comment = false;
+            result.push(chars[i]);
+            i += 1;
+        } else if i + 1 < chars.len() && chars[i] == '!' && chars[i + 1] == '/' && !in_single_line_comment {
+            // 多行注释结束
+            if multi_line_comment_depth > 0 {
+                multi_line_comment_depth -= 1;
+            }
+            i += 2;
+        } else if !in_single_line_comment && multi_line_comment_depth == 0 {
             // 非注释内容
             result.push(chars[i]);
             i += 1;
