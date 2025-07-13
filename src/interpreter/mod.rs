@@ -1,0 +1,469 @@
+pub mod value;
+pub mod evaluator;
+pub mod executor;
+
+use crate::ast::{Program, Expression, Statement, BinaryOperator, Type, Namespace, CompareOperator, LogicalOperator};
+use std::collections::HashMap;
+use value::Value;
+use evaluator::{Evaluator, perform_binary_operation, evaluate_compare_operation};
+use executor::{Executor, update_variable_value, handle_increment, handle_decrement, execute_if_else};
+
+pub fn interpret(program: &Program) -> Value {
+    let mut interpreter = Interpreter::new(program);
+    interpreter.run()
+}
+
+struct Interpreter<'a> {
+    program: &'a Program,
+    functions: HashMap<String, &'a crate::ast::Function>,
+    // 命名空间函数映射，键是完整路径，如 "math::add"
+    namespaced_functions: HashMap<String, &'a crate::ast::Function>,
+    // 导入的命名空间，键是函数名，值是完整路径
+    imported_namespaces: HashMap<String, Vec<String>>,
+    // 全局变量环境
+    global_env: HashMap<String, Value>,
+    // 局部变量环境（函数内）
+    local_env: HashMap<String, Value>,
+}
+
+impl<'a> Interpreter<'a> {
+    fn new(program: &'a Program) -> Self {
+        let mut functions = HashMap::new();
+        let mut namespaced_functions = HashMap::new();
+        
+        // 注册全局函数
+        for function in &program.functions {
+            functions.insert(function.name.clone(), function);
+        }
+        
+        // 注册命名空间函数
+        for namespace in &program.namespaces {
+            Self::register_namespace_functions(namespace, &mut namespaced_functions, "");
+        }
+        
+        Interpreter {
+            program,
+            functions,
+            namespaced_functions,
+            imported_namespaces: HashMap::new(),
+            global_env: HashMap::new(),
+            local_env: HashMap::new(),
+        }
+    }
+    
+    // 递归注册命名空间中的所有函数
+    fn register_namespace_functions(
+        namespace: &'a Namespace, 
+        map: &mut HashMap<String, &'a crate::ast::Function>,
+        prefix: &str
+    ) {
+        let current_prefix = if prefix.is_empty() {
+            namespace.name.clone()
+        } else {
+            format!("{}::{}", prefix, namespace.name)
+        };
+        
+        // 注册当前命名空间中的函数
+        for function in &namespace.functions {
+            let full_path = format!("{}::{}", current_prefix, function.name);
+            map.insert(full_path, function);
+        }
+        
+        // 递归注册子命名空间中的函数
+        for sub_namespace in &namespace.namespaces {
+            Self::register_namespace_functions(sub_namespace, map, &current_prefix);
+        }
+    }
+    
+    fn run(&mut self) -> Value {
+        // 查找 main 函数并执行
+        if let Some(main_fn) = self.functions.get("main") {
+            self.execute_function(main_fn)
+        } else {
+            panic!("没有找到 main 函数");
+        }
+    }
+    
+    // 辅助函数：调用函数并处理参数
+    fn call_function(&mut self, function: &'a crate::ast::Function, arg_values: Vec<Value>) -> Value {
+        // 检查参数数量是否匹配
+        if arg_values.len() != function.parameters.len() {
+            panic!("函数 '{}' 需要 {} 个参数，但提供了 {} 个", 
+                function.name, function.parameters.len(), arg_values.len());
+        }
+        
+        // 保存当前的局部环境
+        let old_local_env = self.local_env.clone();
+        
+        // 清空局部环境，为新函数调用准备
+        self.local_env.clear();
+        
+        // 绑定参数值到参数名
+        for (i, arg_value) in arg_values.into_iter().enumerate() {
+            let param_name = &function.parameters[i].name;
+            self.local_env.insert(param_name.clone(), arg_value);
+        }
+        
+        // 执行函数体
+        let result = self.execute_function(function);
+        
+        // 恢复之前的局部环境
+        self.local_env = old_local_env;
+        
+        result
+    }
+}
+
+impl<'a> Evaluator for Interpreter<'a> {
+    fn evaluate_expression(&mut self, expr: &Expression) -> Value {
+        match expr {
+            Expression::IntLiteral(value) => Value::Int(*value),
+            Expression::FloatLiteral(value) => Value::Float(*value),
+            Expression::BoolLiteral(value) => Value::Bool(*value),
+            Expression::StringLiteral(value) => Value::String(value.clone()),
+            Expression::LongLiteral(value) => Value::Long(*value),
+            Expression::ArrayLiteral(elements) => {
+                let mut values = Vec::new();
+                for elem in elements {
+                    values.push(self.evaluate_expression(elem));
+                }
+                Value::Array(values)
+            },
+            Expression::MapLiteral(entries) => {
+                let mut map = HashMap::new();
+                for (key_expr, value_expr) in entries {
+                    let key = match self.evaluate_expression(key_expr) {
+                        Value::String(s) => s,
+                        _ => panic!("映射键必须是字符串类型"),
+                    };
+                    let value = self.evaluate_expression(value_expr);
+                    map.insert(key, value);
+                }
+                Value::Map(map)
+            },
+            Expression::FunctionCall(name, args) => {
+                // 先计算所有参数值
+                let mut arg_values = Vec::new();
+                for arg_expr in args {
+                    arg_values.push(self.evaluate_expression(arg_expr));
+                }
+                
+                println!("调用函数: {}", name);
+                
+                // 先检查是否是导入的命名空间函数
+                if let Some(paths) = self.imported_namespaces.get(name) {
+                    println!("找到导入的函数: {} -> {:?}", name, paths);
+                    if paths.len() == 1 {
+                        // 只有一个匹配的函数，直接调用
+                        let full_path = &paths[0];
+                        if let Some(function) = self.namespaced_functions.get(full_path) {
+                            return self.call_function(function, arg_values);
+                        } else {
+                            panic!("未找到函数: {}", full_path);
+                        }
+                    } else {
+                        // 有多个匹配的函数，需要解决歧义
+                        panic!("函数名 '{}' 有多个匹配: {:?}", name, paths);
+                    }
+                }
+                
+                // 如果不是导入的函数，再检查全局函数
+                if let Some(function) = self.functions.get(name) {
+                    println!("找到全局函数: {}", name);
+                    // 执行全局函数
+                    self.call_function(function, arg_values)
+                } else {
+                    panic!("未定义的函数: {}", name);
+                }
+            },
+            Expression::GlobalFunctionCall(name, args) => {
+                // 先计算所有参数值
+                let mut arg_values = Vec::new();
+                for arg_expr in args {
+                    arg_values.push(self.evaluate_expression(arg_expr));
+                }
+                
+                println!("调用全局函数: {}", name);
+                
+                // 只在全局函数表中查找
+                if let Some(function) = self.functions.get(name) {
+                    self.call_function(function, arg_values)
+                } else {
+                    panic!("未定义的全局函数: {}", name);
+                }
+            },
+            Expression::NamespacedFunctionCall(path, args) => {
+                // 构建完整的函数路径
+                let full_path = path.join("::");
+                
+                // 先计算所有参数值
+                let mut arg_values = Vec::new();
+                for arg_expr in args {
+                    arg_values.push(self.evaluate_expression(arg_expr));
+                }
+                
+                println!("调用命名空间函数: {}", full_path);
+                
+                // 查找命名空间函数
+                if let Some(function) = self.namespaced_functions.get(&full_path) {
+                    self.call_function(function, arg_values)
+                } else {
+                    // 检查是否是导入命名空间的嵌套命名空间函数
+                    let mut found = false;
+                    for (key, value) in &self.imported_namespaces {
+                        if key.starts_with("__NAMESPACE__") {
+                            let imported_namespace = &key[13..]; // 跳过"__NAMESPACE__"前缀
+                            let potential_path = format!("{}::{}", imported_namespace, full_path);
+                            
+                            println!("尝试查找导入的嵌套命名空间函数: {}", potential_path);
+                            
+                            if let Some(function) = self.namespaced_functions.get(&potential_path) {
+                                found = true;
+                                return self.call_function(function, arg_values);
+                            }
+                        }
+                    }
+                    
+                    if !found {
+                        panic!("未定义的命名空间函数: {}", full_path);
+                    }
+                    
+                    // 这里不会执行到，只是为了编译通过
+                    unreachable!();
+                }
+            },
+            Expression::Variable(name) => {
+                // 先检查局部变量，再检查全局变量
+                if let Some(value) = self.local_env.get(name) {
+                    value.clone()
+                } else if let Some(value) = self.global_env.get(name) {
+                    value.clone()
+                } else {
+                    panic!("未定义的变量: {}", name);
+                }
+            },
+            Expression::BinaryOp(left, op, right) => {
+                let left_val = self.evaluate_expression(left);
+                let right_val = self.evaluate_expression(right);
+                
+                self.perform_binary_operation(&left_val, op, &right_val)
+            },
+            Expression::CompareOp(left, op, right) => {
+                let left_val = self.evaluate_expression(left);
+                let right_val = self.evaluate_expression(right);
+                
+                evaluate_compare_operation(&left_val, op, &right_val)
+            },
+            Expression::LogicalOp(left, op, right) => {
+                match op {
+                    LogicalOperator::And => {
+                        // 短路求值：如果左操作数为假，直接返回假
+                        let left_val = self.evaluate_expression(left);
+                        let left_bool = match left_val {
+                            Value::Bool(b) => b,
+                            _ => panic!("逻辑操作符的操作数必须是布尔类型"),
+                        };
+                        
+                        if !left_bool {
+                            return Value::Bool(false);
+                        }
+                        
+                        // 左操作数为真，计算右操作数
+                        let right_val = self.evaluate_expression(right);
+                        match right_val {
+                            Value::Bool(b) => Value::Bool(b),
+                            _ => panic!("逻辑操作符的操作数必须是布尔类型"),
+                        }
+                    },
+                    LogicalOperator::Or => {
+                        // 短路求值：如果左操作数为真，直接返回真
+                        let left_val = self.evaluate_expression(left);
+                        let left_bool = match left_val {
+                            Value::Bool(b) => b,
+                            _ => panic!("逻辑操作符的操作数必须是布尔类型"),
+                        };
+                        
+                        if left_bool {
+                            return Value::Bool(true);
+                        }
+                        
+                        // 左操作数为假，计算右操作数
+                        let right_val = self.evaluate_expression(right);
+                        match right_val {
+                            Value::Bool(b) => Value::Bool(b),
+                            _ => panic!("逻辑操作符的操作数必须是布尔类型"),
+                        }
+                    },
+                    LogicalOperator::Not => {
+                        // 逻辑非操作
+                        let val = self.evaluate_expression(left);
+                        match val {
+                            Value::Bool(b) => Value::Bool(!b),
+                            _ => panic!("逻辑操作符的操作数必须是布尔类型"),
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    fn perform_binary_operation(&self, left: &Value, op: &BinaryOperator, right: &Value) -> Value {
+        perform_binary_operation(left, op, right)
+    }
+    
+    fn get_variable(&self, name: &str) -> Option<Value> {
+        if let Some(value) = self.local_env.get(name) {
+            Some(value.clone())
+        } else if let Some(value) = self.global_env.get(name) {
+            Some(value.clone())
+        } else {
+            None
+        }
+    }
+    
+    fn call_function(&mut self, function_name: &str, args: Vec<Value>) -> Value {
+        // 先检查是否是导入的命名空间函数
+        if let Some(paths) = self.imported_namespaces.get(function_name) {
+            if paths.len() == 1 {
+                // 只有一个匹配的函数，直接调用
+                let full_path = &paths[0];
+                if let Some(function) = self.namespaced_functions.get(full_path) {
+                    return self.call_function(function, args);
+                }
+            }
+        }
+        
+        // 如果不是导入的函数，再检查全局函数
+        if let Some(function) = self.functions.get(function_name) {
+            self.call_function(function, args)
+        } else {
+            panic!("未定义的函数: {}", function_name);
+        }
+    }
+}
+
+impl<'a> Executor for Interpreter<'a> {
+    fn execute_statement(&mut self, statement: Statement) -> Option<Value> {
+        match statement {
+            Statement::Return(expr) => {
+                // 返回语句，计算表达式值并返回
+                Some(self.evaluate_expression(&expr))
+            },
+            Statement::VariableDeclaration(name, _type, expr) => {
+                let value = self.evaluate_expression(&expr);
+                self.local_env.insert(name, value);
+                None
+            },
+            Statement::VariableAssignment(name, expr) => {
+                let value = self.evaluate_expression(&expr);
+                // 先检查局部变量，再检查全局变量
+                if self.local_env.contains_key(&name) {
+                    self.local_env.insert(name, value);
+                } else if self.global_env.contains_key(&name) {
+                    self.global_env.insert(name, value);
+                } else {
+                    panic!("未定义的变量: {}", name);
+                }
+                None
+            },
+            Statement::Increment(name) => {
+                // 使用辅助函数处理自增操作
+                if let Err(err) = handle_increment(&mut self.local_env, &mut self.global_env, &name) {
+                    panic!("{}", err);
+                }
+                None
+            },
+            Statement::Decrement(name) => {
+                // 使用辅助函数处理自减操作
+                if let Err(err) = handle_decrement(&mut self.local_env, &mut self.global_env, &name) {
+                    panic!("{}", err);
+                }
+                None
+            },
+            Statement::CompoundAssignment(name, op, expr) => {
+                // 复合赋值操作 (+=, -=, *=, /=, %=)
+                let right_value = self.evaluate_expression(&expr);
+                
+                // 获取变量当前值
+                let left_value = if self.local_env.contains_key(&name) {
+                    self.local_env.get(&name).unwrap().clone()
+                } else if self.global_env.contains_key(&name) {
+                    self.global_env.get(&name).unwrap().clone()
+                } else {
+                    panic!("未定义的变量: {}", name);
+                };
+                
+                // 执行对应的二元运算
+                let new_value = self.perform_binary_operation(&left_value, &op, &right_value);
+                
+                // 更新变量值
+                if self.local_env.contains_key(&name) {
+                    self.local_env.insert(name, new_value);
+                } else {
+                    self.global_env.insert(name, new_value);
+                }
+                None
+            },
+            Statement::UsingNamespace(path) => {
+                // 导入命名空间，将命名空间中的函数添加到导入表中
+                let namespace_path = path.join("::");
+                println!("导入命名空间: {}", namespace_path);
+                
+                // 记录导入的命名空间前缀，用于后续查找嵌套命名空间
+                let imported_namespace = namespace_path.clone();
+                
+                // 查找命名空间中的所有函数
+                let mut found_functions = false;
+                for (full_path, _) in &self.namespaced_functions {
+                    if full_path.starts_with(&namespace_path) && full_path.len() > namespace_path.len() {
+                        // 确保是该命名空间下的函数，而不是子命名空间
+                        let remaining = &full_path[namespace_path.len() + 2..]; // +2 是为了跳过"::"
+                        if !remaining.contains("::") {
+                            // 这是命名空间直接包含的函数
+                            let func_name = remaining.to_string();
+                            println!("导入函数: {} -> {}", func_name, full_path);
+                            
+                            // 将函数名和完整路径添加到导入表
+                            self.imported_namespaces.entry(func_name)
+                                .or_insert_with(Vec::new)
+                                .push(full_path.clone());
+                            
+                            found_functions = true;
+                        }
+                    }
+                }
+                
+                if !found_functions {
+                    panic!("未找到命名空间: {}", namespace_path);
+                }
+                
+                // 记录导入的命名空间，用于后续查找嵌套命名空间
+                self.imported_namespaces.insert("__NAMESPACE__".to_string() + &imported_namespace, vec![imported_namespace]);
+                None
+            },
+            Statement::IfElse(condition, if_block, else_blocks) => {
+                execute_if_else(self, &condition, &if_block, &else_blocks, self)
+            }
+        }
+    }
+    
+    fn execute_function(&mut self, function_name: &str) -> Value {
+        if let Some(function) = self.functions.get(function_name) {
+            // 执行函数体
+            for statement in &function.body {
+                if let Some(value) = self.execute_statement(statement.clone()) {
+                    return value;
+                }
+            }
+            
+            // 如果没有返回语句，默认返回0
+            Value::Int(0)
+        } else {
+            panic!("未找到函数: {}", function_name);
+        }
+    }
+    
+    fn update_variable(&mut self, name: &str, value: Value) -> Result<(), String> {
+        update_variable_value(&mut self.local_env, &mut self.global_env, name, value)
+    }
+} 
