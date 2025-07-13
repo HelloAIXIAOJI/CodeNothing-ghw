@@ -3,35 +3,27 @@
 // 移除注释
 pub fn remove_comments(source: &str) -> String {
     let mut result = String::new();
+    let mut in_comment = false;
     let mut i = 0;
     
     let chars: Vec<char> = source.chars().collect();
     
     while i < chars.len() {
         if i + 1 < chars.len() && chars[i] == '/' && chars[i + 1] == '/' {
-            // 单行注释：跳过到行尾
+            // 找到注释开始
+            in_comment = true;
             i += 2;
-            while i < chars.len() && chars[i] != '\n' {
-                i += 1;
-            }
-            // 保留换行符
-            if i < chars.len() && chars[i] == '\n' {
-                result.push(chars[i]);
-                i += 1;
-            }
-        } else if i + 1 < chars.len() && chars[i] == '/' && chars[i + 1] == '!' {
-            // 多行注释：跳过直到找到 !/
-            i += 2;
-            while i + 1 < chars.len() && !(chars[i] == '!' && chars[i + 1] == '/') {
-                i += 1;
-            }
-            // 跳过结束标记
-            if i + 1 < chars.len() {
-                i += 2;
-            }
-        } else {
+        } else if in_comment && chars[i] == '\n' {
+            // 注释结束
+            in_comment = false;
+            result.push(chars[i]);
+            i += 1;
+        } else if !in_comment {
             // 非注释内容
             result.push(chars[i]);
+            i += 1;
+        } else {
+            // 在注释内，跳过
             i += 1;
         }
     }
