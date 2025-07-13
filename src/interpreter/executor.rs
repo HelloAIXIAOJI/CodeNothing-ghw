@@ -1,11 +1,11 @@
-use crate::ast::{Statement, Expression, BinaryOperator, LogicalOperator};
+use crate::ast::{Statement, Expression, BinaryOperator, LogicalOperator, Function};
 use crate::interpreter::value::Value;
 use crate::interpreter::evaluator::{Evaluator, evaluate_compare_operation};
 use std::collections::HashMap;
 
 pub trait Executor: Evaluator {
     fn execute_statement(&mut self, statement: Statement) -> Option<Value>;
-    fn execute_function(&mut self, function_name: &str) -> Value;
+    fn execute_function(&mut self, function: &Function) -> Value;
     fn update_variable(&mut self, name: &str, value: Value) -> Result<(), String>;
 }
 
