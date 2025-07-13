@@ -13,6 +13,41 @@ pub enum Value {
     Map(HashMap<String, Value>),
 }
 
+impl Value {
+    // 将Value转换为String，用于传递给库函数
+    pub fn to_string(&self) -> String {
+        match self {
+            Value::Int(i) => i.to_string(),
+            Value::Float(f) => f.to_string(),
+            Value::Bool(b) => b.to_string(),
+            Value::String(s) => s.clone(),
+            Value::Long(l) => l.to_string(),
+            Value::Array(arr) => {
+                let mut result = String::from("[");
+                for (i, val) in arr.iter().enumerate() {
+                    if i > 0 {
+                        result.push_str(", ");
+                    }
+                    result.push_str(&val.to_string());
+                }
+                result.push(']');
+                result
+            },
+            Value::Map(map) => {
+                let mut result = String::from("{");
+                for (i, (key, val)) in map.iter().enumerate() {
+                    if i > 0 {
+                        result.push_str(", ");
+                    }
+                    result.push_str(&format!("\"{}\": {}", key, val.to_string()));
+                }
+                result.push('}');
+                result
+            }
+        }
+    }
+}
+
 impl fmt::Display for Value {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
