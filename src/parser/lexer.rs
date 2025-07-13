@@ -3,22 +3,31 @@
 // 移除注释
 pub fn remove_comments(source: &str) -> String {
     let mut result = String::new();
-    let mut in_comment = false;
+    let mut in_single_line_comment = false;
+    let mut in_multi_line_comment = false;
     let mut i = 0;
     
     let chars: Vec<char> = source.chars().collect();
     
     while i < chars.len() {
-        if i + 1 < chars.len() && chars[i] == '/' && chars[i + 1] == '/' {
-            // 找到注释开始
-            in_comment = true;
+        if i + 1 < chars.len() && chars[i] == '/' && chars[i + 1] == '/' && !in_multi_line_comment {
+            // 找到单行注释开始
+            in_single_line_comment = true;
             i += 2;
-        } else if in_comment && chars[i] == '\n' {
-            // 注释结束
-            in_comment = false;
+        } else if i + 1 < chars.len() && chars[i] == '/' && chars[i + 1] == '!' && !in_single_line_comment {
+            // 找到多行注释开始
+            in_multi_line_comment = true;
+            i += 2;
+        } else if in_single_line_comment && chars[i] == '\n' {
+            // 单行注释结束
+            in_single_line_comment = false;
             result.push(chars[i]);
             i += 1;
-        } else if !in_comment {
+        } else if in_multi_line_comment && i + 1 < chars.len() && chars[i] == '!' && chars[i + 1] == '/' {
+            // 多行注释结束
+            in_multi_line_comment = false;
+            i += 2;
+        } else if !in_single_line_comment && !in_multi_line_comment {
             // 非注释内容
             result.push(chars[i]);
             i += 1;
