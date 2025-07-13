@@ -136,14 +136,15 @@ impl<'a> ExpressionParser for ParserBase<'a> {
     }
     
     fn parse_primary_expression(&mut self) -> Result<Expression, String> {
-        match self.peek() {
-            Some(token) => {
-                if token == "(" {
+        if let Some(token) = self.peek() {
+            match token.as_str() {
+                "(" => {
                     self.consume(); // 消费左括号
                     let expr = self.parse_expression()?;
                     self.expect(")")?;
                     Ok(expr)
-                } else if token == "[" {
+                },
+                "[" => {
                     // 解析数组字面量
                     self.consume(); // 消费 "["
                     let mut elements = Vec::new();
@@ -164,7 +165,8 @@ impl<'a> ExpressionParser for ParserBase<'a> {
                     
                     self.expect("]")?;
                     Ok(Expression::ArrayLiteral(elements))
-                } else if token == "{" {
+                },
+                "{" => {
                     // 解析映射字面量
                     self.consume(); // 消费 "{"
                     let mut entries = Vec::new();
@@ -191,7 +193,8 @@ impl<'a> ExpressionParser for ParserBase<'a> {
                     
                     self.expect("}")?;
                     Ok(Expression::MapLiteral(entries))
-                } else if token == "::" {
+                },
+                "::" => {
                     // 解析全局函数调用
                     self.consume(); // 消费 "::"
                     
@@ -215,126 +218,136 @@ impl<'a> ExpressionParser for ParserBase<'a> {
                     
                     self.expect(")")?;
                     Ok(Expression::GlobalFunctionCall(func_name, args))
-                } else if token == "true" {
+                },
+                "true" => {
                     self.consume();
                     Ok(Expression::BoolLiteral(true))
-                } else if token == "false" {
+                },
+                "false" => {
                     self.consume();
                     Ok(Expression::BoolLiteral(false))
-                } else if let Ok(value) = token.parse::<i32>() {
-                    self.consume();
-                    Ok(Expression::IntLiteral(value))
-                } else if let Ok(value) = token.parse::<i64>() {
-                    // 检查是否是长整型（超过i32范围）
-                    if value > i32::MAX as i64 || value < i32::MIN as i64 {
-                        self.consume();
-                        Ok(Expression::LongLiteral(value))
-                    } else {
-                        self.consume();
-                        Ok(Expression::IntLiteral(value as i32))
-                    }
-                } else if let Ok(value) = token.parse::<f64>() {
-                    self.consume();
-                    Ok(Expression::FloatLiteral(value))
-                } else if token.starts_with("\"") && token.ends_with("\"") {
-                    // 字符串字面量
-                    let token_clone = token.clone();
-                    self.consume();
-                    let content = token_clone[1..token_clone.len()-1].to_string();
-                    Ok(Expression::StringLiteral(content))
-                } else if let Some(next_token) = self.tokens.get(self.position + 1) {
-                    if next_token == "(" {
-                        let func_name = self.consume().unwrap();
+                },
+                _ => {
+                    // 变量或函数调用
+                    let name = self.consume().unwrap();
+                    
+                    if self.peek() == Some(&"(".to_string()) {
+                        // 函数调用
                         self.consume(); // 消费 "("
                         
-                        // 解析函数调用参数
                         let mut args = Vec::new();
+                        
                         if self.peek() != Some(&")".to_string()) {
-                            // 至少有一个参数
-                            args.push(self.parse_expression()?);
-                            
-                            // 解析剩余参数
-                            while self.peek() == Some(&",".to_string()) {
-                                self.consume(); // 消费逗号
-                                args.push(self.parse_expression()?);
+                            // 解析参数列表
+                            loop {
+                                let arg = self.parse_expression()?;
+                                args.push(arg);
+                                
+                                if self.peek() != Some(&",".to_string()) {
+                                    break;
+                                }
+                                
+                                self.consume(); // 消费 ","
                             }
                         }
                         
                         self.expect(")")?;
-                        Ok(Expression::FunctionCall(func_name, args))
-                    } else if next_token == "::" {
-                        // 解析命名空间函数调用
-                        let mut path = Vec::new();
-                        path.push(self.consume().unwrap()); // 第一个命名空间名
                         
-                        // 解析命名空间路径
-                        while self.peek() == Some(&"::".to_string()) {
-                            self.consume(); // 消费 "::"
-                            if let Some(name) = self.consume() {
-                                path.push(name);
-                            } else {
-                                return Err("期望标识符".to_string());
-                            }
-                            
-                            // 如果下一个不是 "::" 或 "("，则结束路径解析
-                            if self.peek() != Some(&"::".to_string()) && self.peek() != Some(&"(".to_string()) {
-                                break;
-                            }
-                        }
+                        Ok(Expression::FunctionCall(name, args))
+                    } else if self.peek() == Some(&"::".to_string()) {
+                        // 命名空间函数调用或库函数调用
+                        self.consume(); // 消费 "::"
                         
-                        // 最后一个是函数名
-                        if self.peek() == Some(&"(".to_string()) {
-                            self.consume(); // 消费 "("
+                        // 获取函数名
+                        let func_name = self.consume().ok_or_else(|| "期望函数名".to_string())?;
+                        
+                        // 检查是否是库函数调用
+                        if name.starts_with("lib_") {
+                            // 库函数调用，格式为 lib_xxx::func_name
+                            let lib_name = name.trim_start_matches("lib_").to_string();
                             
-                            // 解析函数调用参数
+                            self.expect("(")?;
+                            
                             let mut args = Vec::new();
+                            
                             if self.peek() != Some(&")".to_string()) {
-                                // 至少有一个参数
-                                args.push(self.parse_expression()?);
-                                
-                                // 解析剩余参数
-                                while self.peek() == Some(&",".to_string()) {
-                                    self.consume(); // 消费逗号
-                                    args.push(self.parse_expression()?);
+                                // 解析参数列表
+                                loop {
+                                    let arg = self.parse_expression()?;
+                                    args.push(arg);
+                                    
+                                    if self.peek() != Some(&",".to_string()) {
+                                        break;
+                                    }
+                                    
+                                    self.consume(); // 消费 ","
                                 }
                             }
                             
                             self.expect(")")?;
-                            Ok(Expression::NamespacedFunctionCall(path, args))
+                            
+                            Ok(Expression::LibraryFunctionCall(lib_name, func_name, args))
                         } else {
-                            Err("期望 '('".to_string())
+                            // 命名空间函数调用
+                            let mut path = Vec::new();
+                            path.push(self.consume().unwrap()); // 第一个命名空间名
+                            
+                            // 解析命名空间路径
+                            while self.peek() == Some(&"::".to_string()) {
+                                self.consume(); // 消费 "::"
+                                if let Some(name) = self.consume() {
+                                    path.push(name);
+                                } else {
+                                    return Err("期望标识符".to_string());
+                                }
+                                
+                                // 如果下一个不是 "::" 或 "("，则结束路径解析
+                                if self.peek() != Some(&"::".to_string()) && self.peek() != Some(&"(".to_string()) {
+                                    break;
+                                }
+                            }
+                            
+                            // 最后一个是函数名
+                            if self.peek() == Some(&"(".to_string()) {
+                                self.consume(); // 消费 "("
+                                
+                                // 解析函数调用参数
+                                let mut args = Vec::new();
+                                if self.peek() != Some(&")".to_string()) {
+                                    // 至少有一个参数
+                                    args.push(self.parse_expression()?);
+                                    
+                                    // 解析剩余参数
+                                    while self.peek() == Some(&",".to_string()) {
+                                        self.consume(); // 消费逗号
+                                        args.push(self.parse_expression()?);
+                                    }
+                                }
+                                
+                                self.expect(")")?;
+                                Ok(Expression::NamespacedFunctionCall(path, args))
+                            } else {
+                                Err("期望 '('".to_string())
+                            }
                         }
-                    } else if next_token == "++" {
+                    } else if self.peek() == Some(&"++".to_string()) {
                         // 后置自增
                         let var_name = self.consume().unwrap();
                         self.consume(); // 消费 "++"
                         Ok(Expression::PostIncrement(var_name))
-                    } else if next_token == "--" {
+                    } else if self.peek() == Some(&"--".to_string()) {
                         // 后置自减
                         let var_name = self.consume().unwrap();
                         self.consume(); // 消费 "--"
                         Ok(Expression::PostDecrement(var_name))
                     } else {
-                        // 变量引用
-                        let var_name = self.consume().unwrap();
-                        Ok(Expression::Variable(var_name))
-                    }
-                } else {
-                    // 最后一个token，可能是变量
-                    let var_name = self.consume().unwrap();
-                    // 检查是否有后置自增/自减
-                    if self.peek() == Some(&"++".to_string()) {
-                        self.consume(); // 消费 "++"
-                        Ok(Expression::PostIncrement(var_name))
-                    } else if self.peek() == Some(&"--".to_string()) {
-                        self.consume(); // 消费 "--"
-                        Ok(Expression::PostDecrement(var_name))
-                    } else {
-                        Ok(Expression::Variable(var_name))
+                        // 变量
+                        Ok(Expression::Variable(name))
                     }
                 }
-            },
-            None => Err("期望表达式".to_string()),
+            }
+        } else {
+            Err("期望表达式".to_string())
         }
     }
 } 
