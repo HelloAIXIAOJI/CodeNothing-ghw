@@ -47,4 +47,4 @@ fn main() : int {
     !/
     
     return num; // 应该返回20
-}; 
+};
