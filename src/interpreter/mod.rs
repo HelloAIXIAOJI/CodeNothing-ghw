@@ -367,14 +367,28 @@ impl<'a> Executor for Interpreter<'a> {
                 None
             },
             Statement::Increment(name) => {
-                // 使用辅助函数处理自增操作
+                // 使用辅助函数处理后置自增操作
                 if let Err(err) = handle_increment(&mut self.local_env, &mut self.global_env, &name) {
                     panic!("{}", err);
                 }
                 None
             },
             Statement::Decrement(name) => {
-                // 使用辅助函数处理自减操作
+                // 使用辅助函数处理后置自减操作
+                if let Err(err) = handle_decrement(&mut self.local_env, &mut self.global_env, &name) {
+                    panic!("{}", err);
+                }
+                None
+            },
+            Statement::PreIncrement(name) => {
+                // 使用辅助函数处理前置自增操作
+                if let Err(err) = handle_increment(&mut self.local_env, &mut self.global_env, &name) {
+                    panic!("{}", err);
+                }
+                None
+            },
+            Statement::PreDecrement(name) => {
+                // 使用辅助函数处理前置自减操作
                 if let Err(err) = handle_decrement(&mut self.local_env, &mut self.global_env, &name) {
                     panic!("{}", err);
                 }

@@ -143,6 +143,25 @@ impl<'a> StatementParser for ParserBase<'a> {
                 
                 Ok(Statement::WhileLoop(condition, loop_body))
             },
+            // 添加对前置自增/自减的支持
+            Some(token) if token == "++" => {
+                self.consume(); // 消费 "++"
+                
+                // 获取变量名
+                let var_name = self.consume().ok_or_else(|| "前置自增操作符后期望变量名".to_string())?;
+                
+                self.expect(";")?;
+                Ok(Statement::PreIncrement(var_name))
+            },
+            Some(token) if token == "--" => {
+                self.consume(); // 消费 "--"
+                
+                // 获取变量名
+                let var_name = self.consume().ok_or_else(|| "前置自减操作符后期望变量名".to_string())?;
+                
+                self.expect(";")?;
+                Ok(Statement::PreDecrement(var_name))
+            },
             Some(_) => {
                 // 检查是否是变量声明或赋值
                 let var_name = self.consume().unwrap();
