@@ -73,8 +73,6 @@ pub enum Statement {
     IfElse(Expression, Vec<Statement>, Vec<(Option<Expression>, Vec<Statement>)>), // if-else 语句，包含条件、if块和多个else-if/else块
     ForLoop(String, Expression, Expression, Vec<Statement>), // for循环，包含变量名、范围起始值、范围结束值和循环体
     WhileLoop(Expression, Vec<Statement>), // while循环，包含条件和循环体
-    Break, // break语句，用于跳出循环
-    Continue, // continue语句，用于跳过当前迭代
     // 未来可以扩展更多语句类型
 }
 
