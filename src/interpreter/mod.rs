@@ -303,6 +303,126 @@ impl<'a> Evaluator for Interpreter<'a> {
                         }
                     }
                 }
+            },
+            Expression::PreIncrement(name) => {
+                // 前置自增：先增加变量值，再返回新值
+                
+                // 获取变量当前值
+                let value = if self.local_env.contains_key(name) {
+                    self.local_env.get(name).unwrap().clone()
+                } else if self.global_env.contains_key(name) {
+                    self.global_env.get(name).unwrap().clone()
+                } else {
+                    panic!("未定义的变量: {}", name);
+                };
+                
+                // 根据变量类型执行自增
+                let new_value = match value {
+                    Value::Int(i) => Value::Int(i + 1),
+                    Value::Float(f) => Value::Float(f + 1.0),
+                    Value::Long(l) => Value::Long(l + 1),
+                    _ => panic!("不能对类型 {:?} 执行自增操作", value),
+                };
+                
+                // 更新变量值
+                if self.local_env.contains_key(name) {
+                    self.local_env.insert(name.clone(), new_value.clone());
+                } else {
+                    self.global_env.insert(name.clone(), new_value.clone());
+                }
+                
+                // 返回新值
+                new_value
+            },
+            Expression::PreDecrement(name) => {
+                // 前置自减：先减少变量值，再返回新值
+                
+                // 获取变量当前值
+                let value = if self.local_env.contains_key(name) {
+                    self.local_env.get(name).unwrap().clone()
+                } else if self.global_env.contains_key(name) {
+                    self.global_env.get(name).unwrap().clone()
+                } else {
+                    panic!("未定义的变量: {}", name);
+                };
+                
+                // 根据变量类型执行自减
+                let new_value = match value {
+                    Value::Int(i) => Value::Int(i - 1),
+                    Value::Float(f) => Value::Float(f - 1.0),
+                    Value::Long(l) => Value::Long(l - 1),
+                    _ => panic!("不能对类型 {:?} 执行自减操作", value),
+                };
+                
+                // 更新变量值
+                if self.local_env.contains_key(name) {
+                    self.local_env.insert(name.clone(), new_value.clone());
+                } else {
+                    self.global_env.insert(name.clone(), new_value.clone());
+                }
+                
+                // 返回新值
+                new_value
+            },
+            Expression::PostIncrement(name) => {
+                // 后置自增：先返回原值，再增加变量值
+                
+                // 获取变量当前值
+                let value = if self.local_env.contains_key(name) {
+                    self.local_env.get(name).unwrap().clone()
+                } else if self.global_env.contains_key(name) {
+                    self.global_env.get(name).unwrap().clone()
+                } else {
+                    panic!("未定义的变量: {}", name);
+                };
+                
+                // 根据变量类型执行自增
+                let new_value = match &value {
+                    Value::Int(i) => Value::Int(i + 1),
+                    Value::Float(f) => Value::Float(f + 1.0),
+                    Value::Long(l) => Value::Long(l + 1),
+                    _ => panic!("不能对类型 {:?} 执行自增操作", value),
+                };
+                
+                // 更新变量值
+                if self.local_env.contains_key(name) {
+                    self.local_env.insert(name.clone(), new_value);
+                } else {
+                    self.global_env.insert(name.clone(), new_value);
+                }
+                
+                // 返回原值
+                value
+            },
+            Expression::PostDecrement(name) => {
+                // 后置自减：先返回原值，再减少变量值
+                
+                // 获取变量当前值
+                let value = if self.local_env.contains_key(name) {
+                    self.local_env.get(name).unwrap().clone()
+                } else if self.global_env.contains_key(name) {
+                    self.global_env.get(name).unwrap().clone()
+                } else {
+                    panic!("未定义的变量: {}", name);
+                };
+                
+                // 根据变量类型执行自减
+                let new_value = match &value {
+                    Value::Int(i) => Value::Int(i - 1),
+                    Value::Float(f) => Value::Float(f - 1.0),
+                    Value::Long(l) => Value::Long(l - 1),
+                    _ => panic!("不能对类型 {:?} 执行自减操作", value),
+                };
+                
+                // 更新变量值
+                if self.local_env.contains_key(name) {
+                    self.local_env.insert(name.clone(), new_value);
+                } else {
+                    self.global_env.insert(name.clone(), new_value);
+                }
+                
+                // 返回原值
+                value
             }
         }
     }

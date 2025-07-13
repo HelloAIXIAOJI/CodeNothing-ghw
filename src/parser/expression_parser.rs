@@ -111,6 +111,24 @@ impl<'a> ExpressionParser for ParserBase<'a> {
                 self.consume(); // 消费操作符
                 let expr = self.parse_unary_expression()?;
                 return Ok(Expression::LogicalOp(Box::new(expr), LogicalOperator::Not, Box::new(Expression::BoolLiteral(false))));
+            } else if op == "++" {
+                // 前置自增
+                self.consume(); // 消费 "++"
+                if let Some(var_name) = self.peek() {
+                    let var = self.consume().unwrap();
+                    return Ok(Expression::PreIncrement(var));
+                } else {
+                    return Err("前置自增操作符后期望变量名".to_string());
+                }
+            } else if op == "--" {
+                // 前置自减
+                self.consume(); // 消费 "--"
+                if let Some(var_name) = self.peek() {
+                    let var = self.consume().unwrap();
+                    return Ok(Expression::PreDecrement(var));
+                } else {
+                    return Err("前置自减操作符后期望变量名".to_string());
+                }
             }
         }
         
@@ -286,6 +304,16 @@ impl<'a> ExpressionParser for ParserBase<'a> {
                         } else {
                             Err("期望 '('".to_string())
                         }
+                    } else if next_token == "++" {
+                        // 后置自增
+                        let var_name = self.consume().unwrap();
+                        self.consume(); // 消费 "++"
+                        Ok(Expression::PostIncrement(var_name))
+                    } else if next_token == "--" {
+                        // 后置自减
+                        let var_name = self.consume().unwrap();
+                        self.consume(); // 消费 "--"
+                        Ok(Expression::PostDecrement(var_name))
                     } else {
                         // 变量引用
                         let var_name = self.consume().unwrap();
@@ -294,7 +322,16 @@ impl<'a> ExpressionParser for ParserBase<'a> {
                 } else {
                     // 最后一个token，可能是变量
                     let var_name = self.consume().unwrap();
-                    Ok(Expression::Variable(var_name))
+                    // 检查是否有后置自增/自减
+                    if self.peek() == Some(&"++".to_string()) {
+                        self.consume(); // 消费 "++"
+                        Ok(Expression::PostIncrement(var_name))
+                    } else if self.peek() == Some(&"--".to_string()) {
+                        self.consume(); // 消费 "--"
+                        Ok(Expression::PostDecrement(var_name))
+                    } else {
+                        Ok(Expression::Variable(var_name))
+                    }
                 }
             },
             None => Err("期望表达式".to_string()),

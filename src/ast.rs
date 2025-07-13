@@ -26,6 +26,10 @@ pub enum Expression {
     BinaryOp(Box<Expression>, BinaryOperator, Box<Expression>),
     CompareOp(Box<Expression>, CompareOperator, Box<Expression>), // 比较操作
     LogicalOp(Box<Expression>, LogicalOperator, Box<Expression>), // 逻辑操作
+    PreIncrement(String),  // 前置自增 (++var)
+    PreDecrement(String),  // 前置自减 (--var)
+    PostIncrement(String), // 后置自增 (var++)
+    PostDecrement(String), // 后置自减 (var--)
     // 未来可以扩展更多表达式类型
 }
 
