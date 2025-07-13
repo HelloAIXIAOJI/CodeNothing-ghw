@@ -2,7 +2,7 @@ pub mod value;
 pub mod evaluator;
 pub mod executor;
 
-use crate::ast::{Program, Expression, Statement, BinaryOperator, Type, Namespace, CompareOperator, LogicalOperator};
+use crate::ast::{Program, Expression, Statement, BinaryOperator, Type, Namespace, CompareOperator, LogicalOperator, Function};
 use std::collections::HashMap;
 use value::Value;
 use evaluator::{Evaluator, perform_binary_operation, evaluate_compare_operation};
@@ -464,7 +464,7 @@ impl<'a> Executor for Interpreter<'a> {
                         match maybe_condition {
                             Some(else_if_condition) => {
                                 // 这是 else-if 块，需要计算条件
-                                let else_if_value = self.evaluate_expression(else_if_condition);
+                                let else_if_value = self.evaluate_expression(&else_if_condition);
                                 let else_if_is_true = match else_if_value {
                                     Value::Bool(b) => b,
                                     _ => panic!("else-if 条件表达式必须是布尔类型"),
