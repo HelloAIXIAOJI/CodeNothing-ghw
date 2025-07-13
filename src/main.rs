@@ -14,9 +14,16 @@ fn main() {
     
     let file_path = &args[1];
     let debug_parser = args.iter().any(|arg| arg == "--cn-parser");
+    let debug_lexer = args.iter().any(|arg| arg == "--cn-lexer");
     
     match fs::read_to_string(file_path) {
         Ok(content) => {
+            // 添加调试信息，查看注释移除后的代码
+            if debug_lexer {
+                let content_without_comments = parser::lexer::remove_comments(&content);
+                println!("移除注释后的代码:\n{}", content_without_comments);
+            }
+            
             let ast = parser::parse(&content, debug_parser);
             match ast {
                 Ok(program) => {
