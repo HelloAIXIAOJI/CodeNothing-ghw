@@ -1,0 +1,64 @@
+fn main() : int {
+    // 测试复杂条件表达式
+    a : int = 10;
+    b : int = 20;
+    c : bool = true;
+    
+    result : string = "";
+    
+    // 测试逻辑与
+    if (a > 5 && b > 15) {
+        result = "条件1成立";
+    } else {
+        result = "条件1不成立";
+    };
+    
+    // 测试逻辑或
+    if (a > 15 || b > 15) {
+        result = result + " 条件2成立";
+    } else {
+        result = result + " 条件2不成立";
+    };
+    
+    // 测试逻辑非
+    if (!c) {
+        result = result + " 条件3成立";
+    } else {
+        result = result + " 条件3不成立";
+    };
+    
+    // 测试复杂嵌套条件
+    if (a > 5) {
+        if (b > 15) {
+            if (c) {
+                result = result + " 嵌套条件成立";
+            } else {
+                result = result + " 嵌套条件不成立1";
+            };
+        } else {
+            result = result + " 嵌套条件不成立2";
+        };
+    } else {
+        result = result + " 嵌套条件不成立3";
+    };
+    
+    // 测试多个else-if
+    if (a > 20) {
+        result = result + " 多分支1";
+    } else if (a > 15) {
+        result = result + " 多分支2";
+    } else if (a > 5) {
+        result = result + " 多分支3";
+    } else {
+        result = result + " 多分支4";
+    };
+    
+    // 期望的结果是："条件1成立 条件2成立 条件3不成立 嵌套条件成立 多分支3"
+    expected : string = "条件1成立 条件2成立 条件3不成立 嵌套条件成立 多分支3";
+    
+    if (result == expected) {
+        return 1; // 测试通过
+    } else {
+        return 0; // 测试失败
+    };
+}; 

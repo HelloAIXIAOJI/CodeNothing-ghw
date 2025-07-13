@@ -24,6 +24,8 @@ pub enum Expression {
     GlobalFunctionCall(String, Vec<Expression>), // 全局函数明确调用 (::func)
     Variable(String),
     BinaryOp(Box<Expression>, BinaryOperator, Box<Expression>),
+    CompareOp(Box<Expression>, CompareOperator, Box<Expression>), // 比较操作
+    LogicalOp(Box<Expression>, LogicalOperator, Box<Expression>), // 逻辑操作
     // 未来可以扩展更多表达式类型
 }
 
@@ -37,6 +39,23 @@ pub enum BinaryOperator {
 }
 
 #[derive(Debug, Clone)]
+pub enum CompareOperator {
+    Equal,        // ==
+    NotEqual,     // !=
+    Greater,      // >
+    Less,         // <
+    GreaterEqual, // >=
+    LessEqual,    // <=
+}
+
+#[derive(Debug, Clone)]
+pub enum LogicalOperator {
+    And,  // &&
+    Or,   // ||
+    Not,  // !
+}
+
+#[derive(Debug, Clone)]
 pub enum Statement {
     Return(Expression),
     VariableDeclaration(String, Type, Expression),
@@ -45,6 +64,7 @@ pub enum Statement {
     Decrement(String), // 自减语句 (var--)
     CompoundAssignment(String, BinaryOperator, Expression), // 复合赋值 (+=, -=, *=, /=, %=)
     UsingNamespace(Vec<String>), // 导入命名空间 (using ns xxx;)
+    IfElse(Expression, Vec<Statement>, Vec<(Option<Expression>, Vec<Statement>)>), // if-else 语句，包含条件、if块和多个else-if/else块
     // 未来可以扩展更多语句类型
 }
 

@@ -1,0 +1,13 @@
+fn main() : int {
+    // 测试简单的if语句
+    a : int = 10;
+    result : int = 0;
+    
+    if (a > 5) {
+        result = 1;
+    } else {
+        result = 2;
+    };
+    
+    return result;
+}; 

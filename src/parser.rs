@@ -1,4 +1,4 @@
-use crate::ast::{Program, Function, Statement, Expression, Type, BinaryOperator, Parameter, Namespace};
+use crate::ast::{Program, Function, Statement, Expression, Type, BinaryOperator, Parameter, Namespace, CompareOperator, LogicalOperator};
 
 pub fn parse(source: &str, debug: bool) -> Result<Program, String> {
     // 预处理：移除注释
@@ -90,7 +90,14 @@ impl Parser {
             .replace("-=", " __SUB_ASSIGN__ ")
             .replace("*=", " __MUL_ASSIGN__ ")
             .replace("/=", " __DIV_ASSIGN__ ")
-            .replace("%=", " __MOD_ASSIGN__ ");
+            .replace("%=", " __MOD_ASSIGN__ ")
+            .replace("==", " __EQ__ ")
+            .replace("!=", " __NEQ__ ")
+            .replace(">=", " __GTE__ ")
+            .replace("<=", " __LTE__ ")
+            .replace("&&", " __AND__ ")
+            .replace("||", " __OR__ ")
+            .replace("!", " __NOT__ ");
         
         // 处理其他分隔符
         let mut processed = processed_source
@@ -132,6 +139,20 @@ impl Parser {
                     "/=".to_string()
                 } else if s == "__MOD_ASSIGN__" {
                     "%=".to_string()
+                } else if s == "__EQ__" {
+                    "==".to_string()
+                } else if s == "__NEQ__" {
+                    "!=".to_string()
+                } else if s == "__GTE__" {
+                    ">=".to_string()
+                } else if s == "__LTE__" {
+                    "<=".to_string()
+                } else if s == "__AND__" {
+                    "&&".to_string()
+                } else if s == "__OR__" {
+                    "||".to_string()
+                } else if s == "__NOT__" {
+                    "!".to_string()
                 } else {
                     s.to_string()
                 }
@@ -338,6 +359,63 @@ impl Parser {
                 self.expect(";")?;
                 Ok(Statement::UsingNamespace(path))
             },
+            Some(token) if token == "if" => {
+                self.consume(); // 消费 "if"
+                
+                // 解析条件
+                self.expect("(")?;
+                let condition = self.parse_expression()?;
+                self.expect(")")?;
+                
+                // 解析 if 块
+                self.expect("{")?;
+                let mut if_block = Vec::new();
+                while self.peek() != Some(&"}".to_string()) {
+                    if_block.push(self.parse_statement()?);
+                }
+                self.expect("}")?;
+                
+                // 解析 else if 和 else 块
+                let mut else_blocks = Vec::new();
+                
+                while self.peek() == Some(&"else".to_string()) {
+                    self.consume(); // 消费 "else"
+                    
+                    if self.peek() == Some(&"if".to_string()) {
+                        // else if 块
+                        self.consume(); // 消费 "if"
+                        
+                        // 解析条件
+                        self.expect("(")?;
+                        let else_if_condition = self.parse_expression()?;
+                        self.expect(")")?;
+                        
+                        // 解析 else if 块
+                        self.expect("{")?;
+                        let mut else_if_block = Vec::new();
+                        while self.peek() != Some(&"}".to_string()) {
+                            else_if_block.push(self.parse_statement()?);
+                        }
+                        self.expect("}")?;
+                        
+                        else_blocks.push((Some(else_if_condition), else_if_block));
+                    } else {
+                        // else 块
+                        self.expect("{")?;
+                        let mut else_block = Vec::new();
+                        while self.peek() != Some(&"}".to_string()) {
+                            else_block.push(self.parse_statement()?);
+                        }
+                        self.expect("}")?;
+                        
+                        else_blocks.push((None, else_block));
+                        break; // else 块后不应该有更多块
+                    }
+                }
+                
+                self.expect(";")?;
+                Ok(Statement::IfElse(condition, if_block, else_blocks))
+            },
             Some(_) => {
                 // 检查是否是变量声明或赋值
                 let var_name = self.consume().unwrap();
@@ -425,7 +503,53 @@ impl Parser {
     }
     
     fn parse_expression(&mut self) -> Result<Expression, String> {
-        self.parse_additive_expression()
+        self.parse_logical_expression()
+    }
+    
+    fn parse_logical_expression(&mut self) -> Result<Expression, String> {
+        let mut left = self.parse_compare_expression()?;
+        
+        while let Some(op) = self.peek() {
+            if op == "&&" || op == "||" {
+                let operator = match op.as_str() {
+                    "&&" => LogicalOperator::And,
+                    "||" => LogicalOperator::Or,
+                    _ => unreachable!(),
+                };
+                self.consume(); // 消费操作符
+                let right = self.parse_compare_expression()?;
+                left = Expression::LogicalOp(Box::new(left), operator, Box::new(right));
+            } else {
+                break;
+            }
+        }
+        
+        Ok(left)
+    }
+    
+    fn parse_compare_expression(&mut self) -> Result<Expression, String> {
+        let mut left = self.parse_additive_expression()?;
+        
+        while let Some(op) = self.peek() {
+            if op == "==" || op == "!=" || op == ">" || op == "<" || op == ">=" || op == "<=" {
+                let operator = match op.as_str() {
+                    "==" => CompareOperator::Equal,
+                    "!=" => CompareOperator::NotEqual,
+                    ">" => CompareOperator::Greater,
+                    "<" => CompareOperator::Less,
+                    ">=" => CompareOperator::GreaterEqual,
+                    "<=" => CompareOperator::LessEqual,
+                    _ => unreachable!(),
+                };
+                self.consume(); // 消费操作符
+                let right = self.parse_additive_expression()?;
+                left = Expression::CompareOp(Box::new(left), operator, Box::new(right));
+            } else {
+                break;
+            }
+        }
+        
+        Ok(left)
     }
     
     fn parse_additive_expression(&mut self) -> Result<Expression, String> {
@@ -450,7 +574,7 @@ impl Parser {
     }
     
     fn parse_multiplicative_expression(&mut self) -> Result<Expression, String> {
-        let mut left = self.parse_primary_expression()?;
+        let mut left = self.parse_unary_expression()?;
         
         while let Some(op) = self.peek() {
             if op == "*" || op == "/" || op == "%" {
@@ -461,7 +585,7 @@ impl Parser {
                     _ => unreachable!(),
                 };
                 self.consume(); // 消费操作符
-                let right = self.parse_primary_expression()?;
+                let right = self.parse_unary_expression()?;
                 left = Expression::BinaryOp(Box::new(left), operator, Box::new(right));
             } else {
                 break;
@@ -469,6 +593,18 @@ impl Parser {
         }
         
         Ok(left)
+    }
+    
+    fn parse_unary_expression(&mut self) -> Result<Expression, String> {
+        if let Some(op) = self.peek() {
+            if op == "!" {
+                self.consume(); // 消费操作符
+                let expr = self.parse_unary_expression()?;
+                return Ok(Expression::LogicalOp(Box::new(expr), LogicalOperator::Not, Box::new(Expression::BoolLiteral(false))));
+            }
+        }
+        
+        self.parse_primary_expression()
     }
     
     fn parse_primary_expression(&mut self) -> Result<Expression, String> {

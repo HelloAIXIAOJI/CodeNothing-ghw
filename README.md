@@ -1,0 +1,97 @@
+# CodeNothing
+
+一个简单的编程语言解释器，支持基本的语法和功能。
+
+## 功能
+
+- 变量声明和赋值
+- 基本的算术运算
+- 函数定义和调用
+- 命名空间
+- 自增、自减和复合赋值操作符
+- if-else 条件语句和逻辑操作符
+
+## 语法示例
+
+### 变量声明和赋值
+
+```
+num : int = 10;
+str : string = "hello";
+```
+
+### 函数定义和调用
+
+```
+fn add(a : int, b : int) : int {
+    return a + b;
+};
+
+result : int = add(1, 2);
+```
+
+### 命名空间
+
+```
+ns math {
+    fn add(a : int, b : int) : int {
+        return a + b;
+    };
+};
+
+result : int = math::add(1, 2);
+
+// 导入命名空间
+using ns math;
+result : int = add(1, 2);
+```
+
+### 自增、自减和复合赋值操作符
+
+```
+num : int = 10;
+num++;       // 自增
+num--;       // 自减
+num += 5;    // 复合赋值
+num -= 3;    // 复合赋值
+num *= 2;    // 复合赋值
+num /= 4;    // 复合赋值
+num %= 3;    // 复合赋值
+```
+
+### if-else 条件语句和逻辑操作符
+
+```
+if (condition) {
+    // 代码块
+} else if (another_condition) {
+    // 代码块
+} else {
+    // 代码块
+};
+
+// 逻辑操作符
+if (a > 5 && b < 10) {
+    // 逻辑与
+};
+
+if (a > 5 || b < 10) {
+    // 逻辑或
+};
+
+if (!condition) {
+    // 逻辑非
+};
+```
+
+## 运行
+
+```
+cargo run -- <文件路径>
+```
+
+例如：
+
+```
+cargo run -- helloworld.cn
+``` 

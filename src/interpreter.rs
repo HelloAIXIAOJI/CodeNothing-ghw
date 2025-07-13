@@ -1,4 +1,4 @@
-use crate::ast::{Program, Expression, Statement, BinaryOperator, Type, Namespace};
+use crate::ast::{Program, Expression, Statement, BinaryOperator, Type, Namespace, CompareOperator, LogicalOperator};
 use std::collections::HashMap;
 use std::fmt;
 
@@ -127,236 +127,317 @@ impl<'a> Interpreter<'a> {
         // 不再需要在这里清空局部环境
         
         for statement in &function.body {
-            match statement {
-                Statement::Return(expr) => {
-                    return self.evaluate_expression(expr);
-                },
-                Statement::VariableDeclaration(name, _type, expr) => {
-                    let value = self.evaluate_expression(expr);
-                    self.local_env.insert(name.clone(), value);
-                },
-                Statement::VariableAssignment(name, expr) => {
-                    let value = self.evaluate_expression(expr);
-                    // 先检查局部变量，再检查全局变量
-                    if self.local_env.contains_key(name) {
-                        self.local_env.insert(name.clone(), value);
-                    } else if self.global_env.contains_key(name) {
-                        self.global_env.insert(name.clone(), value);
-                    } else {
-                        panic!("未定义的变量: {}", name);
-                    }
-                },
-                Statement::Increment(name) => {
-                    // 自增操作
-                    let value = if self.local_env.contains_key(name) {
-                        self.local_env.get(name).unwrap().clone()
-                    } else if self.global_env.contains_key(name) {
-                        self.global_env.get(name).unwrap().clone()
-                    } else {
-                        panic!("未定义的变量: {}", name);
-                    };
-                    
-                    // 根据变量类型执行自增
-                    let new_value = match value {
-                        Value::Int(i) => Value::Int(i + 1),
-                        Value::Float(f) => Value::Float(f + 1.0),
-                        Value::Long(l) => Value::Long(l + 1),
-                        _ => panic!("不能对类型 {:?} 执行自增操作", value),
-                    };
-                    
-                    // 更新变量值
-                    if self.local_env.contains_key(name) {
-                        self.local_env.insert(name.clone(), new_value);
-                    } else {
-                        self.global_env.insert(name.clone(), new_value);
-                    }
-                },
-                Statement::Decrement(name) => {
-                    // 自减操作
-                    let value = if self.local_env.contains_key(name) {
-                        self.local_env.get(name).unwrap().clone()
-                    } else if self.global_env.contains_key(name) {
-                        self.global_env.get(name).unwrap().clone()
-                    } else {
-                        panic!("未定义的变量: {}", name);
-                    };
-                    
-                    // 根据变量类型执行自减
-                    let new_value = match value {
-                        Value::Int(i) => Value::Int(i - 1),
-                        Value::Float(f) => Value::Float(f - 1.0),
-                        Value::Long(l) => Value::Long(l - 1),
-                        _ => panic!("不能对类型 {:?} 执行自减操作", value),
-                    };
-                    
-                    // 更新变量值
-                    if self.local_env.contains_key(name) {
-                        self.local_env.insert(name.clone(), new_value);
-                    } else {
-                        self.global_env.insert(name.clone(), new_value);
-                    }
-                },
-                Statement::CompoundAssignment(name, op, expr) => {
-                    // 复合赋值操作 (+=, -=, *=, /=, %=)
-                    let right_value = self.evaluate_expression(expr);
-                    
-                    // 获取变量当前值
-                    let left_value = if self.local_env.contains_key(name) {
-                        self.local_env.get(name).unwrap().clone()
-                    } else if self.global_env.contains_key(name) {
-                        self.global_env.get(name).unwrap().clone()
-                    } else {
-                        panic!("未定义的变量: {}", name);
-                    };
-                    
-                    // 执行对应的二元运算
-                    let new_value = match (left_value, op, &right_value) {
-                        // 整数运算
-                        (Value::Int(l), BinaryOperator::Add, Value::Int(r)) => Value::Int(l + r),
-                        (Value::Int(l), BinaryOperator::Subtract, Value::Int(r)) => Value::Int(l - r),
-                        (Value::Int(l), BinaryOperator::Multiply, Value::Int(r)) => Value::Int(l * r),
-                        (Value::Int(l), BinaryOperator::Divide, Value::Int(r)) => {
-                            if *r == 0 {
-                                panic!("除以零错误");
-                            }
-                            Value::Int(l / r)
-                        },
-                        (Value::Int(l), BinaryOperator::Modulo, Value::Int(r)) => {
-                            if *r == 0 {
-                                panic!("除以零错误");
-                            }
-                            Value::Int(l % r)
-                        },
-                        
-                        // 浮点数运算
-                        (Value::Float(l), BinaryOperator::Add, Value::Float(r)) => Value::Float(l + r),
-                        (Value::Float(l), BinaryOperator::Subtract, Value::Float(r)) => Value::Float(l - r),
-                        (Value::Float(l), BinaryOperator::Multiply, Value::Float(r)) => Value::Float(l * r),
-                        (Value::Float(l), BinaryOperator::Divide, Value::Float(r)) => {
-                            if *r == 0.0 {
-                                panic!("除以零错误");
-                            }
-                            Value::Float(l / r)
-                        },
-                        
-                        // 整数和浮点数混合运算
-                        (Value::Int(l), BinaryOperator::Add, Value::Float(r)) => Value::Float(l as f64 + r),
-                        (Value::Float(l), BinaryOperator::Add, Value::Int(r)) => Value::Float(l + *r as f64),
-                        (Value::Int(l), BinaryOperator::Subtract, Value::Float(r)) => Value::Float(l as f64 - r),
-                        (Value::Float(l), BinaryOperator::Subtract, Value::Int(r)) => Value::Float(l - *r as f64),
-                        (Value::Int(l), BinaryOperator::Multiply, Value::Float(r)) => Value::Float(l as f64 * r),
-                        (Value::Float(l), BinaryOperator::Multiply, Value::Int(r)) => Value::Float(l * *r as f64),
-                        (Value::Int(l), BinaryOperator::Divide, Value::Float(r)) => {
-                            if *r == 0.0 {
-                                panic!("除以零错误");
-                            }
-                            Value::Float(l as f64 / r)
-                        },
-                        (Value::Float(l), BinaryOperator::Divide, Value::Int(r)) => {
-                            if *r == 0 {
-                                panic!("除以零错误");
-                            }
-                            Value::Float(l / *r as f64)
-                        },
-                        
-                        // 长整型运算
-                        (Value::Long(l), BinaryOperator::Add, Value::Long(r)) => Value::Long(l + r),
-                        (Value::Long(l), BinaryOperator::Subtract, Value::Long(r)) => Value::Long(l - r),
-                        (Value::Long(l), BinaryOperator::Multiply, Value::Long(r)) => Value::Long(l * r),
-                        (Value::Long(l), BinaryOperator::Divide, Value::Long(r)) => {
-                            if *r == 0 {
-                                panic!("除以零错误");
-                            }
-                            Value::Long(l / r)
-                        },
-                        (Value::Long(l), BinaryOperator::Modulo, Value::Long(r)) => {
-                            if *r == 0 {
-                                panic!("除以零错误");
-                            }
-                            Value::Long(l % r)
-                        },
-                        
-                        // 整数和长整型混合运算
-                        (Value::Int(l), BinaryOperator::Add, Value::Long(r)) => Value::Long(l as i64 + r),
-                        (Value::Long(l), BinaryOperator::Add, Value::Int(r)) => Value::Long(l + *r as i64),
-                        (Value::Int(l), BinaryOperator::Subtract, Value::Long(r)) => Value::Long(l as i64 - r),
-                        (Value::Long(l), BinaryOperator::Subtract, Value::Int(r)) => Value::Long(l - *r as i64),
-                        (Value::Int(l), BinaryOperator::Multiply, Value::Long(r)) => Value::Long(l as i64 * r),
-                        (Value::Long(l), BinaryOperator::Multiply, Value::Int(r)) => Value::Long(l * *r as i64),
-                        (Value::Int(l), BinaryOperator::Divide, Value::Long(r)) => {
-                            if *r == 0 {
-                                panic!("除以零错误");
-                            }
-                            Value::Long(l as i64 / r)
-                        },
-                        (Value::Long(l), BinaryOperator::Divide, Value::Int(r)) => {
-                            if *r == 0 {
-                                panic!("除以零错误");
-                            }
-                            Value::Long(l / *r as i64)
-                        },
-                        
-                        // 字符串连接
-                        (Value::String(l), BinaryOperator::Add, Value::String(r)) => Value::String(l + r),
-                        
-                        // 字符串和其他类型的连接
-                        (Value::String(l), BinaryOperator::Add, Value::Int(r)) => Value::String(l + &r.to_string()),
-                        (Value::String(l), BinaryOperator::Add, Value::Float(r)) => Value::String(l + &r.to_string()),
-                        (Value::String(l), BinaryOperator::Add, Value::Bool(r)) => Value::String(l + &r.to_string()),
-                        (Value::String(l), BinaryOperator::Add, Value::Long(r)) => Value::String(l + &r.to_string()),
-                        
-                        // 不支持的操作
-                        (l, op, r) => panic!("不支持的复合赋值操作: {:?} {:?} {:?}", l, op, r),
-                    };
-                    
-                    // 更新变量值
-                    if self.local_env.contains_key(name) {
-                        self.local_env.insert(name.clone(), new_value);
-                    } else {
-                        self.global_env.insert(name.clone(), new_value);
-                    }
-                },
-                Statement::UsingNamespace(path) => {
-                    // 导入命名空间，将命名空间中的函数添加到导入表中
-                    let namespace_path = path.join("::");
-                    println!("导入命名空间: {}", namespace_path);
-                    
-                    // 记录导入的命名空间前缀，用于后续查找嵌套命名空间
-                    let imported_namespace = namespace_path.clone();
-                    
-                    // 查找命名空间中的所有函数
-                    let mut found_functions = false;
-                    for (full_path, _) in &self.namespaced_functions {
-                        if full_path.starts_with(&namespace_path) && full_path.len() > namespace_path.len() {
-                            // 确保是该命名空间下的函数，而不是子命名空间
-                            let remaining = &full_path[namespace_path.len() + 2..]; // +2 是为了跳过"::"
-                            if !remaining.contains("::") {
-                                // 这是命名空间直接包含的函数
-                                let func_name = remaining.to_string();
-                                println!("导入函数: {} -> {}", func_name, full_path);
-                                
-                                // 将函数名和完整路径添加到导入表
-                                self.imported_namespaces.entry(func_name)
-                                    .or_insert_with(Vec::new)
-                                    .push(full_path.clone());
-                                
-                                found_functions = true;
-                            }
-                        }
-                    }
-                    
-                    if !found_functions {
-                        panic!("未找到命名空间: {}", namespace_path);
-                    }
-                    
-                    // 记录导入的命名空间，用于后续查找嵌套命名空间
-                    self.imported_namespaces.insert("__NAMESPACE__".to_string() + &imported_namespace, vec![imported_namespace]);
-                }
+            if let Some(value) = self.execute_statement(statement.clone()) {
+                return value;
             }
         }
         
         // 如果没有返回语句，默认返回0
         Value::Int(0)
+    }
+    
+    // 添加辅助方法来执行单个语句
+    fn execute_statement(&mut self, statement: Statement) -> Option<Value> {
+        match statement {
+            Statement::Return(expr) => {
+                // 返回语句，计算表达式值并返回
+                Some(self.evaluate_expression(&expr))
+            },
+            Statement::VariableDeclaration(name, _type, expr) => {
+                let value = self.evaluate_expression(&expr);
+                self.local_env.insert(name, value);
+                None
+            },
+            Statement::VariableAssignment(name, expr) => {
+                let value = self.evaluate_expression(&expr);
+                // 先检查局部变量，再检查全局变量
+                if self.local_env.contains_key(&name) {
+                    self.local_env.insert(name, value);
+                } else if self.global_env.contains_key(&name) {
+                    self.global_env.insert(name, value);
+                } else {
+                    panic!("未定义的变量: {}", name);
+                }
+                None
+            },
+            Statement::Increment(name) => {
+                // 自增操作
+                let value = if self.local_env.contains_key(&name) {
+                    self.local_env.get(&name).unwrap().clone()
+                } else if self.global_env.contains_key(&name) {
+                    self.global_env.get(&name).unwrap().clone()
+                } else {
+                    panic!("未定义的变量: {}", name);
+                };
+                
+                // 根据变量类型执行自增
+                let new_value = match value {
+                    Value::Int(i) => Value::Int(i + 1),
+                    Value::Float(f) => Value::Float(f + 1.0),
+                    Value::Long(l) => Value::Long(l + 1),
+                    _ => panic!("不能对类型 {:?} 执行自增操作", value),
+                };
+                
+                // 更新变量值
+                if self.local_env.contains_key(&name) {
+                    self.local_env.insert(name, new_value);
+                } else {
+                    self.global_env.insert(name, new_value);
+                }
+                None
+            },
+            Statement::Decrement(name) => {
+                // 自减操作
+                let value = if self.local_env.contains_key(&name) {
+                    self.local_env.get(&name).unwrap().clone()
+                } else if self.global_env.contains_key(&name) {
+                    self.global_env.get(&name).unwrap().clone()
+                } else {
+                    panic!("未定义的变量: {}", name);
+                };
+                
+                // 根据变量类型执行自减
+                let new_value = match value {
+                    Value::Int(i) => Value::Int(i - 1),
+                    Value::Float(f) => Value::Float(f - 1.0),
+                    Value::Long(l) => Value::Long(l - 1),
+                    _ => panic!("不能对类型 {:?} 执行自减操作", value),
+                };
+                
+                // 更新变量值
+                if self.local_env.contains_key(&name) {
+                    self.local_env.insert(name, new_value);
+                } else {
+                    self.global_env.insert(name, new_value);
+                }
+                None
+            },
+            Statement::CompoundAssignment(name, op, expr) => {
+                // 复合赋值操作 (+=, -=, *=, /=, %=)
+                let right_value = self.evaluate_expression(&expr);
+                
+                // 获取变量当前值
+                let left_value = if self.local_env.contains_key(&name) {
+                    self.local_env.get(&name).unwrap().clone()
+                } else if self.global_env.contains_key(&name) {
+                    self.global_env.get(&name).unwrap().clone()
+                } else {
+                    panic!("未定义的变量: {}", name);
+                };
+                
+                // 执行对应的二元运算
+                let new_value = self.perform_binary_operation(&left_value, &op, &right_value);
+                
+                // 更新变量值
+                if self.local_env.contains_key(&name) {
+                    self.local_env.insert(name, new_value);
+                } else {
+                    self.global_env.insert(name, new_value);
+                }
+                None
+            },
+            Statement::UsingNamespace(path) => {
+                // 导入命名空间，将命名空间中的函数添加到导入表中
+                let namespace_path = path.join("::");
+                println!("导入命名空间: {}", namespace_path);
+                
+                // 记录导入的命名空间前缀，用于后续查找嵌套命名空间
+                let imported_namespace = namespace_path.clone();
+                
+                // 查找命名空间中的所有函数
+                let mut found_functions = false;
+                for (full_path, _) in &self.namespaced_functions {
+                    if full_path.starts_with(&namespace_path) && full_path.len() > namespace_path.len() {
+                        // 确保是该命名空间下的函数，而不是子命名空间
+                        let remaining = &full_path[namespace_path.len() + 2..]; // +2 是为了跳过"::"
+                        if !remaining.contains("::") {
+                            // 这是命名空间直接包含的函数
+                            let func_name = remaining.to_string();
+                            println!("导入函数: {} -> {}", func_name, full_path);
+                            
+                            // 将函数名和完整路径添加到导入表
+                            self.imported_namespaces.entry(func_name)
+                                .or_insert_with(Vec::new)
+                                .push(full_path.clone());
+                            
+                            found_functions = true;
+                        }
+                    }
+                }
+                
+                if !found_functions {
+                    panic!("未找到命名空间: {}", namespace_path);
+                }
+                
+                // 记录导入的命名空间，用于后续查找嵌套命名空间
+                self.imported_namespaces.insert("__NAMESPACE__".to_string() + &imported_namespace, vec![imported_namespace]);
+                None
+            },
+            Statement::IfElse(condition, if_block, else_blocks) => {
+                // 计算条件表达式
+                let condition_value = self.evaluate_expression(&condition);
+                
+                // 检查条件是否为真
+                let is_true = match condition_value {
+                    Value::Bool(b) => b,
+                    _ => panic!("条件表达式必须是布尔类型"),
+                };
+                
+                if is_true {
+                    // 执行 if 块
+                    for stmt in if_block {
+                        if let Some(value) = self.execute_statement(stmt) {
+                            return Some(value); // 如果有返回值，则提前返回
+                        }
+                    }
+                } else {
+                    // 尝试执行 else-if 或 else 块
+                    for (i, (maybe_condition, block)) in else_blocks.iter().enumerate() {
+                        match maybe_condition {
+                            Some(else_if_condition) => {
+                                // 这是 else-if 块，需要计算条件
+                                let else_if_value = self.evaluate_expression(else_if_condition);
+                                let else_if_is_true = match else_if_value {
+                                    Value::Bool(b) => b,
+                                    _ => panic!("else-if 条件表达式必须是布尔类型"),
+                                };
+                                
+                                if else_if_is_true {
+                                    // 条件为真，执行这个 else-if 块
+                                    for stmt in block {
+                                        if let Some(value) = self.execute_statement(stmt.clone()) {
+                                            return Some(value); // 如果有返回值，则提前返回
+                                        }
+                                    }
+                                    // 执行完一个 else-if 块后，不再执行后续块
+                                    break;
+                                }
+                                // 条件为假，继续检查下一个块
+                            },
+                            None => {
+                                // 这是 else 块，直接执行
+                                for stmt in block {
+                                    if let Some(value) = self.execute_statement(stmt.clone()) {
+                                        return Some(value); // 如果有返回值，则提前返回
+                                    }
+                                }
+                                // else 块是最后一个块，执行完后退出
+                                break;
+                            }
+                        }
+                    }
+                }
+                None
+            }
+        }
+    }
+    
+    // 辅助方法：执行二元运算
+    fn perform_binary_operation(&self, left: &Value, op: &BinaryOperator, right: &Value) -> Value {
+        match (left, op, right) {
+            // 整数运算
+            (Value::Int(l), BinaryOperator::Add, Value::Int(r)) => Value::Int(l + r),
+            (Value::Int(l), BinaryOperator::Subtract, Value::Int(r)) => Value::Int(l - r),
+            (Value::Int(l), BinaryOperator::Multiply, Value::Int(r)) => Value::Int(l * r),
+            (Value::Int(l), BinaryOperator::Divide, Value::Int(r)) => {
+                if *r == 0 {
+                    panic!("除以零错误");
+                }
+                Value::Int(l / r)
+            },
+            (Value::Int(l), BinaryOperator::Modulo, Value::Int(r)) => {
+                if *r == 0 {
+                    panic!("除以零错误");
+                }
+                Value::Int(l % r)
+            },
+            
+            // 浮点数运算
+            (Value::Float(l), BinaryOperator::Add, Value::Float(r)) => Value::Float(l + r),
+            (Value::Float(l), BinaryOperator::Subtract, Value::Float(r)) => Value::Float(l - r),
+            (Value::Float(l), BinaryOperator::Multiply, Value::Float(r)) => Value::Float(l * r),
+            (Value::Float(l), BinaryOperator::Divide, Value::Float(r)) => {
+                if *r == 0.0 {
+                    panic!("除以零错误");
+                }
+                Value::Float(l / r)
+            },
+            
+            // 整数和浮点数混合运算
+            (Value::Int(l), BinaryOperator::Add, Value::Float(r)) => Value::Float(*l as f64 + r),
+            (Value::Float(l), BinaryOperator::Add, Value::Int(r)) => Value::Float(l + *r as f64),
+            (Value::Int(l), BinaryOperator::Subtract, Value::Float(r)) => Value::Float(*l as f64 - r),
+            (Value::Float(l), BinaryOperator::Subtract, Value::Int(r)) => Value::Float(l - *r as f64),
+            (Value::Int(l), BinaryOperator::Multiply, Value::Float(r)) => Value::Float(*l as f64 * r),
+            (Value::Float(l), BinaryOperator::Multiply, Value::Int(r)) => Value::Float(l * *r as f64),
+            (Value::Int(l), BinaryOperator::Divide, Value::Float(r)) => {
+                if *r == 0.0 {
+                    panic!("除以零错误");
+                }
+                Value::Float(*l as f64 / r)
+            },
+            (Value::Float(l), BinaryOperator::Divide, Value::Int(r)) => {
+                if *r == 0 {
+                    panic!("除以零错误");
+                }
+                Value::Float(l / *r as f64)
+            },
+            
+            // 长整型运算
+            (Value::Long(l), BinaryOperator::Add, Value::Long(r)) => Value::Long(l + r),
+            (Value::Long(l), BinaryOperator::Subtract, Value::Long(r)) => Value::Long(l - r),
+            (Value::Long(l), BinaryOperator::Multiply, Value::Long(r)) => Value::Long(l * r),
+            (Value::Long(l), BinaryOperator::Divide, Value::Long(r)) => {
+                if *r == 0 {
+                    panic!("除以零错误");
+                }
+                Value::Long(l / r)
+            },
+            (Value::Long(l), BinaryOperator::Modulo, Value::Long(r)) => {
+                if *r == 0 {
+                    panic!("除以零错误");
+                }
+                Value::Long(l % r)
+            },
+            
+            // 整数和长整型混合运算
+            (Value::Int(l), BinaryOperator::Add, Value::Long(r)) => Value::Long(*l as i64 + r),
+            (Value::Long(l), BinaryOperator::Add, Value::Int(r)) => Value::Long(l + *r as i64),
+            (Value::Int(l), BinaryOperator::Subtract, Value::Long(r)) => Value::Long(*l as i64 - r),
+            (Value::Long(l), BinaryOperator::Subtract, Value::Int(r)) => Value::Long(l - *r as i64),
+            (Value::Int(l), BinaryOperator::Multiply, Value::Long(r)) => Value::Long(*l as i64 * r),
+            (Value::Long(l), BinaryOperator::Multiply, Value::Int(r)) => Value::Long(l * *r as i64),
+            (Value::Int(l), BinaryOperator::Divide, Value::Long(r)) => {
+                if *r == 0 {
+                    panic!("除以零错误");
+                }
+                Value::Long(*l as i64 / r)
+            },
+            (Value::Long(l), BinaryOperator::Divide, Value::Int(r)) => {
+                if *r == 0 {
+                    panic!("除以零错误");
+                }
+                Value::Long(l / *r as i64)
+            },
+            
+            // 字符串连接
+            (Value::String(l), BinaryOperator::Add, Value::String(r)) => Value::String(l.clone() + r),
+            
+            // 字符串和其他类型的连接
+            (Value::String(l), BinaryOperator::Add, Value::Int(r)) => Value::String(l.clone() + &r.to_string()),
+            (Value::String(l), BinaryOperator::Add, Value::Float(r)) => Value::String(l.clone() + &r.to_string()),
+            (Value::String(l), BinaryOperator::Add, Value::Bool(r)) => Value::String(l.clone() + &r.to_string()),
+            (Value::String(l), BinaryOperator::Add, Value::Long(r)) => Value::String(l.clone() + &r.to_string()),
+            
+            // 其他类型和字符串的连接
+            (Value::Int(l), BinaryOperator::Add, Value::String(r)) => Value::String(l.to_string() + r),
+            (Value::Float(l), BinaryOperator::Add, Value::String(r)) => Value::String(l.to_string() + r),
+            (Value::Bool(l), BinaryOperator::Add, Value::String(r)) => Value::String(l.to_string() + r),
+            (Value::Long(l), BinaryOperator::Add, Value::String(r)) => Value::String(l.to_string() + r),
+            
+            // 不支持的操作
+            _ => panic!("不支持的二元操作: {:?} {:?} {:?}", left, op, right),
+        }
     }
     
     fn evaluate_expression(&mut self, expr: &Expression) -> Value {
@@ -490,109 +571,101 @@ impl<'a> Interpreter<'a> {
                 let left_val = self.evaluate_expression(left);
                 let right_val = self.evaluate_expression(right);
                 
-                match (left_val, op, right_val) {
-                    // 整数运算
-                    (Value::Int(l), BinaryOperator::Add, Value::Int(r)) => Value::Int(l + r),
-                    (Value::Int(l), BinaryOperator::Subtract, Value::Int(r)) => Value::Int(l - r),
-                    (Value::Int(l), BinaryOperator::Multiply, Value::Int(r)) => Value::Int(l * r),
-                    (Value::Int(l), BinaryOperator::Divide, Value::Int(r)) => {
-                        if r == 0 {
-                            panic!("除以零错误");
-                        }
-                        Value::Int(l / r)
-                    },
-                    (Value::Int(l), BinaryOperator::Modulo, Value::Int(r)) => {
-                        if r == 0 {
-                            panic!("除以零错误");
-                        }
-                        Value::Int(l % r)
-                    },
+                self.perform_binary_operation(&left_val, op, &right_val)
+            },
+            Expression::CompareOp(left, op, right) => {
+                let left_val = self.evaluate_expression(left);
+                let right_val = self.evaluate_expression(right);
+                
+                match (op, &left_val, &right_val) {
+                    // 整数比较
+                    (CompareOperator::Equal, Value::Int(l), Value::Int(r)) => Value::Bool(l == r),
+                    (CompareOperator::NotEqual, Value::Int(l), Value::Int(r)) => Value::Bool(l != r),
+                    (CompareOperator::Greater, Value::Int(l), Value::Int(r)) => Value::Bool(l > r),
+                    (CompareOperator::Less, Value::Int(l), Value::Int(r)) => Value::Bool(l < r),
+                    (CompareOperator::GreaterEqual, Value::Int(l), Value::Int(r)) => Value::Bool(l >= r),
+                    (CompareOperator::LessEqual, Value::Int(l), Value::Int(r)) => Value::Bool(l <= r),
                     
-                    // 浮点数运算
-                    (Value::Float(l), BinaryOperator::Add, Value::Float(r)) => Value::Float(l + r),
-                    (Value::Float(l), BinaryOperator::Subtract, Value::Float(r)) => Value::Float(l - r),
-                    (Value::Float(l), BinaryOperator::Multiply, Value::Float(r)) => Value::Float(l * r),
-                    (Value::Float(l), BinaryOperator::Divide, Value::Float(r)) => {
-                        if r == 0.0 {
-                            panic!("除以零错误");
-                        }
-                        Value::Float(l / r)
-                    },
+                    // 浮点数比较
+                    (CompareOperator::Equal, Value::Float(l), Value::Float(r)) => Value::Bool(l == r),
+                    (CompareOperator::NotEqual, Value::Float(l), Value::Float(r)) => Value::Bool(l != r),
+                    (CompareOperator::Greater, Value::Float(l), Value::Float(r)) => Value::Bool(l > r),
+                    (CompareOperator::Less, Value::Float(l), Value::Float(r)) => Value::Bool(l < r),
+                    (CompareOperator::GreaterEqual, Value::Float(l), Value::Float(r)) => Value::Bool(l >= r),
+                    (CompareOperator::LessEqual, Value::Float(l), Value::Float(r)) => Value::Bool(l <= r),
                     
-                    // 整数和浮点数混合运算
-                    (Value::Int(l), BinaryOperator::Add, Value::Float(r)) => Value::Float(l as f64 + r),
-                    (Value::Float(l), BinaryOperator::Add, Value::Int(r)) => Value::Float(l + r as f64),
-                    (Value::Int(l), BinaryOperator::Subtract, Value::Float(r)) => Value::Float(l as f64 - r),
-                    (Value::Float(l), BinaryOperator::Subtract, Value::Int(r)) => Value::Float(l - r as f64),
-                    (Value::Int(l), BinaryOperator::Multiply, Value::Float(r)) => Value::Float(l as f64 * r),
-                    (Value::Float(l), BinaryOperator::Multiply, Value::Int(r)) => Value::Float(l * r as f64),
-                    (Value::Int(l), BinaryOperator::Divide, Value::Float(r)) => {
-                        if r == 0.0 {
-                            panic!("除以零错误");
-                        }
-                        Value::Float(l as f64 / r)
-                    },
-                    (Value::Float(l), BinaryOperator::Divide, Value::Int(r)) => {
-                        if r == 0 {
-                            panic!("除以零错误");
-                        }
-                        Value::Float(l / r as f64)
-                    },
+                    // 长整型比较
+                    (CompareOperator::Equal, Value::Long(l), Value::Long(r)) => Value::Bool(l == r),
+                    (CompareOperator::NotEqual, Value::Long(l), Value::Long(r)) => Value::Bool(l != r),
+                    (CompareOperator::Greater, Value::Long(l), Value::Long(r)) => Value::Bool(l > r),
+                    (CompareOperator::Less, Value::Long(l), Value::Long(r)) => Value::Bool(l < r),
+                    (CompareOperator::GreaterEqual, Value::Long(l), Value::Long(r)) => Value::Bool(l >= r),
+                    (CompareOperator::LessEqual, Value::Long(l), Value::Long(r)) => Value::Bool(l <= r),
                     
-                    // 长整型运算
-                    (Value::Long(l), BinaryOperator::Add, Value::Long(r)) => Value::Long(l + r),
-                    (Value::Long(l), BinaryOperator::Subtract, Value::Long(r)) => Value::Long(l - r),
-                    (Value::Long(l), BinaryOperator::Multiply, Value::Long(r)) => Value::Long(l * r),
-                    (Value::Long(l), BinaryOperator::Divide, Value::Long(r)) => {
-                        if r == 0 {
-                            panic!("除以零错误");
+                    // 字符串比较
+                    (CompareOperator::Equal, Value::String(l), Value::String(r)) => Value::Bool(l == r),
+                    (CompareOperator::NotEqual, Value::String(l), Value::String(r)) => Value::Bool(l != r),
+                    
+                    // 布尔值比较
+                    (CompareOperator::Equal, Value::Bool(l), Value::Bool(r)) => Value::Bool(l == r),
+                    (CompareOperator::NotEqual, Value::Bool(l), Value::Bool(r)) => Value::Bool(l != r),
+                    
+                    // 混合类型比较
+                    (CompareOperator::Equal, _, _) => Value::Bool(false), // 不同类型永远不相等
+                    (CompareOperator::NotEqual, _, _) => Value::Bool(true), // 不同类型永远不相等
+                    
+                    // 不支持的比较
+                    _ => panic!("不支持的比较操作: {:?} {:?} {:?}", left_val, op, right_val),
+                }
+            },
+            Expression::LogicalOp(left, op, right) => {
+                match op {
+                    LogicalOperator::And => {
+                        // 短路求值：如果左操作数为假，直接返回假
+                        let left_val = self.evaluate_expression(left);
+                        let left_bool = match left_val {
+                            Value::Bool(b) => b,
+                            _ => panic!("逻辑操作符的操作数必须是布尔类型"),
+                        };
+                        
+                        if !left_bool {
+                            return Value::Bool(false);
                         }
-                        Value::Long(l / r)
-                    },
-                    (Value::Long(l), BinaryOperator::Modulo, Value::Long(r)) => {
-                        if r == 0 {
-                            panic!("除以零错误");
+                        
+                        // 左操作数为真，计算右操作数
+                        let right_val = self.evaluate_expression(right);
+                        match right_val {
+                            Value::Bool(b) => Value::Bool(b),
+                            _ => panic!("逻辑操作符的操作数必须是布尔类型"),
                         }
-                        Value::Long(l % r)
                     },
-                    
-                    // 整数和长整型混合运算
-                    (Value::Int(l), BinaryOperator::Add, Value::Long(r)) => Value::Long(l as i64 + r),
-                    (Value::Long(l), BinaryOperator::Add, Value::Int(r)) => Value::Long(l + r as i64),
-                    (Value::Int(l), BinaryOperator::Subtract, Value::Long(r)) => Value::Long(l as i64 - r),
-                    (Value::Long(l), BinaryOperator::Subtract, Value::Int(r)) => Value::Long(l - r as i64),
-                    (Value::Int(l), BinaryOperator::Multiply, Value::Long(r)) => Value::Long(l as i64 * r),
-                    (Value::Long(l), BinaryOperator::Multiply, Value::Int(r)) => Value::Long(l * r as i64),
-                    (Value::Int(l), BinaryOperator::Divide, Value::Long(r)) => {
-                        if r == 0 {
-                            panic!("除以零错误");
+                    LogicalOperator::Or => {
+                        // 短路求值：如果左操作数为真，直接返回真
+                        let left_val = self.evaluate_expression(left);
+                        let left_bool = match left_val {
+                            Value::Bool(b) => b,
+                            _ => panic!("逻辑操作符的操作数必须是布尔类型"),
+                        };
+                        
+                        if left_bool {
+                            return Value::Bool(true);
                         }
-                        Value::Long(l as i64 / r)
-                    },
-                    (Value::Long(l), BinaryOperator::Divide, Value::Int(r)) => {
-                        if r == 0 {
-                            panic!("除以零错误");
+                        
+                        // 左操作数为假，计算右操作数
+                        let right_val = self.evaluate_expression(right);
+                        match right_val {
+                            Value::Bool(b) => Value::Bool(b),
+                            _ => panic!("逻辑操作符的操作数必须是布尔类型"),
                         }
-                        Value::Long(l / r as i64)
                     },
-                    
-                    // 字符串连接
-                    (Value::String(l), BinaryOperator::Add, Value::String(r)) => Value::String(l + &r),
-                    
-                    // 字符串和其他类型的连接
-                    (Value::String(l), BinaryOperator::Add, Value::Int(r)) => Value::String(l + &r.to_string()),
-                    (Value::String(l), BinaryOperator::Add, Value::Float(r)) => Value::String(l + &r.to_string()),
-                    (Value::String(l), BinaryOperator::Add, Value::Bool(r)) => Value::String(l + &r.to_string()),
-                    (Value::String(l), BinaryOperator::Add, Value::Long(r)) => Value::String(l + &r.to_string()),
-                    
-                    // 其他类型和字符串的连接
-                    (Value::Int(l), BinaryOperator::Add, Value::String(r)) => Value::String(l.to_string() + &r),
-                    (Value::Float(l), BinaryOperator::Add, Value::String(r)) => Value::String(l.to_string() + &r),
-                    (Value::Bool(l), BinaryOperator::Add, Value::String(r)) => Value::String(l.to_string() + &r),
-                    (Value::Long(l), BinaryOperator::Add, Value::String(r)) => Value::String(l.to_string() + &r),
-                    
-                    // 不支持的操作
-                    (l, op, r) => panic!("不支持的操作: {:?} {:?} {:?}", l, op, r),
+                    LogicalOperator::Not => {
+                        // 逻辑非操作
+                        let val = self.evaluate_expression(left);
+                        match val {
+                            Value::Bool(b) => Value::Bool(!b),
+                            _ => panic!("逻辑操作符的操作数必须是布尔类型"),
+                        }
+                    }
                 }
             }
         }

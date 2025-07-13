@@ -1,0 +1,25 @@
+fn main() : int {
+    // 测试字符串比较
+    s1 : string = "hello";
+    s2 : string = "hello";
+    s3 : string = "world";
+    
+    r1 : int = 0;
+    r2 : int = 0;
+    
+    // 相等比较
+    if (s1 == s2) {
+        r1 = 1;
+    } else {
+        r1 = 2;
+    };
+    
+    // 不等比较
+    if (s1 == s3) {
+        r2 = 1;
+    } else {
+        r2 = 2;
+    };
+    
+    return r1 * 10 + r2;
+}; 
