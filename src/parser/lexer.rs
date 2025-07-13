@@ -3,33 +3,22 @@
 // 移除注释
 pub fn remove_comments(source: &str) -> String {
     let mut result = String::new();
-    let mut in_single_line_comment = false;
-    let mut multi_line_comment_depth = 0; // 使用计数器跟踪多行注释的嵌套深度
+    let mut in_comment = false;
     let mut i = 0;
     
     let chars: Vec<char> = source.chars().collect();
     
     while i < chars.len() {
-        if i + 1 < chars.len() && chars[i] == '/' && chars[i + 1] == '/' && multi_line_comment_depth == 0 {
-            // 单行注释开始（仅当不在多行注释中时）
-            in_single_line_comment = true;
+        if i + 1 < chars.len() && chars[i] == '/' && chars[i + 1] == '/' {
+            // 找到注释开始
+            in_comment = true;
             i += 2;
-        } else if i + 1 < chars.len() && chars[i] == '/' && chars[i + 1] == '!' && !in_single_line_comment {
-            // 多行注释开始
-            multi_line_comment_depth += 1;
-            i += 2;
-        } else if in_single_line_comment && chars[i] == '\n' {
-            // 单行注释结束
-            in_single_line_comment = false;
+        } else if in_comment && chars[i] == '\n' {
+            // 注释结束
+            in_comment = false;
             result.push(chars[i]);
             i += 1;
-        } else if i + 1 < chars.len() && chars[i] == '!' && chars[i + 1] == '/' && !in_single_line_comment {
-            // 多行注释结束
-            if multi_line_comment_depth > 0 {
-                multi_line_comment_depth -= 1;
-            }
-            i += 2;
-        } else if !in_single_line_comment && multi_line_comment_depth == 0 {
+        } else if !in_comment {
             // 非注释内容
             result.push(chars[i]);
             i += 1;
