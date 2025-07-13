@@ -70,6 +70,7 @@ pub enum Statement {
     PreDecrement(String), // 前置自减语句 (--var)
     CompoundAssignment(String, BinaryOperator, Expression), // 复合赋值 (+=, -=, *=, /=, %=)
     UsingNamespace(Vec<String>), // 导入命名空间 (using ns xxx;)
+    LibraryImport(String), // 导入动态库 (using lib_once <xxx>;)
     IfElse(Expression, Vec<Statement>, Vec<(Option<Expression>, Vec<Statement>)>), // if-else 语句，包含条件、if块和多个else-if/else块
     ForLoop(String, Expression, Expression, Vec<Statement>), // for循环，包含变量名、范围起始值、范围结束值和循环体
     WhileLoop(Expression, Vec<Statement>), // while循环，包含条件和循环体
