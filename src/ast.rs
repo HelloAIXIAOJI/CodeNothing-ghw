@@ -22,6 +22,7 @@ pub enum Expression {
     FunctionCall(String, Vec<Expression>),
     NamespacedFunctionCall(Vec<String>, Vec<Expression>), // 命名空间函数调用
     GlobalFunctionCall(String, Vec<Expression>), // 全局函数明确调用 (::func)
+    LibraryFunctionCall(String, String, Vec<Expression>), // 库函数调用 (lib::func)
     Variable(String),
     BinaryOp(Box<Expression>, BinaryOperator, Box<Expression>),
     CompareOp(Box<Expression>, CompareOperator, Box<Expression>), // 比较操作
