@@ -60,8 +60,10 @@ pub enum Statement {
     Return(Expression),
     VariableDeclaration(String, Type, Expression),
     VariableAssignment(String, Expression),
-    Increment(String), // 自增语句 (var++)
-    Decrement(String), // 自减语句 (var--)
+    Increment(String), // 后置自增语句 (var++)
+    Decrement(String), // 后置自减语句 (var--)
+    PreIncrement(String), // 前置自增语句 (++var)
+    PreDecrement(String), // 前置自减语句 (--var)
     CompoundAssignment(String, BinaryOperator, Expression), // 复合赋值 (+=, -=, *=, /=, %=)
     UsingNamespace(Vec<String>), // 导入命名空间 (using ns xxx;)
     IfElse(Expression, Vec<Statement>, Vec<(Option<Expression>, Vec<Statement>)>), // if-else 语句，包含条件、if块和多个else-if/else块
