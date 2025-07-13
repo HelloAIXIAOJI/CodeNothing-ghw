@@ -1,6 +1,6 @@
 fn main() : int {
     // 这是单行注释
-    print_message();
+    result : int = test_function();
     
     /!
         这是多行注释
@@ -8,18 +8,18 @@ fn main() : int {
         测试多行注释功能
     !/
     
-    test_nested_comments();
+    result2 : int = test_nested_comments();
     
-    return 0;
+    return result + result2; // 如果所有代码正确执行，应该返回42 + 42 = 84
 };
 
-fn print_message() : int {
+fn test_function() : int {
     message : string = "Hello, World!"; // 行尾注释
     
     /! 这是单行的多行注释语法 !/
     
     // 下面是正常代码
-    return 0;
+    return 42;
 };
 
 fn test_nested_comments() : int {
