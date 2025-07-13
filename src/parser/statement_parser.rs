@@ -18,22 +18,46 @@ impl<'a> StatementParser for ParserBase<'a> {
             },
             Some(token) if token == "using" => {
                 self.consume(); // 消费 "using"
-                self.expect("ns")?; // 期望 "ns" 关键字
                 
-                // 解析命名空间路径
-                let mut path = Vec::new();
-                let first_name = self.consume().ok_or_else(|| "期望命名空间名".to_string())?;
-                path.push(first_name);
-                
-                // 解析嵌套命名空间路径
-                while self.peek() == Some(&"::".to_string()) {
-                    self.consume(); // 消费 "::"
-                    let name = self.consume().ok_or_else(|| "期望命名空间名".to_string())?;
-                    path.push(name);
+                // 检查是导入命名空间还是导入库
+                match self.peek() {
+                    Some(token) if token == "ns" => {
+                        self.consume(); // 消费 "ns" 关键字
+                        
+                        // 解析命名空间路径
+                        let mut path = Vec::new();
+                        let first_name = self.consume().ok_or_else(|| "期望命名空间名".to_string())?;
+                        path.push(first_name);
+                        
+                        // 解析嵌套命名空间路径
+                        while self.peek() == Some(&"::".to_string()) {
+                            self.consume(); // 消费 "::"
+                            let name = self.consume().ok_or_else(|| "期望命名空间名".to_string())?;
+                            path.push(name);
+                        }
+                        
+                        self.expect(";")?;
+                        Ok(Statement::UsingNamespace(path))
+                    },
+                    Some(token) if token == "lib_once" => {
+                        self.consume(); // 消费 "lib_once" 关键字
+                        
+                        // 期望 "<" 符号
+                        self.expect("<")?;
+                        
+                        // 获取库名
+                        let lib_name = self.consume().ok_or_else(|| "期望库名".to_string())?;
+                        
+                        // 期望 ">" 符号
+                        self.expect(">")?;
+                        
+                        // 期望 ";" 符号
+                        self.expect(";")?;
+                        
+                        Ok(Statement::LibraryImport(lib_name))
+                    },
+                    _ => Err("期望 'ns' 或 'lib_once' 关键字".to_string()),
                 }
-                
-                self.expect(";")?;
-                Ok(Statement::UsingNamespace(path))
             },
             Some(token) if token == "if" => {
                 self.consume(); // 消费 "if"
