@@ -101,7 +101,7 @@ pub fn handle_decrement(
 }
 
 // 执行if-else语句
-pub fn execute_if_else<E: Evaluator>(
+pub fn execute_if_else<E: Evaluator + Executor>(
     executor: &mut E,
     condition: &Expression,
     if_block: &[Statement],
