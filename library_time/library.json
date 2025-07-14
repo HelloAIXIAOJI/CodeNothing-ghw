@@ -1,0 +1,9 @@
+{
+  "name": "time",
+  "version": "0.1.0",
+  "description": "CodeNothing时间处理库",
+  "output_name": "time",
+  "author": "CodeNothing",
+  "requires_namespace": true,
+  "namespaces": ["std"]
+} 

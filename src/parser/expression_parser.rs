@@ -319,7 +319,8 @@ impl<'a> ExpressionParser for ParserBase<'a> {
                         } else {
                             // 命名空间函数调用
                             let mut path = Vec::new();
-                            path.push(self.consume().unwrap()); // 第一个命名空间名
+                            path.push(name); // 第一个命名空间名
+                            path.push(func_name); // 第二个部分（可能是函数名或下一级命名空间）
                             
                             // 解析命名空间路径
                             while self.peek() == Some(&"::".to_string()) {
@@ -328,11 +329,6 @@ impl<'a> ExpressionParser for ParserBase<'a> {
                                     path.push(name);
                                 } else {
                                     return Err("期望标识符".to_string());
-                                }
-                                
-                                // 如果下一个不是 "::" 或 "("，则结束路径解析
-                                if self.peek() != Some(&"::".to_string()) && self.peek() != Some(&"(".to_string()) {
-                                    break;
                                 }
                             }
                             

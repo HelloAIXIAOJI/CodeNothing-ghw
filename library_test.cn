@@ -1,28 +1,21 @@
+
+using lib <time>;
+using lib <os>;
 using lib <io>;
-using ns std;
 
 fn main() : int {
-    // 测试println函数
-    println("这是从库函数打印的消息");
+    // 测试io库中的println函数
+    println("测试直接函数调用 (不需要命名空间前缀)");
+    std::println("测试命名空间函数调用 (带std前缀)");
     
-    // 测试print函数
-    print("输入一些内容: ");
+    // 测试时间库函数
+    println("当前时间戳: " + now());
+    println("格式化时间: " + format_now(""));
     
-    // 测试read_line函数
-    // input : string = read_line();
-    input : string = "这并非来自read_line，这是测试"; // 测试
-    println("你输入了: " + input);
-
-    // 测试printf函数和转义字符
-    printf("printf测试，换行符\n制表符\t反斜杠\\引号\"");
+    // 测试系统库函数
+    println("操作系统: " + os_name());
+    println("用户名: " + username());
     
-    // 测试带格式化参数的printf
-    printf("\n\n格式化打印测试: %s, %d, %f\n", "字符串参数", "42", "3.14");
-    
-    // 也可以使用完整命名空间路径
-    std::println("这是使用完整命名空间路径调用的函数");
-    
-    // 返回一个值
-    result : int = 0;
-    return result;
+    return 0;
 };
+

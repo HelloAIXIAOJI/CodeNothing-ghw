@@ -68,6 +68,25 @@ impl NamespaceBuilder {
         };
         self.functions.contains_key(&full_name)
     }
+    
+    /// 向命名空间中添加直接调用函数（不带命名空间前缀）
+    /// 这允许函数被直接调用，而不需要命名空间前缀
+    /// 
+    /// # 参数
+    /// * `name` - 函数名称
+    /// * `func` - 函数指针
+    /// 
+    /// # 返回
+    /// 返回自身引用，支持链式调用
+    pub fn add_direct_function(&mut self, name: &str, func: LibraryFunction) -> &mut Self {
+        self.functions.insert(name.to_string(), func);
+        self
+    }
+    
+    /// 获取函数映射的克隆
+    pub fn get_functions(&self) -> HashMap<String, LibraryFunction> {
+        self.functions.clone()
+    }
 }
 
 /// 创建并初始化多个命名空间
@@ -100,4 +119,75 @@ pub fn register_namespaces(namespaces: Vec<(&str, Vec<(&str, LibraryFunction)>)>
 /// 返回函数映射的原始指针
 pub fn create_library_pointer(functions: HashMap<String, LibraryFunction>) -> *mut HashMap<String, LibraryFunction> {
     Box::into_raw(Box::new(functions))
+}
+
+/// 库函数注册器，用于统一管理库函数的注册
+pub struct LibraryRegistry {
+    namespaces: HashMap<String, NamespaceBuilder>,
+    direct_functions: HashMap<String, LibraryFunction>,
+}
+
+impl LibraryRegistry {
+    /// 创建一个新的库函数注册器
+    pub fn new() -> Self {
+        LibraryRegistry {
+            namespaces: HashMap::new(),
+            direct_functions: HashMap::new(),
+        }
+    }
+    
+    /// 获取或创建命名空间构建器
+    /// 
+    /// # 参数
+    /// * `namespace` - 命名空间名称
+    /// 
+    /// # 返回
+    /// 返回命名空间构建器的可变引用
+    pub fn namespace(&mut self, namespace: &str) -> &mut NamespaceBuilder {
+        if !self.namespaces.contains_key(namespace) {
+            self.namespaces.insert(namespace.to_string(), NamespaceBuilder::new(namespace));
+        }
+        self.namespaces.get_mut(namespace).unwrap()
+    }
+    
+    /// 添加直接调用函数（不带命名空间前缀）
+    /// 
+    /// # 参数
+    /// * `name` - 函数名称
+    /// * `func` - 函数指针
+    /// 
+    /// # 返回
+    /// 返回自身引用，支持链式调用
+    pub fn add_direct_function(&mut self, name: &str, func: LibraryFunction) -> &mut Self {
+        self.direct_functions.insert(name.to_string(), func);
+        self
+    }
+    
+    /// 构建最终的函数映射
+    /// 
+    /// # 返回
+    /// 返回合并所有命名空间和直接函数后的函数映射
+    pub fn build(&self) -> HashMap<String, LibraryFunction> {
+        let mut all_functions = HashMap::new();
+        
+        // 添加所有命名空间函数
+        for (_, ns_builder) in &self.namespaces {
+            ns_builder.register_all(&mut all_functions);
+        }
+        
+        // 添加所有直接函数
+        for (name, func) in &self.direct_functions {
+            all_functions.insert(name.clone(), *func);
+        }
+        
+        all_functions
+    }
+    
+    /// 构建并创建库指针
+    /// 
+    /// # 返回
+    /// 返回函数映射的原始指针，用于库初始化
+    pub fn build_library_pointer(&self) -> *mut HashMap<String, LibraryFunction> {
+        create_library_pointer(self.build())
+    }
 } 

@@ -3,7 +3,7 @@ use ::std::io::{self, Write as IoWrite};
 use ::std::fmt::Write as FmtWrite;
 
 // 导入通用库
-use cn_common::namespace::{LibraryFunction, NamespaceBuilder, create_library_pointer};
+use cn_common::namespace::{LibraryFunction, NamespaceBuilder, create_library_pointer, LibraryRegistry};
 use cn_common::string::process_escape_chars;
 
 // 命名空间函数
@@ -136,19 +136,22 @@ mod std {
 // 初始化函数，返回函数映射
 #[no_mangle]
 pub extern "C" fn cn_init() -> *mut HashMap<String, LibraryFunction> {
-    // 使用命名空间构建器注册std命名空间下的函数
-    let mut std_ns = NamespaceBuilder::new("std");
+    // 创建库函数注册器
+    let mut registry = LibraryRegistry::new();
+    
+    // 注册std命名空间下的函数
+    let std_ns = registry.namespace("std");
     std_ns.add_function("print", std::cn_print)
          .add_function("println", std::cn_println)
          .add_function("read_line", std::cn_read_line)
          .add_function("printf", std::cn_printf);
     
-    // 创建函数映射
-    let mut functions = HashMap::new();
+    // 同时注册为直接函数，不需要命名空间前缀
+    registry.add_direct_function("print", std::cn_print)
+            .add_direct_function("println", std::cn_println)
+            .add_direct_function("read_line", std::cn_read_line)
+            .add_direct_function("printf", std::cn_printf);
     
-    // 注册所有函数到主函数映射
-    std_ns.register_all(&mut functions);
-    
-    // 将HashMap装箱并转换为原始指针
-    create_library_pointer(functions)
+    // 构建并返回库指针
+    registry.build_library_pointer()
 } 

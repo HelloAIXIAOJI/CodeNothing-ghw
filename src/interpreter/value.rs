@@ -11,6 +11,7 @@ pub enum Value {
     Long(i64),
     Array(Vec<Value>),
     Map(HashMap<String, Value>),
+    None, // 表示空值或未定义的值
 }
 
 impl Value {
@@ -43,7 +44,8 @@ impl Value {
                 }
                 result.push('}');
                 result
-            }
+            },
+            Value::None => "null".to_string(),
         }
     }
 }
@@ -75,7 +77,8 @@ impl fmt::Display for Value {
                     write!(f, "\"{}\": {}", key, val)?;
                 }
                 write!(f, "}}")
-            }
+            },
+            Value::None => write!(f, "null"),
         }
     }
 } 

@@ -306,6 +306,66 @@ impl<'a> StatementParser for ParserBase<'a> {
                         self.consume(); // 消费 "--"
                         self.expect(";")?;
                         Ok(Statement::Decrement(var_name))
+                    } else if next_token == "::" {
+                        // 命名空间函数调用
+                        self.consume(); // 消费 "::"
+                        
+                        // 获取函数名
+                        let func_name = self.consume().ok_or_else(|| "期望函数名".to_string())?;
+                        
+                        // 检查是否是库函数调用
+                        if var_name.starts_with("lib_") {
+                            // 库函数调用，格式为 lib_xxx::func_name
+                            let lib_name = var_name.trim_start_matches("lib_").to_string();
+                            
+                            self.expect("(")?;
+                            
+                            let mut args = Vec::new();
+                            
+                            if self.peek() != Some(&")".to_string()) {
+                                // 解析参数列表
+                                loop {
+                                    let arg = self.parse_expression()?;
+                                    args.push(arg);
+                                    
+                                    if self.peek() != Some(&",".to_string()) {
+                                        break;
+                                    }
+                                    
+                                    self.consume(); // 消费 ","
+                                }
+                            }
+                            
+                            self.expect(")")?;
+                            self.expect(";")?;
+                            
+                            Ok(Statement::LibraryFunctionCallStatement(lib_name, func_name, args))
+                        } else {
+                            // 命名空间函数调用
+                            let mut path = Vec::new();
+                            path.push(var_name); // 第一个命名空间名
+                            path.push(func_name); // 函数名
+                            
+                            self.expect("(")?;
+                            
+                            // 解析函数调用参数
+                            let mut args = Vec::new();
+                            if self.peek() != Some(&")".to_string()) {
+                                // 至少有一个参数
+                                args.push(self.parse_expression()?);
+                                
+                                // 解析剩余参数
+                                while self.peek() == Some(&",".to_string()) {
+                                    self.consume(); // 消费逗号
+                                    args.push(self.parse_expression()?);
+                                }
+                            }
+                            
+                            self.expect(")")?;
+                            self.expect(";")?;
+                            
+                            Ok(Statement::NamespacedFunctionCallStatement(path, args))
+                        }
                     } else if next_token == "(" {
                         // 函数调用语句
                         self.consume(); // 消费 "("

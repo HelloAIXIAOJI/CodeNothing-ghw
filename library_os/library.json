@@ -1,0 +1,9 @@
+{
+  "name": "os",
+  "version": "0.1.0",
+  "description": "CodeNothing操作系统接口库",
+  "output_name": "os",
+  "author": "CodeNothing",
+  "requires_namespace": true,
+  "namespaces": ["std"]
+}
