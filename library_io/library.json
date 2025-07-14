@@ -1,0 +1,9 @@
+{
+  "name": "io",
+  "version": "1.0.0",
+  "description": "CodeNothing 基础IO库",
+  "output_name": "io",
+  "author": "CodeNothing Team",
+  "requires_namespace": true,
+  "namespaces": ["std"]
+} 

@@ -1,4 +1,5 @@
 /target
 /doc
 /.*
+!/.github
 /*-don't-see

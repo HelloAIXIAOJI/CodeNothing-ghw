@@ -1,0 +1,230 @@
+name: 构建CodeNothing库文件
+
+on:
+  # 默认只能手动触发，避免每次提交都构建
+  workflow_dispatch:
+    inputs:
+      libraries:
+        description: '要构建的库列表 (all 表示全部, 或用逗号分隔的名称列表如 io,example)'
+        required: true
+        default: 'all'
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  prepare:
+    name: 准备库列表
+    runs-on: ubuntu-latest
+    outputs:
+      library_matrix: ${{ steps.set-matrix.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v3
+      
+      - id: set-matrix
+        name: 准备库矩阵
+        run: |
+          if [[ "${{ github.event.inputs.libraries }}" == "all" ]]; then
+            # 自动查找所有以library_开头的目录
+            LIBRARIES=$(find . -maxdepth 1 -type d -name "library_*" | sed 's|./library_||g' | jq -R . | jq -s .)
+          else
+            # 使用提供的库列表
+            LIBRARIES=$(echo "${{ github.event.inputs.libraries }}" | tr ',' '\n' | jq -R . | jq -s .)
+          fi
+          echo "matrix=${LIBRARIES}" >> $GITHUB_OUTPUT
+        shell: bash
+
+  build:
+    name: 构建库
+    needs: prepare
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        library: ${{ fromJson(needs.prepare.outputs.library_matrix) }}
+        os: [windows-latest, ubuntu-latest, macos-latest]
+        include:
+          - os: windows-latest
+            lib_extension: 'dll'
+            archive_format: 'zip'
+          - os: ubuntu-latest
+            lib_extension: 'so'
+            archive_format: 'tar.gz'
+          - os: macos-latest
+            lib_extension: 'dylib'
+            archive_format: 'tar.gz'
+
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: 设置Rust工具链
+      uses: actions-rs/toolchain@v1
+      with:
+        toolchain: stable
+        override: true
+    
+    - name: 检查库目录是否存在
+      id: check_dir
+      run: |
+        if [ -d "library_${{ matrix.library }}" ]; then
+          echo "exists=true" >> $GITHUB_OUTPUT
+        else
+          echo "exists=false" >> $GITHUB_OUTPUT
+          echo "警告: 库 ${{ matrix.library }} 的目录不存在，跳过构建"
+        fi
+      shell: bash
+    
+    - name: 获取库配置
+      if: steps.check_dir.outputs.exists == 'true'
+      id: get_config
+      run: |
+        if [ -f "library_${{ matrix.library }}/library.json" ]; then
+          OUTPUT_NAME=$(jq -r '.output_name // "${{ matrix.library }}"' library_${{ matrix.library }}/library.json)
+        else
+          OUTPUT_NAME="${{ matrix.library }}"
+        fi
+        echo "output_name=${OUTPUT_NAME}" >> $GITHUB_OUTPUT
+      shell: bash
+    
+    - name: 构建库
+      if: steps.check_dir.outputs.exists == 'true'
+      run: |
+        cd library_${{ matrix.library }}
+        cargo build --release
+      shell: bash
+    
+    - name: 创建输出目录
+      if: steps.check_dir.outputs.exists == 'true'
+      run: mkdir -p library-package
+      shell: bash
+    
+    - name: 复制构建产物 (Windows)
+      if: steps.check_dir.outputs.exists == 'true' && matrix.os == 'windows-latest'
+      run: |
+        LIB_PATH="library_${{ matrix.library }}/target/release/${{ steps.get_config.outputs.output_name }}.dll"
+        if [ -f "$LIB_PATH" ]; then
+          cp "$LIB_PATH" "library-package/${{ matrix.library }}.${{ matrix.lib_extension }}"
+        else
+          echo "找不到库文件，尝试备选路径..."
+          # 尝试Cargo.toml中的包名
+          PACKAGE_NAME=$(grep -m 1 "name" "library_${{ matrix.library }}/Cargo.toml" | cut -d'"' -f2 | tr -d '\r')
+          cp "library_${{ matrix.library }}/target/release/${PACKAGE_NAME}.dll" "library-package/${{ matrix.library }}.${{ matrix.lib_extension }}"
+        fi
+      shell: bash
+    
+    - name: 复制构建产物 (Linux/macOS)
+      if: steps.check_dir.outputs.exists == 'true' && matrix.os != 'windows-latest'
+      run: |
+        LIB_PATH="library_${{ matrix.library }}/target/release/lib${{ steps.get_config.outputs.output_name }}.${{ matrix.lib_extension }}"
+        if [ -f "$LIB_PATH" ]; then
+          cp "$LIB_PATH" "library-package/${{ matrix.library }}.${{ matrix.lib_extension }}"
+        else
+          echo "找不到库文件，尝试备选路径..."
+          # 尝试Cargo.toml中的包名
+          PACKAGE_NAME=$(grep -m 1 "name" "library_${{ matrix.library }}/Cargo.toml" | cut -d'"' -f2 | tr -d '\r')
+          cp "library_${{ matrix.library }}/target/release/lib${PACKAGE_NAME}.${{ matrix.lib_extension }}" "library-package/${{ matrix.library }}.${{ matrix.lib_extension }}"
+        fi
+      shell: bash
+    
+    - name: 创建档案 (Windows)
+      if: steps.check_dir.outputs.exists == 'true' && matrix.os == 'windows-latest'
+      run: |
+        cd library-package
+        7z a "../${{ matrix.library }}-${{ matrix.os }}.${{ matrix.archive_format }}" *
+      shell: bash
+    
+    - name: 创建档案 (Linux/macOS)
+      if: steps.check_dir.outputs.exists == 'true' && matrix.os != 'windows-latest'
+      run: |
+        tar -czvf "${{ matrix.library }}-${{ matrix.os }}.${{ matrix.archive_format }}" -C library-package .
+      shell: bash
+    
+    - name: 上传构建产物
+      if: steps.check_dir.outputs.exists == 'true'
+      uses: actions/upload-artifact@v3
+      with:
+        name: ${{ matrix.library }}-${{ matrix.os }}
+        path: ${{ matrix.library }}-${{ matrix.os }}.${{ matrix.archive_format }}
+    
+    - name: 创建发布
+      if: steps.check_dir.outputs.exists == 'true' && startsWith(github.ref, 'refs/tags/')
+      uses: softprops/action-gh-release@v1
+      with:
+        files: ${{ matrix.library }}-${{ matrix.os }}.${{ matrix.archive_format }}
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # 额外的工作以合并所有库为一个包
+  package-all:
+    name: 打包所有库
+    needs: build
+    runs-on: ${{ matrix.os }}
+    if: ${{ github.event.inputs.libraries == 'all' }}
+    strategy:
+      matrix:
+        os: [windows-latest, ubuntu-latest, macos-latest]
+        include:
+          - os: windows-latest
+            archive_format: 'zip'
+          - os: ubuntu-latest
+            archive_format: 'tar.gz'
+          - os: macos-latest
+            archive_format: 'tar.gz'
+    
+    steps:
+    - name: 下载所有构建产物
+      uses: actions/download-artifact@v3
+      
+    - name: 准备合并目录
+      run: |
+        mkdir -p all-libraries
+      shell: bash
+    
+    - name: 解压所有库 (Windows)
+      if: matrix.os == 'windows-latest'
+      run: |
+        for d in *-${{ matrix.os }}; do
+          if [ -d "$d" ]; then
+            cd "$d"
+            7z x "*.zip" -o../all-libraries
+            cd ..
+          fi
+        done
+      shell: bash
+    
+    - name: 解压所有库 (Linux/macOS)
+      if: matrix.os != 'windows-latest'
+      run: |
+        for d in *-${{ matrix.os }}; do
+          if [ -d "$d" ]; then
+            cd "$d"
+            tar -xzvf *.tar.gz -C ../all-libraries
+            cd ..
+          fi
+        done
+      shell: bash
+    
+    - name: 创建合并档案 (Windows)
+      if: matrix.os == 'windows-latest'
+      run: |
+        7z a "codenothing-all-libraries-${{ matrix.os }}.${{ matrix.archive_format }}" ./all-libraries/*
+      shell: bash
+    
+    - name: 创建合并档案 (Linux/macOS)
+      if: matrix.os != 'windows-latest'
+      run: |
+        tar -czvf "codenothing-all-libraries-${{ matrix.os }}.${{ matrix.archive_format }}" -C all-libraries .
+      shell: bash
+    
+    - name: 上传合并构建产物
+      uses: actions/upload-artifact@v3
+      with:
+        name: codenothing-all-libraries-${{ matrix.os }}
+        path: codenothing-all-libraries-${{ matrix.os }}.${{ matrix.archive_format }}
+    
+    - name: 创建发布
+      if: startsWith(github.ref, 'refs/tags/')
+      uses: softprops/action-gh-release@v1
+      with:
+        files: codenothing-all-libraries-${{ matrix.os }}.${{ matrix.archive_format }}
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} 
