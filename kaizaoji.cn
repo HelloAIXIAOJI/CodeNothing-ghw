@@ -5,6 +5,7 @@ using ns std;
 
 fn main() : int {
     while (true) {
+        exec("powershell", "-Command", "Clear-Host");
         println("  🎃");
         println("██░░██");
         println("  ░░");
@@ -14,7 +15,6 @@ fn main() : int {
         println("░░██░░");
         println("  ██");
         sleep_seconds(0.2);
-        exec("powershell", "-Command", "Clear-Host");
     };
     return 0;
 };
