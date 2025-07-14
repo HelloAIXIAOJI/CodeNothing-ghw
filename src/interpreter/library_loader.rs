@@ -65,9 +65,10 @@ pub fn load_library(lib_name: &str) -> Result<Arc<HashMap<String, LibraryFunctio
                 return Err("库初始化函数返回空指针".to_string());
             }
             
-            // 将原始指针转换为Arc<HashMap>
-            let functions = Arc::new(Box::from_raw(functions_ptr).clone());
-            return Ok(functions);
+            // 将原始指针转换为HashMap，然后包装为Arc
+            let boxed_functions = Box::from_raw(functions_ptr);
+            let functions = *boxed_functions; // 解引用Box<HashMap>为HashMap
+            return Ok(Arc::new(functions));
         }
     }
     
@@ -97,13 +98,15 @@ pub fn load_library(lib_name: &str) -> Result<Arc<HashMap<String, LibraryFunctio
             return Err("库初始化函数返回空指针".to_string());
         }
         
-        // 将原始指针转换为Arc<HashMap>
-        let functions = Arc::new(Box::from_raw(functions_ptr).clone());
+        // 将原始指针转换为HashMap，然后包装为Arc
+        let boxed_functions = Box::from_raw(functions_ptr);
+        let functions = *boxed_functions; // 解引用Box<HashMap>为HashMap
+        let functions_arc = Arc::new(functions);
         
         // 将库添加到已加载库缓存
         loaded_libs.insert(lib_name.to_string(), lib);
         
-        Ok(functions)
+        Ok(functions_arc)
     }
 }
 

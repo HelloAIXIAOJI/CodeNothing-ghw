@@ -1,5 +1,6 @@
 use crate::ast::{Expression, BinaryOperator, CompareOperator, LogicalOperator};
 use crate::parser::parser_base::ParserBase;
+use crate::interpreter::debug_println;
 
 pub trait ExpressionParser {
     fn parse_expression(&mut self) -> Result<Expression, String>;
@@ -228,8 +229,34 @@ impl<'a> ExpressionParser for ParserBase<'a> {
                     Ok(Expression::BoolLiteral(false))
                 },
                 _ => {
+                    // 检查是否是字符串字面量
+                    if token.starts_with('"') && token.ends_with('"') {
+                        let string_value = token[1..token.len()-1].to_string();
+                        self.consume();
+                        return Ok(Expression::StringLiteral(string_value));
+                    }
+                    
+                    // 检查是否是数字字面量
+                    if let Ok(int_value) = token.parse::<i32>() {
+                        self.consume();
+                        return Ok(Expression::IntLiteral(int_value));
+                    } else if let Ok(float_value) = token.parse::<f64>() {
+                        self.consume();
+                        return Ok(Expression::FloatLiteral(float_value));
+                    } else if token.ends_with('L') || token.ends_with('l') {
+                        // 长整型字面量
+                        if let Ok(long_value) = token[..token.len()-1].parse::<i64>() {
+                            self.consume();
+                            return Ok(Expression::LongLiteral(long_value));
+                        }
+                    }
+                    
                     // 变量或函数调用
                     let name = self.consume().unwrap();
+                    
+                    // 调试输出
+                    debug_println(&format!("解析标识符: {}", name));
+                    debug_println(&format!("下一个token: {:?}", self.peek()));
                     
                     if self.peek() == Some(&"(".to_string()) {
                         // 函数调用
@@ -260,11 +287,13 @@ impl<'a> ExpressionParser for ParserBase<'a> {
                         
                         // 获取函数名
                         let func_name = self.consume().ok_or_else(|| "期望函数名".to_string())?;
+                        debug_println(&format!("解析库函数调用: {}::{}", name, func_name));
                         
                         // 检查是否是库函数调用
                         if name.starts_with("lib_") {
                             // 库函数调用，格式为 lib_xxx::func_name
                             let lib_name = name.trim_start_matches("lib_").to_string();
+                            debug_println(&format!("识别为库函数调用: {} -> {}", lib_name, func_name));
                             
                             self.expect("(")?;
                             

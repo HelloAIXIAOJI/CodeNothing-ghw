@@ -12,6 +12,7 @@
 - if-else 条件语句和逻辑操作符
 - for循环和while循环
 - 单行和多行注释
+- 动态库加载和调用
 
 ## 语法示例
 
@@ -150,6 +151,19 @@ while (condition) {
 !/
 ```
 
+### 动态库加载和调用
+
+```
+// 导入动态库
+using lib_once <io>;
+
+// 调用库函数
+lib_io::println("Hello, world!");
+
+// 读取用户输入
+input : string = lib_io::read_line();
+```
+
 ## 运行
 
 ```
@@ -160,4 +174,13 @@ cargo run -- <文件路径>
 
 ```
 cargo run -- helloworld.cn
-``` 
+```
+
+## 动态库开发
+
+CodeNothing 支持通过动态库扩展功能。动态库必须遵循以下规则：
+
+1. 必须导出一个名为 `cn_init` 的函数，该函数返回一个包含库函数的 HashMap 指针。
+2. 库函数必须接受 `Vec<String>` 类型的参数，并返回 `String` 类型的结果。
+
+详细信息请参阅 `library_example` 目录中的示例库和说明文档。 

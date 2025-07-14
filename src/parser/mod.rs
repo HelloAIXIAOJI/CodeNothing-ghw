@@ -26,18 +26,57 @@ pub fn parse(source: &str, debug: bool) -> Result<Program, String> {
 fn parse_program(parser: &mut ParserBase) -> Result<Program, String> {
     let mut functions = Vec::new();
     let mut namespaces = Vec::new();
+    let mut library_imports = Vec::new();
     
     while parser.position < parser.tokens.len() {
         if parser.peek() == Some(&"ns".to_string()) {
             namespaces.push(parse_namespace(parser)?);
         } else if parser.peek() == Some(&"fn".to_string()) {
             functions.push(parse_function(parser)?);
+        } else if parser.peek() == Some(&"using".to_string()) {
+            // 解析using语句
+            parser.consume(); // 消费 "using"
+            
+            if parser.peek() == Some(&"lib_once".to_string()) || parser.peek() == Some(&"lib".to_string()) {
+                let lib_keyword = parser.consume().unwrap(); // 消费 "lib_once" 或 "lib"
+                
+                // 期望 "<" 符号
+                parser.expect("<")?;
+                
+                // 获取库名
+                let lib_name = parser.consume().ok_or_else(|| "期望库名".to_string())?;
+                
+                // 期望 ">" 符号
+                parser.expect(">")?;
+                
+                // 期望 ";" 符号
+                parser.expect(";")?;
+                
+                // 添加到库导入列表
+                library_imports.push(lib_name);
+            } else if parser.peek() == Some(&"ns".to_string()) || parser.peek() == Some(&"namespace".to_string()) {
+                // 解析命名空间导入，但在顶层不做任何处理，因为命名空间导入只在函数内部有效
+                parser.consume(); // 消费 "ns" 或 "namespace"
+                
+                // 解析命名空间路径
+                while parser.peek().is_some() && parser.peek() != Some(&";".to_string()) {
+                    parser.consume();
+                }
+                
+                parser.expect(";")?;
+            } else {
+                return Err("期望 'lib_once'、'lib'、'ns' 或 'namespace' 关键字".to_string());
+            }
         } else {
-            return Err(format!("期望 'fn' 或 'ns', 但得到了 '{:?}'", parser.peek()));
+            return Err(format!("期望 'fn', 'ns', 或 'using', 但得到了 '{:?}'", parser.peek()));
         }
     }
     
-    Ok(Program { functions, namespaces })
+    Ok(Program { 
+        functions, 
+        namespaces,
+        library_imports,
+    })
 }
 
 fn parse_namespace(parser: &mut ParserBase) -> Result<Namespace, String> {

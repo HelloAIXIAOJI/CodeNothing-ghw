@@ -72,6 +72,7 @@ pub enum Statement {
     CompoundAssignment(String, BinaryOperator, Expression), // 复合赋值 (+=, -=, *=, /=, %=)
     UsingNamespace(Vec<String>), // 导入命名空间 (using ns xxx;)
     LibraryImport(String), // 导入动态库 (using lib_once <xxx>;)
+    FunctionCallStatement(Expression), // 函数调用语句
     IfElse(Expression, Vec<Statement>, Vec<(Option<Expression>, Vec<Statement>)>), // if-else 语句，包含条件、if块和多个else-if/else块
     ForLoop(String, Expression, Expression, Vec<Statement>), // for循环，包含变量名、范围起始值、范围结束值和循环体
     WhileLoop(Expression, Vec<Statement>), // while循环，包含条件和循环体
@@ -105,4 +106,5 @@ pub struct Namespace {
 pub struct Program {
     pub functions: Vec<Function>,
     pub namespaces: Vec<Namespace>, // 顶层命名空间
+    pub library_imports: Vec<String>, // 顶层库导入
 } 

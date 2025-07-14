@@ -1,4 +1,4 @@
-use crate::ast::{Statement, Type, BinaryOperator};
+use crate::ast::{Statement, Type, BinaryOperator, Expression};
 use crate::parser::parser_base::ParserBase;
 use crate::parser::expression_parser::ExpressionParser;
 
@@ -56,7 +56,42 @@ impl<'a> StatementParser for ParserBase<'a> {
                         
                         Ok(Statement::LibraryImport(lib_name))
                     },
-                    _ => Err("期望 'ns' 或 'lib_once' 关键字".to_string()),
+                    Some(token) if token == "lib" => {
+                        self.consume(); // 消费 "lib" 关键字
+                        
+                        // 期望 "<" 符号
+                        self.expect("<")?;
+                        
+                        // 获取库名
+                        let lib_name = self.consume().ok_or_else(|| "期望库名".to_string())?;
+                        
+                        // 期望 ">" 符号
+                        self.expect(">")?;
+                        
+                        // 期望 ";" 符号
+                        self.expect(";")?;
+                        
+                        Ok(Statement::LibraryImport(lib_name))
+                    },
+                    Some(token) if token == "namespace" => {
+                        self.consume(); // 消费 "namespace" 关键字
+                        
+                        // 解析命名空间路径
+                        let mut path = Vec::new();
+                        let first_name = self.consume().ok_or_else(|| "期望命名空间名".to_string())?;
+                        path.push(first_name);
+                        
+                        // 解析嵌套命名空间路径
+                        while self.peek() == Some(&"::".to_string()) {
+                            self.consume(); // 消费 "::"
+                            let name = self.consume().ok_or_else(|| "期望命名空间名".to_string())?;
+                            path.push(name);
+                        }
+                        
+                        self.expect(";")?;
+                        Ok(Statement::UsingNamespace(path))
+                    },
+                    _ => Err("期望 'ns'、'namespace'、'lib' 或 'lib_once' 关键字".to_string()),
                 }
             },
             Some(token) if token == "if" => {
@@ -197,7 +232,7 @@ impl<'a> StatementParser for ParserBase<'a> {
                 Ok(Statement::PreDecrement(var_name))
             },
             Some(_) => {
-                // 检查是否是变量声明或赋值
+                // 检查是否是变量声明、赋值或函数调用
                 let var_name = self.consume().unwrap();
                 
                 if let Some(next_token) = self.peek() {
@@ -271,6 +306,34 @@ impl<'a> StatementParser for ParserBase<'a> {
                         self.consume(); // 消费 "--"
                         self.expect(";")?;
                         Ok(Statement::Decrement(var_name))
+                    } else if next_token == "(" {
+                        // 函数调用语句
+                        self.consume(); // 消费 "("
+                        
+                        let mut args = Vec::new();
+                        
+                        if self.peek() != Some(&")".to_string()) {
+                            // 解析参数列表
+                            loop {
+                                let arg = self.parse_expression()?;
+                                args.push(arg);
+                                
+                                if self.peek() != Some(&",".to_string()) {
+                                    break;
+                                }
+                                
+                                self.consume(); // 消费 ","
+                            }
+                        }
+                        
+                        self.expect(")")?;
+                        self.expect(";")?;
+                        
+                        // 创建函数调用表达式
+                        let func_call_expr = Expression::FunctionCall(var_name, args);
+                        
+                        // 返回函数调用语句
+                        Ok(Statement::FunctionCallStatement(func_call_expr))
                     } else {
                         Err(format!("不支持的语句: {} {}", var_name, next_token))
                     }

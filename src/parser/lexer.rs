@@ -1,3 +1,5 @@
+use crate::interpreter::debug_println;
+
 // 词法分析器：负责将源代码转换为词法单元（tokens）
 
 // 移除注释
@@ -187,7 +189,7 @@ pub fn tokenize(source: &str, debug: bool) -> Vec<String> {
         .collect::<Vec<String>>();
     
     if debug {
-        println!("词法分析结果: {:?}", tokens);
+        debug_println(&format!("词法分析结果: {:?}", tokens));
     }
     
     tokens
