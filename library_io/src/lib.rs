@@ -10,6 +10,7 @@ use cn_common::string::process_escape_chars;
 mod std {
     use super::*;
     use ::std::fmt::Write;
+    use ::std::io::Write;
     
     // 打印字符串到标准输出
     pub fn cn_print(args: Vec<String>) -> String {

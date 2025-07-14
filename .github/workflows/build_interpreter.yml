@@ -60,7 +60,15 @@ jobs:
       if: matrix.os == 'windows-latest'
       run: |
         cp target/release/codenothing.exe release-package/
-        cp -r examples release-package/
+        # 如果examples目录存在，则复制
+        if [ -d "examples" ]; then
+          cp -r examples release-package/
+        else
+          echo "警告：examples目录不存在，跳过复制"
+          # 创建一个空的examples目录，确保有内容
+          mkdir -p release-package/examples
+          echo "# CodeNothing 示例" > release-package/examples/README.md
+        fi
         7z a ${{ matrix.asset_name }} ./release-package/*
       shell: bash
     
@@ -68,7 +76,15 @@ jobs:
       if: matrix.os != 'windows-latest'
       run: |
         cp target/release/codenothing release-package/
-        cp -r examples release-package/
+        # 如果examples目录存在，则复制
+        if [ -d "examples" ]; then
+          cp -r examples release-package/
+        else
+          echo "警告：examples目录不存在，跳过复制"
+          # 创建一个空的examples目录，确保有内容
+          mkdir -p release-package/examples
+          echo "# CodeNothing 示例" > release-package/examples/README.md
+        fi
         tar -czvf ${{ matrix.asset_name }} -C release-package .
       shell: bash
     
