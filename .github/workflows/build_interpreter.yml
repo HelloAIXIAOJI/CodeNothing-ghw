@@ -17,6 +17,10 @@ on:
     types: [created]  # 发布版本时触发
   workflow_dispatch:  # 允许手动触发
 
+# 添加权限设置
+permissions:
+  contents: write
+
 env:
   CARGO_TERM_COLOR: always
 
@@ -104,5 +108,5 @@ jobs:
       with:
         files: ${{ matrix.asset_name }}
         tag_name: ${{ github.ref_name }}
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} 
+        draft: false
+        generate_release_notes: true 

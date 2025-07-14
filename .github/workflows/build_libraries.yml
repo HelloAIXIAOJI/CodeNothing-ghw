@@ -16,6 +16,10 @@ on:
     tags:
       - 'v*'
 
+# 添加权限设置
+permissions:
+  contents: write
+
 env:
   CARGO_TERM_COLOR: always
 
@@ -159,8 +163,8 @@ jobs:
       with:
         files: ${{ matrix.library }}-${{ matrix.os }}.${{ matrix.archive_format }}
         tag_name: ${{ github.ref_name }}
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        draft: false
+        generate_release_notes: true
 
   # 额外的工作以合并所有库为一个包
   package-all:
@@ -237,5 +241,5 @@ jobs:
       with:
         files: codenothing-all-libraries-${{ matrix.os }}.${{ matrix.archive_format }}
         tag_name: ${{ github.ref_name }}
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} 
+        draft: false
+        generate_release_notes: true 
