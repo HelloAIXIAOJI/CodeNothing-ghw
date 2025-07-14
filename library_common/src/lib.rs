@@ -33,6 +33,6 @@ pub mod string {
 // 用于测试库是否正常工作的函数
 #[no_mangle]
 pub extern "C" fn cn_test() -> i32 {
-    println!("CodeNothing通用库测试成功");
+    ::std::println!("CodeNothing通用库测试成功");
     1
 } 

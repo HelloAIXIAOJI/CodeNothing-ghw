@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use ::std::collections::HashMap;
 
 // 定义库函数类型
 pub type LibraryFunction = fn(Vec<String>) -> String;

@@ -1,6 +1,6 @@
-use std::collections::HashMap;
-use std::io::{self, Write};
-use std::fmt::Write as FmtWrite;
+use ::std::collections::HashMap;
+use ::std::io::{self, Write};
+use ::std::fmt::Write as FmtWrite;
 
 // 导入通用库
 use cn_common::namespace::{LibraryFunction, NamespaceBuilder, create_library_pointer};
@@ -9,6 +9,7 @@ use cn_common::string::process_escape_chars;
 // 命名空间函数
 mod std {
     use super::*;
+    use ::std::fmt::Write;
     
     // 打印字符串到标准输出
     pub fn cn_print(args: Vec<String>) -> String {

@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use ::std::collections::HashMap;
 
 // 导入通用库
 use cn_common::namespace::{LibraryFunction, NamespaceBuilder, create_library_pointer, register_namespaces};
