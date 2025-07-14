@@ -1,38 +1,7 @@
 use std::collections::HashMap;
 
-// 定义库函数类型
-type LibraryFunction = fn(Vec<String>) -> String;
-
-// 命名空间辅助结构体和函数
-struct NamespaceBuilder {
-    namespace: String,
-    functions: HashMap<String, LibraryFunction>,
-}
-
-impl NamespaceBuilder {
-    fn new(namespace: &str) -> Self {
-        NamespaceBuilder {
-            namespace: namespace.to_string(),
-            functions: HashMap::new(),
-        }
-    }
-    
-    fn add_function(&mut self, name: &str, func: LibraryFunction) -> &mut Self {
-        let full_name = if self.namespace.is_empty() {
-            name.to_string()
-        } else {
-            format!("{}::{}", self.namespace, name)
-        };
-        self.functions.insert(full_name, func);
-        self
-    }
-    
-    fn register_all(&self, target: &mut HashMap<String, LibraryFunction>) {
-        for (name, func) in &self.functions {
-            target.insert(name.clone(), *func);
-        }
-    }
-}
+// 导入通用库
+use cn_common::namespace::{LibraryFunction, NamespaceBuilder, create_library_pointer, register_namespaces};
 
 // 根命名空间函数
 // 示例函数：将输入字符串反转并返回
@@ -80,6 +49,7 @@ mod string {
 // 初始化函数，返回函数映射
 #[no_mangle]
 pub extern "C" fn cn_init() -> *mut HashMap<String, LibraryFunction> {
+    // 方法1：使用命名空间构建器单独注册每个命名空间
     let mut functions = HashMap::new();
     
     // 注册根命名空间函数
@@ -94,8 +64,18 @@ pub extern "C" fn cn_init() -> *mut HashMap<String, LibraryFunction> {
     // 注册所有函数到主函数映射
     string_ns.register_all(&mut functions);
     
+    // 方法2：使用register_namespaces函数一次性注册多个命名空间
+    // let functions = register_namespaces(vec![
+    //     ("", vec![("reverse", cn_reverse)]),
+    //     ("string", vec![
+    //         ("length", string::cn_length),
+    //         ("to_upper", string::cn_to_upper),
+    //         ("to_lower", string::cn_to_lower),
+    //     ]),
+    // ]);
+    
     // 将HashMap装箱并转换为原始指针
-    Box::into_raw(Box::new(functions))
+    create_library_pointer(functions)
 }
 
 /* 
@@ -128,6 +108,15 @@ pub extern "C" fn cn_init() -> *mut HashMap<String, LibraryFunction> {
  *    let mut ns = NamespaceBuilder::new("my_namespace");
  *    ns.add_function("my_function", my_namespace::my_ns_function);
  *    ns.register_all(&mut functions);
+ *    
+ *    // 或者使用一次性注册多个命名空间的方法
+ *    let functions = register_namespaces(vec![
+ *        ("", vec![("root_function", root_function)]),
+ *        ("my_namespace", vec![
+ *            ("my_function", my_namespace::my_ns_function),
+ *            ("another_function", my_namespace::another_function),
+ *        ]),
+ *    ]);
  * 
  * 4. 编译库：
  *    cargo build --release

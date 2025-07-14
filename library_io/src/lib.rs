@@ -2,65 +2,9 @@ use std::collections::HashMap;
 use std::io::{self, Write};
 use std::fmt::Write as FmtWrite;
 
-// 定义库函数类型
-type LibraryFunction = fn(Vec<String>) -> String;
-
-// 命名空间辅助结构体和函数
-struct NamespaceBuilder {
-    namespace: String,
-    functions: HashMap<String, LibraryFunction>,
-}
-
-impl NamespaceBuilder {
-    fn new(namespace: &str) -> Self {
-        NamespaceBuilder {
-            namespace: namespace.to_string(),
-            functions: HashMap::new(),
-        }
-    }
-    
-    fn add_function(&mut self, name: &str, func: LibraryFunction) -> &mut Self {
-        let full_name = if self.namespace.is_empty() {
-            name.to_string()
-        } else {
-            format!("{}::{}", self.namespace, name)
-        };
-        self.functions.insert(full_name, func);
-        self
-    }
-    
-    fn register_all(&self, target: &mut HashMap<String, LibraryFunction>) {
-        for (name, func) in &self.functions {
-            target.insert(name.clone(), *func);
-        }
-    }
-}
-
-// 处理转义字符
-fn process_escape_chars(input: &str) -> String {
-    let mut result = String::new();
-    let mut chars = input.chars().peekable();
-    
-    while let Some(c) = chars.next() {
-        if c == '\\' && chars.peek().is_some() {
-            match chars.next().unwrap() {
-                'n' => result.push('\n'),
-                't' => result.push('\t'),
-                'r' => result.push('\r'),
-                '\\' => result.push('\\'),
-                '"' => result.push('"'),
-                c => {
-                    result.push('\\');
-                    result.push(c);
-                }
-            }
-        } else {
-            result.push(c);
-        }
-    }
-    
-    result
-}
+// 导入通用库
+use cn_common::namespace::{LibraryFunction, NamespaceBuilder, create_library_pointer};
+use cn_common::string::process_escape_chars;
 
 // 命名空间函数
 mod std {
@@ -192,8 +136,6 @@ mod std {
 // 初始化函数，返回函数映射
 #[no_mangle]
 pub extern "C" fn cn_init() -> *mut HashMap<String, LibraryFunction> {
-    let mut functions = HashMap::new();
-    
     // 使用命名空间构建器注册std命名空间下的函数
     let mut std_ns = NamespaceBuilder::new("std");
     std_ns.add_function("print", std::cn_print)
@@ -201,9 +143,12 @@ pub extern "C" fn cn_init() -> *mut HashMap<String, LibraryFunction> {
          .add_function("read_line", std::cn_read_line)
          .add_function("printf", std::cn_printf);
     
+    // 创建函数映射
+    let mut functions = HashMap::new();
+    
     // 注册所有函数到主函数映射
     std_ns.register_all(&mut functions);
     
     // 将HashMap装箱并转换为原始指针
-    Box::into_raw(Box::new(functions))
+    create_library_pointer(functions)
 } 

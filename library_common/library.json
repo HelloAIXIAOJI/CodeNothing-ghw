@@ -1,0 +1,9 @@
+{
+  "name": "common",
+  "version": "1.0.0",
+  "description": "CodeNothing 通用辅助库",
+  "output_name": "common",
+  "author": "CodeNothing Team",
+  "requires_namespace": false,
+  "namespaces": []
+} 
