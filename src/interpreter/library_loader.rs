@@ -39,7 +39,7 @@ fn get_library_path(lib_name: &str) -> PathBuf {
     }
     #[cfg(not(target_os = "windows"))]
     {
-        path.push(format!("lib{}.so", lib_name));
+        path.push(format!("{}.so", lib_name));
     }
     
     debug_println(&format!("尝试加载库文件: {:?}", path));
