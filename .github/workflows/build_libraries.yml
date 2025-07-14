@@ -26,10 +26,10 @@ jobs:
         run: |
           if [[ "${{ github.event.inputs.libraries }}" == "all" ]]; then
             # 自动查找所有以library_开头的目录
-            LIBRARIES=$(find . -maxdepth 1 -type d -name "library_*" | sed 's|./library_||g' | jq -R . | jq -s .)
+            LIBRARIES=$(find . -maxdepth 1 -type d -name "library_*" | sed 's|./library_||g' | jq -R . | jq -cs .)
           else
             # 使用提供的库列表
-            LIBRARIES=$(echo "${{ github.event.inputs.libraries }}" | tr ',' '\n' | jq -R . | jq -s .)
+            LIBRARIES=$(echo "${{ github.event.inputs.libraries }}" | tr ',' '\n' | jq -R . | jq -cs .)
           fi
           echo "matrix=${LIBRARIES}" >> $GITHUB_OUTPUT
         shell: bash
@@ -140,7 +140,7 @@ jobs:
     
     - name: 上传构建产物
       if: steps.check_dir.outputs.exists == 'true'
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: ${{ matrix.library }}-${{ matrix.os }}
         path: ${{ matrix.library }}-${{ matrix.os }}.${{ matrix.archive_format }}
@@ -172,7 +172,7 @@ jobs:
     
     steps:
     - name: 下载所有构建产物
-      uses: actions/download-artifact@v3
+      uses: actions/download-artifact@v4
       
     - name: 准备合并目录
       run: |
@@ -216,7 +216,7 @@ jobs:
       shell: bash
     
     - name: 上传合并构建产物
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: codenothing-all-libraries-${{ matrix.os }}
         path: codenothing-all-libraries-${{ matrix.os }}.${{ matrix.archive_format }}
