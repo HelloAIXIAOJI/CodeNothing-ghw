@@ -1,13 +1,20 @@
 name: 构建CodeNothing库文件
 
 on:
-  # 默认只能手动触发，避免每次提交都构建
+  # 手动触发
   workflow_dispatch:
     inputs:
       libraries:
         description: '要构建的库列表 (all 表示全部, 或用逗号分隔的名称列表如 io,example)'
         required: true
         default: 'all'
+  # 发布版本时自动触发
+  release:
+    types: [created]
+  # 标签推送时自动触发
+  push:
+    tags:
+      - 'v*'
 
 env:
   CARGO_TERM_COLOR: always
@@ -24,12 +31,13 @@ jobs:
       - id: set-matrix
         name: 准备库矩阵
         run: |
-          if [[ "${{ github.event.inputs.libraries }}" == "all" ]]; then
-            # 自动查找所有以library_开头的目录
-            LIBRARIES=$(find . -maxdepth 1 -type d -name "library_*" | sed 's|./library_||g' | jq -R . | jq -cs .)
-          else
+          # 如果是手动触发并指定了库，则使用指定的库
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" && "${{ github.event.inputs.libraries }}" != "all" ]]; then
             # 使用提供的库列表
             LIBRARIES=$(echo "${{ github.event.inputs.libraries }}" | tr ',' '\n' | jq -R . | jq -cs .)
+          else
+            # 否则构建所有库
+            LIBRARIES=$(find . -maxdepth 1 -type d -name "library_*" | sed 's|./library_||g' | jq -R . | jq -cs .)
           fi
           echo "matrix=${LIBRARIES}" >> $GITHUB_OUTPUT
         shell: bash
@@ -146,10 +154,11 @@ jobs:
         path: ${{ matrix.library }}-${{ matrix.os }}.${{ matrix.archive_format }}
     
     - name: 创建发布
-      if: steps.check_dir.outputs.exists == 'true' && startsWith(github.ref, 'refs/tags/')
+      if: steps.check_dir.outputs.exists == 'true' && (startsWith(github.ref, 'refs/tags/') || github.event_name == 'release')
       uses: softprops/action-gh-release@v1
       with:
         files: ${{ matrix.library }}-${{ matrix.os }}.${{ matrix.archive_format }}
+        tag_name: ${{ github.ref_name }}
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -158,7 +167,8 @@ jobs:
     name: 打包所有库
     needs: build
     runs-on: ${{ matrix.os }}
-    if: ${{ github.event.inputs.libraries == 'all' }}
+    # 在手动触发并指定'all'或发布版本时打包所有库
+    if: ${{ github.event.inputs.libraries == 'all' || github.event_name == 'release' || startsWith(github.ref, 'refs/tags/') }}
     strategy:
       matrix:
         os: [windows-latest, ubuntu-latest, macos-latest]
@@ -222,9 +232,10 @@ jobs:
         path: codenothing-all-libraries-${{ matrix.os }}.${{ matrix.archive_format }}
     
     - name: 创建发布
-      if: startsWith(github.ref, 'refs/tags/')
+      if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'release'
       uses: softprops/action-gh-release@v1
       with:
         files: codenothing-all-libraries-${{ matrix.os }}.${{ matrix.archive_format }}
+        tag_name: ${{ github.ref_name }}
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} 

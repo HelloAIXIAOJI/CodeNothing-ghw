@@ -6,11 +6,15 @@ on:
     paths-ignore:
       - 'library_*/**'
       - '**.md'
+    tags:
+      - 'v*'  # 添加标签触发
   pull_request:
     branches: [ main ]
     paths-ignore:
       - 'library_*/**'
       - '**.md'
+  release:
+    types: [created]  # 发布版本时触发
   workflow_dispatch:  # 允许手动触发
 
 env:
@@ -96,8 +100,9 @@ jobs:
     
     - name: 创建发布
       uses: softprops/action-gh-release@v1
-      if: startsWith(github.ref, 'refs/tags/')
+      if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'release'
       with:
         files: ${{ matrix.asset_name }}
+        tag_name: ${{ github.ref_name }}
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} 

@@ -1,7 +1,0 @@
-x : int = 1;                  // 整数
-f : float = 3.14;             // 浮点数
-b : bool = true;              // 布尔值
-s : string = "hello";         // 字符串
-l : long = 1000000000000000000; // 长整型
-arr : int[] = [1, 2, 3];      // 数组
-map : Map<string, int> = {"one": 1, "two": 2}; // 映射/字典
