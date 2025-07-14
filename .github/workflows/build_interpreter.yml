@@ -75,7 +75,7 @@ jobs:
     - name: 打包Linux/macOS
       if: matrix.os != 'windows-latest'
       run: |
-        cp target/release/codenothing release-package/
+        cp target/release/CodeNothing release-package/
         # 如果examples目录存在，则复制
         if [ -d "examples" ]; then
           cp -r examples release-package/

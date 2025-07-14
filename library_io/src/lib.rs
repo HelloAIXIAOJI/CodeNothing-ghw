@@ -1,5 +1,5 @@
 use ::std::collections::HashMap;
-use ::std::io::{self, Write};
+use ::std::io::{self, Write as IoWrite};
 use ::std::fmt::Write as FmtWrite;
 
 // 导入通用库
@@ -9,8 +9,6 @@ use cn_common::string::process_escape_chars;
 // 命名空间函数
 mod std {
     use super::*;
-    use ::std::fmt::Write;
-    use ::std::io::Write;
     
     // 打印字符串到标准输出
     pub fn cn_print(args: Vec<String>) -> String {
@@ -83,7 +81,7 @@ mod std {
                             // 整数格式化
                             if let Some(arg) = format_args.next() {
                                 if let Ok(num) = arg.parse::<i32>() {
-                                    let _ = write!(result, "{}", num);
+                                    let _ = FmtWrite::write_fmt(&mut result, format_args!("{}", num));
                                 } else {
                                     result.push_str("%d");
                                 }
@@ -96,7 +94,7 @@ mod std {
                             // 浮点数格式化
                             if let Some(arg) = format_args.next() {
                                 if let Ok(num) = arg.parse::<f64>() {
-                                    let _ = write!(result, "{}", num);
+                                    let _ = FmtWrite::write_fmt(&mut result, format_args!("{}", num));
                                 } else {
                                     result.push_str("%f");
                                 }
