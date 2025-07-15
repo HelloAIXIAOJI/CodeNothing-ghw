@@ -178,84 +178,33 @@ fn main() {
                     let result = interpreter::interpret(&program);
                     println!("程序执行结果: {}", result);
                 },
-                Err(errors) => {
-                    // 增强错误报告 - 显示所有收集到的错误
-                    if errors.is_empty() {
-                        println!("解析错误：未知错误");
-                    } else {
-                        println!("\n发现 {} 个解析错误:", errors.len());
-                        println!("==============================================");
+                Err(err) => {
+                    // 增强错误报告
+                    println!("解析错误: {}", err);
+                    
+                    // 尝试提取错误位置信息
+                    if let Some(pos) = processed_content.find(&err.replace("期望", "").trim()) {
+                        // 计算行号和列号
+                        let mut line = 1;
+                        let mut col = 1;
+                        for (i, c) in processed_content.chars().enumerate() {
+                            if i == pos {
+                                break;
+                            }
+                            if c == '\n' {
+                                line += 1;
+                                col = 1;
+                            } else {
+                                col += 1;
+                            }
+                        }
+                        println!("错误可能位于第 {} 行, 第 {} 列附近", line, col);
                         
-                        // 将源代码按行分割
+                        // 显示错误行的内容
                         let lines: Vec<&str> = processed_content.lines().collect();
-                        
-                        // 显示每一个错误的详细信息
-                        for (i, error) in errors.iter().enumerate() {
-                            println!("\n错误 #{}: {}", i + 1, error.message);
-                            
-                            // 显示当前Token信息
-                            if let Some(ref token) = error.token {
-                                println!("当前处理的标记: '{}'", token);
-                            }
-                            
-                            println!("Token位置索引: {}", error.token_position);
-                            
-                            // 从源代码的开始扫描，统计token数量，找到大致的错误行
-                            let tokens_per_line = tokenize_lines(&processed_content);
-                            let mut token_count = 0;
-                            let mut found_token_line = false;
-                            
-                            // 找到token_position所在的行
-                            for (line_idx, tokens_in_line) in tokens_per_line.iter().enumerate() {
-                                if token_count + tokens_in_line.len() > error.token_position {
-                                    // 找到了错误所在的行
-                                    found_token_line = true;
-                                    let current_line = line_idx + 1;
-                                    
-                                    // 估算token在行中的位置
-                                    let token_idx_in_line = error.token_position - token_count;
-                                    let column = if token_idx_in_line < tokens_in_line.len() {
-                                        // 使用token的实际位置
-                                        tokens_in_line[token_idx_in_line].1 + 1 // +1 因为列从1开始
-                                    } else {
-                                        // fallback
-                                        1
-                                    };
-                                    
-                                    println!("位置: 第 {} 行, 第 {} 列", current_line, column);
-                                    
-                                    // 显示错误行的上下文
-                                    let start_line = if current_line > 2 { current_line - 2 } else { 1 };
-                                    let end_line = if current_line + 1 < lines.len() { current_line + 1 } else { lines.len() };
-                                    
-                                    println!("代码上下文:");
-                                    for l in start_line..=end_line {
-                                        if l > 0 && l <= lines.len() {
-                                            let line_content = lines[l-1];
-                                            if l == current_line {
-                                                // 错误所在行，高亮显示
-                                                println!("-> {}: {}", l, line_content);
-                                                if column > 0 {
-                                                    // 在错误位置下方显示指示符
-                                                    println!("   {}{}", " ".repeat(column - 1), "^");
-                                                }
-                                            } else {
-                                                println!("   {}: {}", l, line_content);
-                                            }
-                                        }
-                                    }
-                                    
-                                    break;
-                                }
-                                
-                                token_count += tokens_in_line.len();
-                            }
-                            
-                            if !found_token_line {
-                                println!("无法精确定位错误行");
-                            }
-                            
-                            println!("----------------------------------------------");
+                        if line > 0 && line <= lines.len() {
+                            println!("行内容: {}", lines[line - 1]);
+                            println!("{}^", " ".repeat(col - 1));
                         }
                     }
                 }
@@ -263,43 +212,4 @@ fn main() {
         },
         Err(err) => println!("预处理文件错误: {}", err),
     }
-}
-
-// 辅助函数：为每一行标记token和它们在行中的位置
-fn tokenize_lines(source: &str) -> Vec<Vec<(String, usize)>> {
-    let mut result = Vec::new();
-    
-    for line in source.lines() {
-        let mut line_tokens = Vec::new();
-        let mut in_token = false;
-        let mut token_start = 0;
-        let mut token = String::new();
-        
-        for (i, c) in line.char_indices() {
-            if c.is_whitespace() {
-                if in_token {
-                    // 结束当前token
-                    line_tokens.push((token.clone(), token_start));
-                    token.clear();
-                    in_token = false;
-                }
-            } else {
-                if !in_token {
-                    // 开始新token
-                    token_start = i;
-                    in_token = true;
-                }
-                token.push(c);
-            }
-        }
-        
-        // 检查最后一个token
-        if in_token {
-            line_tokens.push((token, token_start));
-        }
-        
-        result.push(line_tokens);
-    }
-    
-    result
 }

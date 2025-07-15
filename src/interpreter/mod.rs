@@ -29,14 +29,14 @@ pub fn interpret(program: &Program) -> Value {
     let mut interpreter = Interpreter::new(program);
     
     // 处理顶层的库导入
-    for (lib_name, is_once) in &program.library_imports {
-        debug_println(&format!("导入顶层动态库: {}{}", lib_name, if *is_once { " (只加载一次)" } else { "" }));
+    for lib_name in &program.library_imports {
+        debug_println(&format!("导入顶层动态库: {}", lib_name));
         
         // 尝试加载库
-        match load_library(lib_name.as_str()) {
+        match load_library(lib_name) {
             Ok(functions) => {
                 // 库加载成功，将其添加到已导入库列表
-                interpreter.imported_libraries.insert(lib_name.clone(), functions);
+                interpreter.imported_libraries.insert(lib_name.to_string(), functions);
                 debug_println(&format!("顶层库 '{}' 加载成功", lib_name));
                 
                 // 将库中的所有函数添加到全局函数列表
@@ -46,7 +46,7 @@ pub fn interpret(program: &Program) -> Value {
                         debug_println(&format!("  - {}", func_name));
                         
                         // 直接将库函数注册为全局函数，这样可以直接调用
-                        interpreter.library_functions.insert(func_name.to_string(), (lib_name.clone(), func_name.to_string()));
+                        interpreter.library_functions.insert(func_name.to_string(), (lib_name.to_string(), func_name.to_string()));
                     }
                 }
             },
