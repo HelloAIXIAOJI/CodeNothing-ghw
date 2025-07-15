@@ -1,9 +1,5 @@
 {
   "name": "time",
-  "version": "0.1.0",
-  "description": "CodeNothing时间处理库",
   "output_name": "time",
-  "author": "CodeNothing",
-  "requires_namespace": true,
-  "namespaces": ["std"]
+  "_comment": "此配置文件仅用于GitHub工作流，不用于源代码中。实际库的命名空间信息直接从lib.rs中获取。"
 } 
