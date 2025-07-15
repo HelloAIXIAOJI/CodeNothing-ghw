@@ -1,0 +1,40 @@
+// 这是一个包含多个错误的测试文件，用于测试--cn-allerror功能
+
+// 导入IO库
+using lib_once <io>;
+
+// 错误1: 缺少分号
+let global_var : int = 10
+
+// 错误2: 未定义的函数
+fn undefined_function() : int {
+    // 错误3: 未定义的变量
+    print(undefined_var);
+    
+    // 错误4: 类型不匹配
+    let s : string = 42;
+    
+    // 错误5: 语法错误，缺少右括号
+    print("Hello, World!";
+    
+    // 错误6: 缺少分号
+    let x : int = 5
+    
+    // 错误7: 函数调用参数错误
+    print();
+    
+    return 0;
+};
+
+fn main() : int {
+    // 错误8: 错误的函数调用格式
+    print "Direct call without parentheses";
+    
+    // 错误9: 类型不匹配的赋值
+    let num : int = "string";
+    
+    // 错误10: 未定义变量的使用
+    let result : int = x + y;
+    
+    return 0;
+}; 
