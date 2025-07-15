@@ -168,16 +168,7 @@ impl<'a> Interpreter<'a> {
     
     // 辅助函数：调用函数并处理参数
     fn call_function_impl(&mut self, function: &'a crate::ast::Function, arg_values: Vec<Value>) -> Value {
-        // 处理内置函数
-        if function.name == "print" {
-            // 处理内置print函数
-            if let Some(message) = arg_values.first() {
-                println!("{}", message);
-                return Value::Void;
-            } else {
-                panic!("print函数需要一个参数");
-            }
-        }
+        // 移除内置print函数处理
         
         // 检查参数数量是否匹配
         if arg_values.len() != function.parameters.len() {
@@ -739,15 +730,7 @@ impl<'a> Evaluator for Interpreter<'a> {
     }
     
     fn call_function(&mut self, function_name: &str, args: Vec<Value>) -> Value {
-        // 处理内置函数
-        if function_name == "print" {
-            if let Some(message) = args.first() {
-                println!("{}", message);
-                return Value::Void;
-            } else {
-                panic!("print函数需要一个参数");
-            }
-        }
+        // 移除内置print函数处理
         
         // 查找函数
         if let Some(function) = self.functions.get(function_name) {
