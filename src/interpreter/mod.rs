@@ -3,7 +3,7 @@ pub mod evaluator;
 pub mod executor;
 pub mod library_loader;
 
-use crate::ast::{Program, Expression, Statement, BinaryOperator, Type, Namespace, CompareOperator, LogicalOperator, Function, Parameter};
+use crate::ast::{Program, Expression, Statement, BinaryOperator, Type, Namespace, CompareOperator, LogicalOperator, Function};
 use std::collections::HashMap;
 use value::Value;
 use evaluator::{Evaluator, perform_binary_operation, evaluate_compare_operation};
@@ -11,22 +11,6 @@ use executor::{Executor, ExecutionResult, update_variable_value, handle_incremen
 use library_loader::{load_library, call_library_function};
 use std::sync::Arc;
 use std::env;
-
-// 添加错误位置信息结构体
-#[derive(Debug, Clone)]
-pub struct ErrorPosition {
-    pub line: usize,
-    pub column: usize,
-    pub context: Option<String>, // 可选的上下文信息
-}
-
-// 添加解释器错误结构体
-#[derive(Debug, Clone)]
-pub struct InterpreterError {
-    pub message: String,
-    pub position: Option<ErrorPosition>,
-    pub error_type: String, // 错误类型
-}
 
 // 添加调试模式检查函数
 fn is_debug_mode() -> bool {
@@ -40,8 +24,7 @@ pub fn debug_println(msg: &str) {
     }
 }
 
-// 修改解释器返回类型，使用Result包装
-pub fn interpret(program: &Program) -> Result<Value, InterpreterError> {
+pub fn interpret(program: &Program) -> Value {
     // 创建解释器
     let mut interpreter = Interpreter::new(program);
     
@@ -68,11 +51,7 @@ pub fn interpret(program: &Program) -> Result<Value, InterpreterError> {
                 }
             },
             Err(err) => {
-                return Err(InterpreterError {
-                    message: format!("无法加载顶层库 '{}': {}", lib_name, err),
-                    position: None,
-                    error_type: "库加载错误".to_string(),
-                });
+                panic!("无法加载顶层库 '{}': {}", lib_name, err);
             }
         }
     }
@@ -112,7 +91,6 @@ impl<'a> Interpreter<'a> {
             Self::register_namespace_functions(namespace, &mut namespaced_functions, "");
         }
         
-        // 创建解释器实例
         Interpreter {
             program,
             functions,
@@ -153,23 +131,17 @@ impl<'a> Interpreter<'a> {
         }
     }
     
-    fn run(&mut self) -> Result<Value, InterpreterError> {
+    fn run(&mut self) -> Value {
         // 查找 main 函数并执行
         if let Some(main_fn) = self.functions.get("main") {
-            Ok(self.execute_function(main_fn))
+            self.execute_function(main_fn)
         } else {
-            Err(InterpreterError {
-                message: "没有找到 main 函数".to_string(),
-                position: None,
-                error_type: "入口点错误".to_string(),
-            })
+            panic!("没有找到 main 函数");
         }
     }
     
     // 辅助函数：调用函数并处理参数
     fn call_function_impl(&mut self, function: &'a crate::ast::Function, arg_values: Vec<Value>) -> Value {
-        // 移除内置print函数处理
-        
         // 检查参数数量是否匹配
         if arg_values.len() != function.parameters.len() {
             panic!("函数 '{}' 需要 {} 个参数，但提供了 {} 个", 
@@ -195,38 +167,6 @@ impl<'a> Interpreter<'a> {
         self.local_env = old_local_env;
         
         result
-    }
-
-    // 创建错误辅助方法
-    fn create_error(&self, message: &str, line: Option<usize>, column: Option<usize>, error_type: &str) -> InterpreterError {
-        let position = if let (Some(l), Some(c)) = (line, column) {
-            Some(ErrorPosition {
-                line: l,
-                column: c,
-                context: None,
-            })
-        } else {
-            None
-        };
-        
-        InterpreterError {
-            message: message.to_string(),
-            position,
-            error_type: error_type.to_string(),
-        }
-    }
-    
-    // 更新变量方法，添加错误位置信息
-    fn update_variable_with_position(&mut self, name: &str, value: Value, line: Option<usize>, column: Option<usize>) -> Result<(), InterpreterError> {
-        if self.local_env.contains_key(name) {
-            self.local_env.insert(name.to_string(), value);
-            Ok(())
-        } else if self.global_env.contains_key(name) {
-            self.global_env.insert(name.to_string(), value);
-            Ok(())
-        } else {
-            Err(self.create_error(&format!("未定义的变量: {}", name), line, column, "变量错误"))
-        }
     }
 }
 
@@ -730,36 +670,23 @@ impl<'a> Evaluator for Interpreter<'a> {
     }
     
     fn call_function(&mut self, function_name: &str, args: Vec<Value>) -> Value {
-        // 移除内置print函数处理
+        // 先检查是否是导入的命名空间函数
+        if let Some(paths) = self.imported_namespaces.get(function_name) {
+            if paths.len() == 1 {
+                // 只有一个匹配的函数，直接调用
+                let full_path = &paths[0];
+                if let Some(function) = self.namespaced_functions.get(full_path) {
+                    return self.call_function_impl(function, args);
+                }
+            }
+        }
         
-        // 查找函数
+        // 如果不是导入的函数，再检查全局函数
         if let Some(function) = self.functions.get(function_name) {
-            return self.call_function_impl(function, args);
+            self.call_function_impl(function, args)
+        } else {
+            panic!("未定义的函数: {}", function_name);
         }
-        
-        // 尝试查找命名空间函数
-        for (ns_path, ns_functions) in &self.imported_namespaces {
-            for ns_func in ns_functions {
-                if ns_func == function_name {
-                    let full_path = format!("{}::{}", ns_path, function_name);
-                    if let Some(function) = self.namespaced_functions.get(&full_path) {
-                        return self.call_function_impl(function, args);
-                    }
-                }
-            }
-        }
-        
-        // 尝试查找库函数
-        if let Some((lib_name, func_name)) = self.library_functions.get(function_name) {
-            if let Some(lib_functions) = self.imported_libraries.get(lib_name) {
-                match call_library_function(lib_name, func_name, args.iter().map(|v| v.to_string()).collect()) {
-                    Ok(result) => return Value::String(result),
-                    Err(err) => panic!("调用库函数 '{}::{}' 失败: {}", lib_name, func_name, err),
-                }
-            }
-        }
-        
-        panic!("未定义的函数: {}", function_name);
     }
 }
 
@@ -1121,11 +1048,66 @@ impl<'a> Executor for Interpreter<'a> {
                 
                 ExecutionResult::None
             },
-            Statement::WhileLoop(condition, loop_body) => {
-                self.execute_while_loop(&condition, &loop_body)
+            Statement::ForLoop(variable_name, range_start, range_end, loop_body) => {
+                // 计算范围的起始值和结束值
+                let start_value = self.evaluate_expression(&range_start);
+                let end_value = self.evaluate_expression(&range_end);
+                
+                // 获取起始和结束的整数值
+                let (start, end) = match (&start_value, &end_value) {
+                    (Value::Int(s), Value::Int(e)) => (*s, *e),
+                    _ => panic!("for循环的范围必须是整数类型"),
+                };
+                
+                // 在局部环境中声明循环变量
+                self.local_env.insert(variable_name.clone(), Value::Int(start));
+                
+                // 执行循环
+                for i in start..=end {
+                    // 更新循环变量的值
+                    self.local_env.insert(variable_name.clone(), Value::Int(i));
+                    
+                    // 执行循环体
+                    for stmt in &loop_body {
+                        match self.execute_statement(stmt.clone()) {
+                            ExecutionResult::None => {},
+                            ExecutionResult::Return(value) => return ExecutionResult::Return(value),
+                            ExecutionResult::Break => return ExecutionResult::None, // 跳出循环，但不向上传递break
+                            ExecutionResult::Continue => break, // 跳过当前迭代的剩余语句，继续下一次迭代
+                        }
+                    }
+                }
+                
+                ExecutionResult::None
             },
-            Statement::ForLoop(var_name, start, end, loop_body) => {
-                self.execute_for_loop(&var_name, &start, &end, &loop_body)
+            Statement::WhileLoop(condition, loop_body) => {
+                // 循环执行，直到条件为假
+                loop {
+                    // 计算条件表达式
+                    let condition_value = self.evaluate_expression(&condition);
+                    
+                    // 检查条件是否为真
+                    let is_true = match condition_value {
+                        Value::Bool(b) => b,
+                        _ => panic!("while循环的条件必须是布尔类型"),
+                    };
+                    
+                    if !is_true {
+                        break; // 条件为假，退出循环
+                    }
+                    
+                    // 执行循环体
+                    for stmt in &loop_body {
+                        match self.execute_statement(stmt.clone()) {
+                            ExecutionResult::None => {},
+                            ExecutionResult::Return(value) => return ExecutionResult::Return(value),
+                            ExecutionResult::Break => return ExecutionResult::None, // 跳出循环，但不向上传递break
+                            ExecutionResult::Continue => break, // 跳过当前迭代的剩余语句，继续下一次迭代
+                        }
+                    }
+                }
+                
+                ExecutionResult::None
             },
             Statement::Break => {
                 // 返回Break结果，由循环处理
@@ -1146,116 +1128,14 @@ impl<'a> Executor for Interpreter<'a> {
                 ExecutionResult::None => {},
                 ExecutionResult::Break => panic!("break语句只能在循环内部使用"),
                 ExecutionResult::Continue => panic!("continue语句只能在循环内部使用"),
-                ExecutionResult::Error(err) => panic!("执行错误: {}", err.message),
             }
         }
         
-        // 如果函数没有明确返回值，则根据返回类型返回默认值
-        match function.return_type {
-            Type::Int => Value::Int(0),
-            Type::Float => Value::Float(0.0),
-            Type::Bool => Value::Bool(false),
-            Type::String => Value::String(String::new()),
-            Type::Long => Value::Long(0),
-            Type::Void => Value::Void,
-            Type::Array(_) => Value::Array(vec![]),
-            Type::Map(_, _) => Value::Map(HashMap::new()),
-        }
+        // 如果函数没有明确的返回语句，则返回空值
+        Value::None
     }
     
-    fn update_variable(&mut self, name: &str, value: Value) -> Result<(), InterpreterError> {
-        if self.local_env.contains_key(name) {
-            self.local_env.insert(name.to_string(), value);
-            Ok(())
-        } else if self.global_env.contains_key(name) {
-            self.global_env.insert(name.to_string(), value);
-            Ok(())
-        } else {
-            Err(InterpreterError {
-                message: format!("未定义的变量: {}", name),
-                position: None,
-                error_type: "变量错误".to_string(),
-            })
-        }
-    }
-    
-    fn get_current_position(&self) -> Option<(usize, usize)> {
-        None // 默认实现，未来可以扩展为跟踪当前执行位置
-    }
-}
-
-impl<'a> Interpreter<'a> {
-    fn execute_while_loop(&mut self, condition: &Expression, body: &[Statement]) -> ExecutionResult {
-        loop {
-            // 计算条件
-            let condition_value = self.evaluate_expression(condition);
-            let is_continue = match condition_value {
-                Value::Bool(b) => b,
-                _ => return self.handle_error("while循环条件必须是布尔类型", "类型错误"),
-            };
-            
-            if !is_continue {
-                break;
-            }
-            
-            // 执行循环体
-            for stmt in body {
-                match self.execute_statement(stmt.clone()) {
-                    ExecutionResult::None => {},
-                    ExecutionResult::Return(value) => return ExecutionResult::Return(value),
-                    ExecutionResult::Break => return ExecutionResult::None, // 跳出循环
-                    ExecutionResult::Continue => break, // 跳过当前迭代的剩余语句，继续下一次迭代
-                    ExecutionResult::Error(err) => return ExecutionResult::Error(err),
-                }
-            }
-        }
-        
-        ExecutionResult::None
-    }
-    
-    fn execute_for_loop(&mut self, var_name: &str, start: &Expression, end: &Expression, body: &[Statement]) -> ExecutionResult {
-        // 计算范围的起始值和结束值
-        let start_value = self.evaluate_expression(start);
-        let end_value = self.evaluate_expression(end);
-        
-        // 确保起始值和结束值都是整数
-        let (start_int, end_int) = match (start_value, end_value) {
-            (Value::Int(s), Value::Int(e)) => (s, e),
-            _ => return self.handle_error("for循环的范围必须是整数", "类型错误"),
-        };
-        
-        // 在局部环境中创建循环变量
-        self.local_env.insert(var_name.to_string(), Value::Int(start_int));
-        
-        // 执行循环
-        for i in start_int..=end_int {
-            // 更新循环变量
-            self.local_env.insert(var_name.to_string(), Value::Int(i));
-            
-            // 执行循环体
-            for stmt in body {
-                match self.execute_statement(stmt.clone()) {
-                    ExecutionResult::None => {},
-                    ExecutionResult::Return(value) => return ExecutionResult::Return(value),
-                    ExecutionResult::Break => return ExecutionResult::None, // 跳出循环
-                    ExecutionResult::Continue => break, // 跳过当前迭代的剩余语句，继续下一次迭代
-                    ExecutionResult::Error(err) => return ExecutionResult::Error(err),
-                }
-            }
-        }
-        
-        // 移除循环变量
-        self.local_env.remove(var_name);
-        
-        ExecutionResult::None
-    }
-    
-    // 添加错误处理辅助方法
-    fn handle_error(&self, message: &str, error_type: &str) -> ExecutionResult {
-        ExecutionResult::Error(InterpreterError {
-            message: message.to_string(),
-            position: None,
-            error_type: error_type.to_string(),
-        })
+    fn update_variable(&mut self, name: &str, value: Value) -> Result<(), String> {
+        update_variable_value(&mut self.local_env, &mut self.global_env, name, value)
     }
 } 
