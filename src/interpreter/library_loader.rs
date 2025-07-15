@@ -2,6 +2,8 @@ use std::path::{Path, PathBuf};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::env;
+use std::fs;
+use std::io::Read;
 use libloading::{Library, Symbol};
 use once_cell::sync::Lazy;
 use crate::interpreter::debug_println;
@@ -40,11 +42,40 @@ fn get_library_path(lib_name: &str) -> PathBuf {
     }
     #[cfg(not(target_os = "windows"))]
     {
-        path.push(format!("{}.so", lib_name));
+        path.push(format!("lib{}.so", lib_name));
     }
     
     debug_println(&format!("尝试加载库文件: {:?}", path));
     path
+}
+
+// 获取库支持的命名空间
+pub fn get_library_namespaces(lib_name: &str) -> Result<Vec<String>, String> {
+    // 加载库函数
+    let functions = load_library(lib_name)?;
+    let mut namespaces = Vec::new();
+    
+    // 从函数名中提取命名空间
+    for func_name in functions.keys() {
+        if func_name.contains("::") {
+            let parts: Vec<&str> = func_name.split("::").collect();
+            if parts.len() >= 2 {
+                let ns_name = parts[0].to_string();
+                if !namespaces.contains(&ns_name) {
+                    debug_println(&format!("从函数名 '{}' 中检测到命名空间: {}", func_name, ns_name));
+                    namespaces.push(ns_name);
+                }
+            }
+        }
+    }
+    
+    if namespaces.is_empty() {
+        debug_println(&format!("库 '{}' 中未检测到命名空间", lib_name));
+    } else {
+        debug_println(&format!("库 '{}' 支持的命名空间: {:?}", lib_name, namespaces));
+    }
+    
+    Ok(namespaces)
 }
 
 // 添加一个函数来打印库中的所有函数
