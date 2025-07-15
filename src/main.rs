@@ -178,7 +178,7 @@ fn main() {
                 Ok((program, warnings)) => {
                     // 显示警告信息
                     if !warnings.is_empty() {
-                        println!("编译警告:");
+                        println!("解析警告:");
                         for (i, warning) in warnings.iter().enumerate() {
                             println!("警告 {}: {}", i+1, warning);
                         }
@@ -191,7 +191,7 @@ fn main() {
                 },
                 Err(errors) => {
                     // 显示所有错误信息
-                    println!("发现 {} 个编译错误:", errors.len());
+                    println!("发现 {} 个解析错误:", errors.len());
                     
                     // 简单直接地显示错误
                     for (i, error) in errors.iter().enumerate() {
@@ -206,7 +206,7 @@ fn main() {
                     }
                     
                     println!("\n可以使用 --cn-parser 选项查看更详细的解析信息。");
-                    println!("由于存在编译错误，程序无法执行。");
+                    println!("由于存在解析错误，程序无法执行。");
                 }
             }
         },
