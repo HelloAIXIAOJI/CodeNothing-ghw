@@ -172,41 +172,41 @@ fn main() {
                 println!("");
             }
             
-            let ast = parser::parse(&processed_content, debug_parser);
-            match ast {
-                Ok(program) => {
+            // 修改为收集所有错误
+            let parse_result = parser::parse_all_errors(&processed_content, debug_parser);
+            match parse_result {
+                Ok((program, warnings)) => {
+                    // 显示警告信息
+                    if !warnings.is_empty() {
+                        println!("编译警告:");
+                        for (i, warning) in warnings.iter().enumerate() {
+                            println!("警告 {}: {}", i+1, warning);
+                        }
+                        println!("");
+                    }
+                    
+                    // 执行程序
                     let result = interpreter::interpret(&program);
                     println!("程序执行结果: {}", result);
                 },
-                Err(err) => {
-                    // 增强错误报告
-                    println!("解析错误: {}", err);
+                Err(errors) => {
+                    // 显示所有错误信息
+                    println!("发现 {} 个编译错误:", errors.len());
                     
-                    // 尝试提取错误位置信息
-                    if let Some(pos) = processed_content.find(&err.replace("期望", "").trim()) {
-                        // 计算行号和列号
-                        let mut line = 1;
-                        let mut col = 1;
-                        for (i, c) in processed_content.chars().enumerate() {
-                            if i == pos {
-                                break;
-                            }
-                            if c == '\n' {
-                                line += 1;
-                                col = 1;
-                            } else {
-                                col += 1;
-                            }
-                        }
-                        println!("错误可能位于第 {} 行, 第 {} 列附近", line, col);
+                    // 简单直接地显示错误
+                    for (i, error) in errors.iter().enumerate() {
+                        // 提取错误消息，忽略位置信息
+                        let error_msg = if let Some(pos_start) = error.find("(位置:") {
+                            error[0..pos_start].trim()
+                        } else {
+                            error.as_str()
+                        };
                         
-                        // 显示错误行的内容
-                        let lines: Vec<&str> = processed_content.lines().collect();
-                        if line > 0 && line <= lines.len() {
-                            println!("行内容: {}", lines[line - 1]);
-                            println!("{}^", " ".repeat(col - 1));
-                        }
+                        println!("错误 {}: {}", i+1, error_msg);
                     }
+                    
+                    println!("\n可以使用 --cn-parser 选项查看更详细的解析信息。");
+                    println!("由于存在编译错误，程序无法执行。");
                 }
             }
         },
