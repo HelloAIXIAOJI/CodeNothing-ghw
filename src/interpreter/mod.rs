@@ -46,6 +46,14 @@ pub fn interpret(program: &Program) -> Value {
                         interpreter.imported_libraries.insert(lib_name.to_string(), functions);
                         debug_println(&format!("顶层库 '{}' 加载成功", lib_name));
                         
+                        // 获取库支持的命名空间
+                        if let Ok(namespaces) = library_loader::get_library_namespaces(lib_name) {
+                            for ns in namespaces {
+                                debug_println(&format!("注册库 '{}' 的命名空间: {}", lib_name, ns));
+                                interpreter.library_namespaces.insert(ns.to_string(), lib_name.to_string());
+                            }
+                        }
+                        
                         // 将库中的所有函数添加到全局函数列表
                         if let Some(lib_functions) = interpreter.imported_libraries.get(lib_name) {
                             debug_println(&format!("库 '{}' 中的函数:", lib_name));
@@ -112,6 +120,7 @@ impl<'a> Interpreter<'a> {
     fn new(program: &'a Program) -> Self {
         let mut functions = HashMap::new();
         let mut namespaced_functions = HashMap::new();
+        let mut library_namespaces = HashMap::new();
         
         // 注册全局函数
         for function in &program.functions {
@@ -133,7 +142,7 @@ impl<'a> Interpreter<'a> {
             global_env: HashMap::new(),
             local_env: HashMap::new(),
             global_namespace_imports: Vec::new(),
-            library_namespaces: HashMap::new(),
+            library_namespaces,
         }
     }
     
@@ -275,10 +284,10 @@ impl<'a> Evaluator for Interpreter<'a> {
                         // 将参数转换为字符串
                         let string_args = convert_values_to_string_args(&arg_values);
                         
-                        // 尝试调用库函数
+                        // 尝试调用库函数 - 使用完整的命名空间路径
                         match call_library_function(lib_name, name, string_args) {
                             Ok(result) => {
-                                debug_println(&format!("库函数调用成功: {}::{} -> {}", lib_name, name, result));
+                                debug_println(&format!("库函数调用成功: {} -> {}", name, result));
                                 // 尝试将结果转换为适当的值类型
                                 if let Ok(int_val) = result.parse::<i32>() {
                                     return Value::Int(int_val);
@@ -310,7 +319,7 @@ impl<'a> Evaluator for Interpreter<'a> {
                             let string_args = convert_values_to_string_args(&arg_values);
                             
                             let result = func(string_args);
-                            debug_println(&format!("库函数调用成功: {}::{} -> {}", lib_name, name, result));
+                            debug_println(&format!("库函数调用成功: {} -> {}", name, result));
                             
                             // 尝试将结果转换为适当的值类型
                             if let Ok(int_val) = result.parse::<i32>() {
@@ -346,7 +355,7 @@ impl<'a> Evaluator for Interpreter<'a> {
                 
                 // 检查是否是库函数
                 if let Some((lib_name, func_name)) = self.library_functions.get(name) {
-                    debug_println(&format!("调用库函数: {}::{}", lib_name, func_name));
+                    debug_println(&format!("调用库函数: {}", func_name));
                     
                     // 使用新函数将参数转换为字符串
                     let string_args = convert_values_to_string_args(&arg_values);
@@ -681,6 +690,16 @@ impl<'a> Evaluator for Interpreter<'a> {
                             _ => panic!("逻辑操作符的操作数必须是布尔类型"),
                         }
                     }
+                }
+            },
+            Expression::TernaryOp(condition, true_expr, false_expr) => {
+                // 三元运算符：先计算条件，然后根据条件计算相应的表达式
+                let condition_val = self.evaluate_expression(condition);
+                
+                match condition_val {
+                    Value::Bool(true) => self.evaluate_expression(true_expr),
+                    Value::Bool(false) => self.evaluate_expression(false_expr),
+                    _ => panic!("三元运算符的条件必须是布尔类型"),
                 }
             },
             Expression::PreIncrement(name) => {
@@ -1135,14 +1154,10 @@ impl<'a> Executor for Interpreter<'a> {
                 if let Some(lib_name) = self.library_namespaces.get(ns_name) {
                     debug_println(&format!("检测到库命名空间: {} -> 库: {}", ns_name, lib_name));
                     
-                    // 构建库函数名
-                    let func_name = if path.len() > 1 {
-                        format!("{}::{}", ns_name, path[1])
-                    } else {
-                        return ExecutionResult::None; // 不应该发生，因为路径长度至少为2
-                    };
+                    // 构建库函数名 - 直接使用原始命名空间路径
+                    let func_name = full_path.clone();
                     
-                    debug_println(&format!("尝试调用库函数: {}::{}", lib_name, func_name));
+                    debug_println(&format!("尝试调用库函数: {}", func_name));
                     
                     // 将参数转换为字符串
                     let string_args = convert_values_to_string_args(&arg_values);
@@ -1150,83 +1165,13 @@ impl<'a> Executor for Interpreter<'a> {
                     // 调用库函数
                     match call_library_function(lib_name, &func_name, string_args) {
                         Ok(result) => {
-                            debug_println(&format!("库函数调用成功: {}::{} -> {}", lib_name, func_name, result));
+                            debug_println(&format!("库函数调用成功: {} -> {}", func_name, result));
                             return ExecutionResult::None;
                         },
                         Err(err) => {
                             debug_println(&format!("调用库函数失败: {}", err));
                             // 继续尝试其他方式
                         }
-                    }
-                }
-                
-                // 对于库命名空间函数，先检查是否是已导入的库
-                if let Some(lib_functions) = self.imported_libraries.get(&path[0]) {
-                    // 检查是否是两级以上的路径 (例如 io::std::println)
-                    if path.len() >= 3 && path[1] == "std" {
-                        // 这是类似 io::std::println 这样的库函数调用
-                        let func_name = &path[2]; // 取出真正的函数名
-                        debug_println(&format!("检查库 '{}' 中的 std 命名空间是否有函数 '{}'", path[0], func_name));
-                        
-                        // 构建完整的函数名称（库中的命名空间格式通常是 std::函数名）
-                        let full_func_name = format!("std::{}", func_name);
-                        
-                        if let Some(func) = lib_functions.get(&full_func_name) {
-                            // 使用新函数将参数转换为字符串
-                            let string_args = convert_values_to_string_args(&arg_values);
-                            
-                            // 调用库函数
-                            let result = func(string_args);
-                            debug_println(&format!("库函数调用成功: {}::{} -> {}", path[0], full_func_name, result));
-                            return ExecutionResult::None;
-                        } else if let Some(func) = lib_functions.get(func_name) {
-                            // 尝试直接以函数名查找
-                            let string_args = convert_values_to_string_args(&arg_values);
-                            let result = func(string_args);
-                            debug_println(&format!("库函数调用成功: {}::{} -> {}", path[0], func_name, result));
-                            return ExecutionResult::None;
-                        } else {
-                            // 尝试以省略std命名空间的方式查找
-                            // 有些库可能直接注册了函数，没有使用std命名空间
-                            let simplified_func_name = format!("cn_{}", func_name);
-                            if let Some(func) = lib_functions.get(&simplified_func_name) {
-                                let string_args = convert_values_to_string_args(&arg_values);
-                                let result = func(string_args);
-                                debug_println(&format!("库函数调用成功(cn_前缀): {}::{} -> {}", path[0], simplified_func_name, result));
-                                return ExecutionResult::None;
-                            }
-
-                            panic!("库 '{}' 中未找到函数 'std::{}' 或 '{}'", path[0], func_name, func_name);
-                        }
-                    } else if path.len() >= 2 {
-                        // 这是类似 http::get 这样的库函数调用
-                        let func_name = &path[1]; // 取出函数名
-                        debug_println(&format!("检查库 '{}' 中是否有函数 '{}'", path[0], func_name));
-                        
-                        // 构建完整的函数名称
-                        let full_func_name = format!("{}::{}", path[0], func_name);
-                        
-                        // 尝试不同的函数名格式
-                        let variants = [
-                            full_func_name.clone(),               // 完整函数名 (http::get)
-                            func_name.to_string(),               // 原始函数名 (get)
-                            format!("cn_{}", func_name),         // cn_前缀 (cn_get)
-                        ];
-                        
-                        for variant in &variants {
-                            debug_println(&format!("尝试查找函数: {}", variant));
-                            if let Some(func) = lib_functions.get(variant) {
-                                // 使用新函数将参数转换为字符串
-                                let string_args = convert_values_to_string_args(&arg_values);
-                                
-                                // 调用库函数
-                                let result = func(string_args);
-                                debug_println(&format!("库函数调用成功(变体{}): {}::{} -> {}", variant, path[0], variant, result));
-                                return ExecutionResult::None;
-                            }
-                        }
-                        
-                        panic!("库 '{}' 中未找到函数 '{}' 或其变体", path[0], func_name);
                     }
                 }
                 
@@ -1248,7 +1193,7 @@ impl<'a> Executor for Interpreter<'a> {
                         // 尝试调用库函数
                         match call_library_function(lib_name, &full_func_name, string_args.clone()) {
                             Ok(result) => {
-                                debug_println(&format!("库函数调用成功: {}::{} -> {}", lib_name, full_func_name, result));
+                                debug_println(&format!("库函数调用成功: {} -> {}", full_func_name, result));
                                 return ExecutionResult::None;
                             },
                             Err(err) => {
@@ -1267,7 +1212,7 @@ impl<'a> Executor for Interpreter<'a> {
                         if let Some(func) = lib_functions.get(&full_func_name) {
                             debug_println(&format!("在库 '{}' 中找到函数 '{}' (完整路径)", lib_name, full_func_name));
                             let result = func(string_args.clone());
-                            debug_println(&format!("库函数调用成功: {}::{} -> {}", lib_name, full_func_name, result));
+                            debug_println(&format!("库函数调用成功: {} -> {}", full_func_name, result));
                             return ExecutionResult::None;
                         }
                         
@@ -1276,7 +1221,7 @@ impl<'a> Executor for Interpreter<'a> {
                         if let Some(func) = lib_functions.get(func_name) {
                             debug_println(&format!("在库 '{}' 中找到函数 '{}'", lib_name, func_name));
                             let result = func(string_args.clone());
-                            debug_println(&format!("库函数调用成功: {}::{} -> {}", lib_name, func_name, result));
+                            debug_println(&format!("库函数调用成功: {} -> {}", func_name, result));
                             return ExecutionResult::None;
                         }
                         
@@ -1286,28 +1231,28 @@ impl<'a> Executor for Interpreter<'a> {
                         if let Some(func) = lib_functions.get(&cn_func_name) {
                             debug_println(&format!("在库 '{}' 中找到函数 '{}' (cn_前缀)", lib_name, cn_func_name));
                             let result = func(string_args.clone());
-                            debug_println(&format!("库函数调用成功: {}::{} -> {}", lib_name, cn_func_name, result));
+                            debug_println(&format!("库函数调用成功: {} -> {}", cn_func_name, result));
                             return ExecutionResult::None;
                         }
                     }
                     
                     // 如果在库中找不到，尝试查找全局映射的库函数
                     if let Some((lib_name, lib_func_name)) = self.library_functions.get(func_name) {
-                        debug_println(&format!("在库函数映射中找到: {} -> {}::{}", func_name, lib_name, lib_func_name));
+                        debug_println(&format!("在库函数映射中找到: {} -> {}", func_name, lib_func_name));
                         
                         // 调用库函数
                         match call_library_function(lib_name, lib_func_name, string_args.clone()) {
                             Ok(result) => {
-                                debug_println(&format!("库函数调用成功: {}::{} -> {}", lib_name, lib_func_name, result));
+                                debug_println(&format!("库函数调用成功: {} -> {}", lib_func_name, result));
                                 return ExecutionResult::None;
                             },
                             Err(err) => {
-                                debug_println(&format!("调用库函数 {}::{} 失败: {}", lib_name, lib_func_name, err));
+                                debug_println(&format!("调用库函数 {} 失败: {}", lib_func_name, err));
                                 // 尝试调用cn_前缀的函数
                                 let cn_func_name = format!("cn_{}", func_name);
                                 match call_library_function(lib_name, &cn_func_name, string_args.clone()) {
                                     Ok(result) => {
-                                        debug_println(&format!("库函数调用成功(cn_前缀): {}::{} -> {}", lib_name, cn_func_name, result));
+                                        debug_println(&format!("库函数调用成功(cn_前缀): {} -> {}", cn_func_name, result));
                                         return ExecutionResult::None;
                                     },
                                     Err(_) => {}
@@ -1321,7 +1266,7 @@ impl<'a> Executor for Interpreter<'a> {
                     let full_func_name = format!("std::{}", func_name);
                     match call_library_function("io", &full_func_name, string_args.clone()) {
                         Ok(result) => {
-                            debug_println(&format!("库函数调用成功: io::{} -> {}", full_func_name, result));
+                            debug_println(&format!("库函数调用成功: {} -> {}", full_func_name, result));
                             return ExecutionResult::None;
                         },
                         Err(_) => {
@@ -1329,7 +1274,7 @@ impl<'a> Executor for Interpreter<'a> {
                             let cn_func_name = format!("cn_{}", func_name);
                             match call_library_function("io", &cn_func_name, string_args.clone()) {
                                 Ok(result) => {
-                                    debug_println(&format!("库函数调用成功(cn_前缀): io::{} -> {}", cn_func_name, result));
+                                    debug_println(&format!("库函数调用成功(cn_前缀): {} -> {}", cn_func_name, result));
                                     return ExecutionResult::None;
                                 },
                                 Err(_) => {
@@ -1493,6 +1438,68 @@ impl<'a> Executor for Interpreter<'a> {
                             ExecutionResult::Continue => break, // 跳过当前迭代的剩余语句，继续下一次迭代
                         }
                     }
+                }
+                
+                ExecutionResult::None
+            },
+            Statement::ForEachLoop(variable_name, collection_expr, loop_body) => {
+                // 计算集合表达式
+                let collection = self.evaluate_expression(&collection_expr);
+                
+                // 根据集合类型执行不同的迭代逻辑
+                match collection {
+                    Value::Array(items) => {
+                        // 数组迭代
+                        for item in items {
+                            // 在局部环境中设置迭代变量
+                            self.local_env.insert(variable_name.clone(), item);
+                            
+                            // 执行循环体
+                            for stmt in &loop_body {
+                                match self.execute_statement(stmt.clone()) {
+                                    ExecutionResult::None => {},
+                                    ExecutionResult::Return(value) => return ExecutionResult::Return(value),
+                                    ExecutionResult::Break => return ExecutionResult::None, // 跳出循环，但不向上传递break
+                                    ExecutionResult::Continue => break, // 跳过当前迭代的剩余语句，继续下一次迭代
+                                }
+                            }
+                        }
+                    },
+                    Value::Map(map) => {
+                        // 映射迭代（迭代键）
+                        for key in map.keys() {
+                            // 在局部环境中设置迭代变量（键）
+                            self.local_env.insert(variable_name.clone(), Value::String(key.clone()));
+                            
+                            // 执行循环体
+                            for stmt in &loop_body {
+                                match self.execute_statement(stmt.clone()) {
+                                    ExecutionResult::None => {},
+                                    ExecutionResult::Return(value) => return ExecutionResult::Return(value),
+                                    ExecutionResult::Break => return ExecutionResult::None, // 跳出循环，但不向上传递break
+                                    ExecutionResult::Continue => break, // 跳过当前迭代的剩余语句，继续下一次迭代
+                                }
+                            }
+                        }
+                    },
+                    Value::String(s) => {
+                        // 字符串迭代（按字符迭代）
+                        for c in s.chars() {
+                            // 在局部环境中设置迭代变量（单个字符）
+                            self.local_env.insert(variable_name.clone(), Value::String(c.to_string()));
+                            
+                            // 执行循环体
+                            for stmt in &loop_body {
+                                match self.execute_statement(stmt.clone()) {
+                                    ExecutionResult::None => {},
+                                    ExecutionResult::Return(value) => return ExecutionResult::Return(value),
+                                    ExecutionResult::Break => return ExecutionResult::None, // 跳出循环，但不向上传递break
+                                    ExecutionResult::Continue => break, // 跳过当前迭代的剩余语句，继续下一次迭代
+                                }
+                            }
+                        }
+                    },
+                    _ => panic!("foreach循环的集合必须是数组、映射或字符串类型"),
                 }
                 
                 ExecutionResult::None
