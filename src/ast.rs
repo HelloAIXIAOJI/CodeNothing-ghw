@@ -32,6 +32,7 @@ pub enum Expression {
     PreDecrement(String),  // 前置自减 (--var)
     PostIncrement(String), // 后置自增 (var++)
     PostDecrement(String), // 后置自减 (var--)
+    TernaryOp(Box<Expression>, Box<Expression>, Box<Expression>), // 三元条件运算符 (cond ? expr1 : expr2)
     // 未来可以扩展更多表达式类型
 }
 
@@ -88,6 +89,7 @@ pub enum Statement {
     WhileLoop(Expression, Vec<Statement>), // while循环，包含条件和循环体
     Break, // 跳出当前循环
     Continue, // 跳过当前迭代，继续下一次迭代
+    ForEachLoop(String, Expression, Vec<Statement>), // foreach循环，包含变量名、集合表达式和循环体
     // 未来可以扩展更多语句类型
 }
 
