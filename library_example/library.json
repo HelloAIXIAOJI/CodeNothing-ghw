@@ -1,0 +1,9 @@
+{
+  "name": "example",
+  "version": "1.0.0",
+  "description": "CodeNothing 示例库",
+  "output_name": "example",
+  "author": "CodeNothing Team",
+  "requires_namespace": false,
+  "namespaces": []
+} 

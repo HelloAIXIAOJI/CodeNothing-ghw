@@ -320,16 +320,20 @@ impl<'a> ExpressionParser for ParserBase<'a> {
                             // 命名空间函数调用
                             debug_println(&format!("识别为命名空间函数调用: {}::{}", name, func_name));
                             
-                            // 构建命名空间路径
+                            // 构建完整的函数名称（包含命名空间）
+                            let mut full_name = format!("{}::{}", name, func_name);
+                            
+                            // 检查是否有更多的命名空间层级
                             let mut path = Vec::new();
                             path.push(name);
                             path.push(func_name);
                             
-                            // 检查是否有更多的命名空间层级
                             while self.peek() == Some(&"::".to_string()) {
                                 self.consume(); // 消费 "::"
                                 let next_name = self.consume().ok_or_else(|| "期望命名空间或函数名".to_string())?;
-                                path.push(next_name);
+                                path.push(next_name.clone());
+                                full_name.push_str("::");
+                                full_name.push_str(&next_name);
                             }
                             
                             // 期望 "("
@@ -353,7 +357,14 @@ impl<'a> ExpressionParser for ParserBase<'a> {
                             
                             self.expect(")")?;
                             
-                            Ok(Expression::NamespacedFunctionCall(path, args))
+                            // 使用FunctionCall而不是NamespacedFunctionCall，以便直接匹配库函数
+                            if path.len() == 2 && (path[0] == "http" || path[0] == "std") {
+                                debug_println(&format!("使用FunctionCall处理: {}", full_name));
+                                Ok(Expression::FunctionCall(full_name, args))
+                            } else {
+                                debug_println(&format!("使用NamespacedFunctionCall处理: {:?}", path));
+                                Ok(Expression::NamespacedFunctionCall(path, args))
+                            }
                         }
                     } else if self.peek() == Some(&"++".to_string()) {
                         // 后置自增

@@ -8,7 +8,8 @@ $libraries = @(
     "library_common",
     "library_example", 
     "library_os",
-    "library_time"
+    "library_time",
+    "library_http"
 )
 
 # create the target directory for release

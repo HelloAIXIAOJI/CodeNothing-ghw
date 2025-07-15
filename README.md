@@ -158,10 +158,10 @@ while (condition) {
 using lib_once <io>;
 
 // 调用库函数
-lib_io::println("Hello, world!");
+std::println("Hello, world!");
 
 // 读取用户输入
-input : string = lib_io::read_line();
+input : string = std::read_line();
 ```
 
 ## 运行

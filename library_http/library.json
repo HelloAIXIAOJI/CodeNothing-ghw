@@ -1,0 +1,9 @@
+{
+  "name": "http",
+  "version": "1.0.0",
+  "description": "CodeNothing HTTP库，提供HTTP请求功能",
+  "output_name": "http",
+  "author": "CodeNothing Team",
+  "requires_namespace": true,
+  "namespaces": ["http"]
+} 
