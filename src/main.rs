@@ -19,6 +19,65 @@ fn debug_println(msg: &str) {
     }
 }
 
+// 添加错误处理辅助函数
+fn display_error_context(source: &str, error_msg: &str, line: usize, col: usize) {
+    // 显示错误位置的上下文（前后各显示1行）
+    let lines: Vec<&str> = source.lines().collect();
+    let line_count = lines.len();
+    
+    println!("\n错误详情:");
+    println!("-------------------------");
+    
+    // 显示错误前一行（如果有）
+    if line > 1 && line <= line_count {
+        println!("{:4} | {}", line-1, lines[line-2]);
+    }
+    
+    // 显示错误行并标记错误位置
+    if line > 0 && line <= line_count {
+        println!("{:4} | {}", line, lines[line-1]);
+        println!("     | {}^", " ".repeat(col.saturating_sub(1)));
+    }
+    
+    // 显示错误消息
+    println!("     | \x1b[31m错误: {}\x1b[0m", error_msg);
+    
+    // 显示错误后一行（如果有）
+    if line < line_count {
+        println!("{:4} | {}", line+1, lines[line]);
+    }
+    
+    println!("-------------------------");
+}
+
+// 添加错误类型分析函数
+fn analyze_error(err: &str) -> (&str, Option<String>) {
+    // 分析错误类型并提供可能的修复建议
+    if err.contains("期望") && err.contains("但得到了") {
+        return ("语法错误", Some("检查语法是否正确，可能缺少分号、括号或其他语法元素".to_string()));
+    } else if err.contains("未定义的变量") {
+        return ("变量错误", Some("确保变量在使用前已声明".to_string()));
+    } else if err.contains("类型不匹配") || err.contains("类型必须是") {
+        return ("类型错误", Some("检查变量类型是否与操作兼容".to_string()));
+    } else if err.contains("检测到循环依赖") {
+        return ("导入错误", Some("检查文件导入结构，消除循环依赖".to_string()));
+    } else if err.contains("无法读取文件") || err.contains("文件不存在") {
+        return ("文件错误", Some("确保文件路径正确且文件存在".to_string()));
+    } else {
+        return ("一般错误", None);
+    }
+}
+
+// 从错误信息中提取文件路径
+fn extract_file_path_from_error(err: &str) -> Option<&str> {
+    if let Some(start) = err.find("'") {
+        if let Some(end) = err[start+1..].find("'") {
+            return Some(&err[start+1..start+1+end]);
+        }
+    }
+    None
+}
+
 // 文件预处理器，处理文件导入
 struct FilePreprocessor {
     // 已处理的文件路径集合，用于检测循环依赖
@@ -175,41 +234,56 @@ fn main() {
             let ast = parser::parse(&processed_content, debug_parser);
             match ast {
                 Ok(program) => {
-                    let result = interpreter::interpret(&program);
-                    println!("程序执行结果: {}", result);
+                    match interpreter::interpret(&program) {
+                        Ok(result) => println!("程序执行结果: {}", result),
+                        Err(err) => {
+                            // 增强解释器错误报告
+                            println!("\n\x1b[31m解释器错误:\x1b[0m {}", err.message);
+                            
+                            // 显示错误位置信息
+                            if let Some(pos) = err.position {
+                                display_error_context(&processed_content, &err.message, pos.line, pos.column);
+                                
+                                // 提供修复建议
+                                let (error_type, suggestion) = analyze_error(&err.message);
+                                println!("\n错误类型: {}", error_type);
+                                if let Some(suggest) = suggestion {
+                                    println!("修复建议: {}", suggest);
+                                }
+                            }
+                        }
+                    }
                 },
                 Err(err) => {
-                    // 增强错误报告
-                    println!("解析错误: {}", err);
+                    // 增强解析错误报告
+                    println!("\n\x1b[31m解析错误:\x1b[0m {}", err.message);
                     
-                    // 尝试提取错误位置信息
-                    if let Some(pos) = processed_content.find(&err.replace("期望", "").trim()) {
-                        // 计算行号和列号
-                        let mut line = 1;
-                        let mut col = 1;
-                        for (i, c) in processed_content.chars().enumerate() {
-                            if i == pos {
-                                break;
-                            }
-                            if c == '\n' {
-                                line += 1;
-                                col = 1;
-                            } else {
-                                col += 1;
-                            }
-                        }
-                        println!("错误可能位于第 {} 行, 第 {} 列附近", line, col);
-                        
-                        // 显示错误行的内容
-                        let lines: Vec<&str> = processed_content.lines().collect();
-                        if line > 0 && line <= lines.len() {
-                            println!("行内容: {}", lines[line - 1]);
-                            println!("{}^", " ".repeat(col - 1));
-                        }
+                    // 显示错误位置信息
+                    display_error_context(&processed_content, &err.message, err.line, err.column);
+                    
+                    // 提供修复建议
+                    let (error_type, suggestion) = analyze_error(&err.message);
+                    println!("\n错误类型: {}", error_type);
+                    if let Some(suggest) = suggestion {
+                        println!("修复建议: {}", suggest);
                     }
                 }
             }
         },
-        Err(err) => println!("预处理文件错误: {}", err),
+        Err(err) => {
+            println!("\n\x1b[31m预处理文件错误:\x1b[0m {}", err);
+            
+            // 尝试从错误信息中提取文件路径
+            if let Some(file_path) = extract_file_path_from_error(&err) {
+                println!("出错的文件: {}", file_path);
+                
+                // 提供修复建议
+                let (error_type, suggestion) = analyze_error(&err);
+                println!("\n错误类型: {}", error_type);
+                if let Some(suggest) = suggestion {
+                    println!("修复建议: {}", suggest);
+                }
+            }
+        },
     }
 }

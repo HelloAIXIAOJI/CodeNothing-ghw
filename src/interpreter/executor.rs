@@ -1,6 +1,7 @@
 use crate::ast::{Statement, Expression, BinaryOperator, LogicalOperator, Function};
 use crate::interpreter::value::Value;
 use crate::interpreter::evaluator::{Evaluator, evaluate_compare_operation};
+use crate::interpreter::InterpreterError;
 use std::collections::HashMap;
 
 // 执行结果枚举，用于表示语句执行的结果
@@ -10,12 +11,37 @@ pub enum ExecutionResult {
     Return(Value),       // 返回值
     Break,               // break语句
     Continue,            // continue语句
+    Error(InterpreterError), // 添加错误类型
 }
 
 pub trait Executor: Evaluator {
     fn execute_statement(&mut self, statement: Statement) -> ExecutionResult;
     fn execute_function(&mut self, function: &Function) -> Value;
-    fn update_variable(&mut self, name: &str, value: Value) -> Result<(), String>;
+    fn update_variable(&mut self, name: &str, value: Value) -> Result<(), InterpreterError>;
+    
+    // 添加获取当前执行位置的方法
+    fn get_current_position(&self) -> Option<(usize, usize)> {
+        None // 默认实现返回None，子类可以覆盖
+    }
+    
+    // 添加错误处理辅助方法
+    fn handle_error(&self, message: &str, error_type: &str) -> ExecutionResult {
+        let (line, column) = self.get_current_position().unwrap_or((0, 0));
+        
+        ExecutionResult::Error(InterpreterError {
+            message: message.to_string(),
+            position: if line > 0 && column > 0 {
+                Some(crate::interpreter::ErrorPosition {
+                    line,
+                    column,
+                    context: None,
+                })
+            } else {
+                None
+            },
+            error_type: error_type.to_string(),
+        })
+    }
 }
 
 // 处理变量更新逻辑
@@ -113,7 +139,7 @@ pub fn execute_if_else<E: Evaluator + Executor>(
     // 检查条件是否为真
     let is_true = match condition_value {
         Value::Bool(b) => b,
-        _ => panic!("条件表达式必须是布尔类型"),
+        _ => return executor.handle_error("条件表达式必须是布尔类型", "类型错误"),
     };
     
     if is_true {
@@ -133,7 +159,7 @@ pub fn execute_if_else<E: Evaluator + Executor>(
                     let else_if_value = executor.evaluate_expression(else_if_condition);
                     let else_if_is_true = match else_if_value {
                         Value::Bool(b) => b,
-                        _ => panic!("else-if 条件表达式必须是布尔类型"),
+                        _ => return executor.handle_error("else-if 条件表达式必须是布尔类型", "类型错误"),
                     };
                     
                     if else_if_is_true {

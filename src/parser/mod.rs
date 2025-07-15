@@ -9,7 +9,24 @@ use parser_base::ParserBase;
 use expression_parser::ExpressionParser;
 use statement_parser::StatementParser;
 
-pub fn parse(source: &str, debug: bool) -> Result<Program, String> {
+// 添加解析错误结构体
+#[derive(Debug, Clone)]
+pub struct ParseError {
+    pub message: String,
+    pub line: usize,
+    pub column: usize,
+    pub position: usize,
+}
+
+impl std::fmt::Display for ParseError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{} (行: {}, 列: {}, 位置: {})", 
+            self.message, self.line, self.column, self.position)
+    }
+}
+
+// 修改解析函数返回类型
+pub fn parse(source: &str, debug: bool) -> Result<Program, ParseError> {
     // 预处理：移除注释
     let source_without_comments = remove_comments(source);
     
@@ -20,7 +37,15 @@ pub fn parse(source: &str, debug: bool) -> Result<Program, String> {
     let mut parser = ParserBase::new(&source_without_comments, tokens, debug);
     
     // 解析程序
-    parse_program(&mut parser)
+    parse_program(&mut parser).map_err(|err_msg| {
+        let (line, column) = parser.get_line_column();
+        ParseError {
+            message: err_msg,
+            line,
+            column,
+            position: parser.position,
+        }
+    })
 }
 
 fn parse_program(parser: &mut ParserBase) -> Result<Program, String> {
@@ -45,7 +70,7 @@ fn parse_program(parser: &mut ParserBase) -> Result<Program, String> {
                 parser.expect("<")?;
                 
                 // 获取库名
-                let lib_name = parser.consume().ok_or_else(|| "期望库名".to_string())?;
+                let lib_name = parser.consume().ok_or_else(|| parser.create_error("期望库名"))?;
                 
                 // 期望 ">" 符号
                 parser.expect(">")?;
@@ -60,7 +85,7 @@ fn parse_program(parser: &mut ParserBase) -> Result<Program, String> {
                 parser.consume(); // 消费 "file"
                 
                 // 获取文件路径（可能被引号包裹）
-                let file_path = parser.consume().ok_or_else(|| "期望文件路径".to_string())?;
+                let file_path = parser.consume().ok_or_else(|| parser.create_error("期望文件路径"))?;
                 
                 // 移除可能存在的引号
                 let file_path = if file_path.starts_with("\"") && file_path.ends_with("\"") {
@@ -87,10 +112,10 @@ fn parse_program(parser: &mut ParserBase) -> Result<Program, String> {
                 
                 parser.expect(";")?;
             } else {
-                return Err("期望 'lib_once'、'lib'、'file'、'ns' 或 'namespace' 关键字".to_string());
+                return Err(parser.create_error("期望 'lib_once'、'lib'、'file'、'ns' 或 'namespace' 关键字"));
             }
         } else {
-            return Err(format!("期望 'fn', 'ns', 或 'using', 但得到了 '{:?}'", parser.peek()));
+            return Err(parser.create_error(&format!("期望 'fn', 'ns', 或 'using', 但得到了 '{:?}'", parser.peek())));
         }
     }
     
@@ -107,7 +132,7 @@ fn parse_namespace(parser: &mut ParserBase) -> Result<Namespace, String> {
     
     let name = match parser.consume() {
         Some(name) => name,
-        None => return Err("期望命名空间名".to_string()),
+        None => return Err(parser.create_error("期望命名空间名")),
     };
     
     if parser.debug {
@@ -132,8 +157,9 @@ fn parse_namespace(parser: &mut ParserBase) -> Result<Namespace, String> {
         } else if token == "ns" {
             namespaces.push(parse_namespace(parser)?);
         } else {
-            return Err(format!("期望 'fn', 'ns' 或 '}}', 但得到了 '{}' (位置: {})", 
-                token, parser.position));
+            let (line, column) = parser.get_line_column();
+            return Err(format!("期望 'fn', 'ns' 或 '}}', 但得到了 '{}' (行: {}, 列: {}, 位置: {})", 
+                token, line, column, parser.position));
         }
     }
     

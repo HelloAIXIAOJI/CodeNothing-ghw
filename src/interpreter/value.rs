@@ -12,6 +12,7 @@ pub enum Value {
     Array(Vec<Value>),
     Map(HashMap<String, Value>),
     None, // 表示空值或未定义的值
+    Void, // 表示void函数的返回值
 }
 
 impl Value {
@@ -46,6 +47,7 @@ impl Value {
                 result
             },
             Value::None => "null".to_string(),
+            Value::Void => "void".to_string(),
         }
     }
 }
@@ -79,6 +81,7 @@ impl fmt::Display for Value {
                 write!(f, "}}")
             },
             Value::None => write!(f, "null"),
+            Value::Void => write!(f, "void"),
         }
     }
 } 

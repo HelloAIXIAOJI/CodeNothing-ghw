@@ -1,0 +1,11 @@
+// 这是一个简单的Hello World程序，用于测试错误报告功能
+
+fn main() : int {
+    // 正确的语句
+    print("Hello, World!");
+    
+    // 错误的语句 - 未定义变量
+    print(undefined_var);
+    
+    return 0;
+}; 
