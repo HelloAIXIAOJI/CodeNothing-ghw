@@ -12,14 +12,38 @@ impl<'a> StatementParser for ParserBase<'a> {
         match self.peek() {
             Some(token) if token == "return" => {
                 self.consume(); // 消费 "return"
-                let expr = self.parse_expression()?;
+                
+                if self.debug {
+                    println!("解析return语句, 当前位置: {}", self.position);
+                    println!("下一个token: {:?}", self.peek());
+                }
+                
+                // 解析表达式
+                let expr = if self.peek() == Some(&";".to_string()) {
+                    // 如果下一个token是分号，则是无返回值的return语句
+                    Expression::IntLiteral(0) // 使用0作为默认值
+                } else {
+                    self.parse_expression()?
+                };
+                
+                if self.debug {
+                    println!("解析return语句表达式后, 当前位置: {}", self.position);
+                    println!("下一个token: {:?}", self.peek());
+                }
+                
+                // 期望分号
                 self.expect(";")?;
+                
+                if self.debug {
+                    println!("解析return语句完成, 当前位置: {}", self.position);
+                }
+                
                 Ok(Statement::Return(expr))
             },
             Some(token) if token == "using" => {
                 self.consume(); // 消费 "using"
                 
-                // 检查是导入命名空间还是导入库
+                // 检查是导入命名空间、导入库还是导入文件
                 match self.peek() {
                     Some(token) if token == "ns" => {
                         self.consume(); // 消费 "ns" 关键字
@@ -73,6 +97,26 @@ impl<'a> StatementParser for ParserBase<'a> {
                         
                         Ok(Statement::LibraryImport(lib_name))
                     },
+                    Some(token) if token == "file" => {
+                        self.consume(); // 消费 "file" 关键字
+                        
+                        // 获取文件路径（可能被引号包裹）
+                        let file_path = self.consume().ok_or_else(|| "期望文件路径".to_string())?;
+                        
+                        // 移除可能存在的引号
+                        let file_path = if file_path.starts_with("\"") && file_path.ends_with("\"") {
+                            file_path[1..file_path.len()-1].to_string()
+                        } else if file_path.starts_with("'") && file_path.ends_with("'") {
+                            file_path[1..file_path.len()-1].to_string()
+                        } else {
+                            file_path
+                        };
+                        
+                        // 期望 ";" 符号
+                        self.expect(";")?;
+                        
+                        Ok(Statement::FileImport(file_path))
+                    },
                     Some(token) if token == "namespace" => {
                         self.consume(); // 消费 "namespace" 关键字
                         
@@ -91,7 +135,7 @@ impl<'a> StatementParser for ParserBase<'a> {
                         self.expect(";")?;
                         Ok(Statement::UsingNamespace(path))
                     },
-                    _ => Err("期望 'ns'、'namespace'、'lib' 或 'lib_once' 关键字".to_string()),
+                    _ => Err("期望 'ns'、'namespace'、'lib'、'file' 或 'lib_once' 关键字".to_string()),
                 }
             },
             Some(token) if token == "if" => {
@@ -344,7 +388,17 @@ impl<'a> StatementParser for ParserBase<'a> {
                             // 命名空间函数调用
                             let mut path = Vec::new();
                             path.push(var_name); // 第一个命名空间名
-                            path.push(func_name); // 函数名
+                            path.push(func_name); // 函数名或下一级命名空间
+                            
+                            // 解析命名空间路径
+                            while self.peek() == Some(&"::".to_string()) {
+                                self.consume(); // 消费 "::"
+                                if let Some(name) = self.consume() {
+                                    path.push(name);
+                                } else {
+                                    return Err("期望标识符".to_string());
+                                }
+                            }
                             
                             self.expect("(")?;
                             
@@ -414,6 +468,7 @@ impl<'a> StatementParser for ParserBase<'a> {
             "bool" => Ok(Type::Bool),
             "string" => Ok(Type::String),
             "long" => Ok(Type::Long),
+            "void" => Ok(Type::Void),  // 添加对void类型的支持
             "int[]" => Ok(Type::Array(Box::new(Type::Int))),
             "float[]" => Ok(Type::Array(Box::new(Type::Float))),
             "bool[]" => Ok(Type::Array(Box::new(Type::Bool))),

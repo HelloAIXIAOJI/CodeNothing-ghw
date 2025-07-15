@@ -35,14 +35,19 @@ impl<'a> ParserBase<'a> {
     
     // 期望下一个词法单元是指定的值，如果是则消费，否则返回错误
     pub fn expect(&mut self, expected: &str) -> Result<(), String> {
+        if self.debug {
+            println!("期望标记符: {}", expected);
+            println!("下一个token: {:?}", self.peek());
+        }
+        
         if let Some(token) = self.consume() {
             if token == expected {
                 Ok(())
             } else {
-                Err(format!("期望 '{}', 但得到了 '{}'", expected, token))
+                Err(format!("期望 '{}', 但得到了 '{}' (位置: {})", expected, token, self.position))
             }
         } else {
-            Err(format!("期望 '{}', 但到达了文件末尾", expected))
+            Err(format!("期望 '{}', 但到达了文件末尾 (位置: {})", expected, self.position))
         }
     }
 } 

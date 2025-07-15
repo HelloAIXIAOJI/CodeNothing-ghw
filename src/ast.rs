@@ -5,6 +5,7 @@ pub enum Type {
     Bool,
     String,
     Long,
+    Void,    // 添加void类型
     Array(Box<Type>),
     Map(Box<Type>, Box<Type>),
     // 未来可以扩展更多类型
@@ -72,6 +73,7 @@ pub enum Statement {
     CompoundAssignment(String, BinaryOperator, Expression), // 复合赋值 (+=, -=, *=, /=, %=)
     UsingNamespace(Vec<String>), // 导入命名空间 (using ns xxx;)
     LibraryImport(String), // 导入动态库 (using lib_once <xxx>;)
+    FileImport(String),    // 导入文件 (using file "xxx.cn";)
     FunctionCallStatement(Expression), // 函数调用语句
     NamespacedFunctionCallStatement(Vec<String>, Vec<Expression>), // 命名空间函数调用语句 (ns::func())
     LibraryFunctionCallStatement(String, String, Vec<Expression>), // 库函数调用语句 (lib::func())
@@ -109,4 +111,5 @@ pub struct Program {
     pub functions: Vec<Function>,
     pub namespaces: Vec<Namespace>, // 顶层命名空间
     pub library_imports: Vec<String>, // 顶层库导入
+    pub file_imports: Vec<String>,   // 顶层文件导入
 } 

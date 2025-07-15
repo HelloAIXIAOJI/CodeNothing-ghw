@@ -27,6 +27,7 @@ fn parse_program(parser: &mut ParserBase) -> Result<Program, String> {
     let mut functions = Vec::new();
     let mut namespaces = Vec::new();
     let mut library_imports = Vec::new();
+    let mut file_imports = Vec::new();
     
     while parser.position < parser.tokens.len() {
         if parser.peek() == Some(&"ns".to_string()) {
@@ -54,6 +55,27 @@ fn parse_program(parser: &mut ParserBase) -> Result<Program, String> {
                 
                 // 添加到库导入列表
                 library_imports.push(lib_name);
+            } else if parser.peek() == Some(&"file".to_string()) {
+                // 解析文件导入
+                parser.consume(); // 消费 "file"
+                
+                // 获取文件路径（可能被引号包裹）
+                let file_path = parser.consume().ok_or_else(|| "期望文件路径".to_string())?;
+                
+                // 移除可能存在的引号
+                let file_path = if file_path.starts_with("\"") && file_path.ends_with("\"") {
+                    file_path[1..file_path.len()-1].to_string()
+                } else if file_path.starts_with("'") && file_path.ends_with("'") {
+                    file_path[1..file_path.len()-1].to_string()
+                } else {
+                    file_path
+                };
+                
+                // 期望 ";" 符号
+                parser.expect(";")?;
+                
+                // 添加到文件导入列表
+                file_imports.push(file_path);
             } else if parser.peek() == Some(&"ns".to_string()) || parser.peek() == Some(&"namespace".to_string()) {
                 // 解析命名空间导入，但在顶层不做任何处理，因为命名空间导入只在函数内部有效
                 parser.consume(); // 消费 "ns" 或 "namespace"
@@ -65,7 +87,7 @@ fn parse_program(parser: &mut ParserBase) -> Result<Program, String> {
                 
                 parser.expect(";")?;
             } else {
-                return Err("期望 'lib_once'、'lib'、'ns' 或 'namespace' 关键字".to_string());
+                return Err("期望 'lib_once'、'lib'、'file'、'ns' 或 'namespace' 关键字".to_string());
             }
         } else {
             return Err(format!("期望 'fn', 'ns', 或 'using', 但得到了 '{:?}'", parser.peek()));
@@ -76,6 +98,7 @@ fn parse_program(parser: &mut ParserBase) -> Result<Program, String> {
         functions, 
         namespaces,
         library_imports,
+        file_imports,
     })
 }
 
@@ -87,12 +110,21 @@ fn parse_namespace(parser: &mut ParserBase) -> Result<Namespace, String> {
         None => return Err("期望命名空间名".to_string()),
     };
     
+    if parser.debug {
+        println!("开始解析命名空间: {}", name);
+    }
+    
     parser.expect("{")?;
     
     let mut functions = Vec::new();
     let mut namespaces = Vec::new();
     
     while let Some(token) = parser.peek() {
+        if parser.debug {
+            println!("命名空间 {} 内部解析: 当前token = {:?}, 位置 = {}", 
+                name, token, parser.position);
+        }
+        
         if token == "}" {
             break;
         } else if token == "fn" {
@@ -100,12 +132,28 @@ fn parse_namespace(parser: &mut ParserBase) -> Result<Namespace, String> {
         } else if token == "ns" {
             namespaces.push(parse_namespace(parser)?);
         } else {
-            return Err(format!("期望 'fn', 'ns' 或 '}}', 但得到了 '{}'", token));
+            return Err(format!("期望 'fn', 'ns' 或 '}}', 但得到了 '{}' (位置: {})", 
+                token, parser.position));
         }
     }
     
+    if parser.debug {
+        println!("命名空间 {} 解析完成, 期望 '}}', 当前token = {:?}, 位置 = {}", 
+            name, parser.peek(), parser.position);
+    }
+    
     parser.expect("}")?;
+    
+    if parser.debug {
+        println!("命名空间 {} 的 '}}' 已消费, 期望 ';', 当前token = {:?}, 位置 = {}", 
+            name, parser.peek(), parser.position);
+    }
+    
     parser.expect(";")?;
+    
+    if parser.debug {
+        println!("命名空间 {} 解析成功", name);
+    }
     
     Ok(Namespace { name, functions, namespaces })
 }
@@ -160,8 +208,15 @@ fn parse_function(parser: &mut ParserBase) -> Result<Function, String> {
         body.push(parser.parse_statement()?);
     }
     
-    parser.expect("}")?;
-    parser.expect(";")?;
+    if parser.peek() != Some(&"}".to_string()) {
+        return Err(format!("期望 '}}', 但得到了 {:?}", parser.peek()));
+    }
+    parser.consume(); // 消费 "}"
+    
+    if parser.peek() != Some(&";".to_string()) {
+        return Err(format!("在函数 '{}' 定义末尾期望 ';', 但得到了 {:?}", name, parser.peek()));
+    }
+    parser.consume(); // 消费 ";"
     
     Ok(Function {
         name,
