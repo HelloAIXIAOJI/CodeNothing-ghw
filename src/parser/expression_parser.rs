@@ -14,7 +14,31 @@ pub trait ExpressionParser {
 
 impl<'a> ExpressionParser for ParserBase<'a> {
     fn parse_expression(&mut self) -> Result<Expression, String> {
-        self.parse_logical_expression()
+        // 解析条件表达式（三元运算符）
+        let expr = self.parse_logical_expression()?;
+        
+        // 检查是否是三元运算符
+        if self.peek() == Some(&"?".to_string()) {
+            self.consume(); // 消费 "?"
+            
+            // 解析条件为真时的表达式
+            let true_expr = self.parse_expression()?;
+            
+            // 期望 ":"
+            self.expect(":")?;
+            
+            // 解析条件为假时的表达式
+            let false_expr = self.parse_expression()?;
+            
+            // 构建三元运算符表达式
+            return Ok(Expression::TernaryOp(
+                Box::new(expr),
+                Box::new(true_expr),
+                Box::new(false_expr)
+            ));
+        }
+        
+        Ok(expr)
     }
     
     fn parse_logical_expression(&mut self) -> Result<Expression, String> {
