@@ -1,7 +1,8 @@
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::collections::{HashSet, Vec};
+use std::collections::HashSet;
 use std::env;
+use std::vec::Vec;
 
 mod parser;
 mod ast;
