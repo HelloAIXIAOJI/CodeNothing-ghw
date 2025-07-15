@@ -5,6 +5,7 @@ use std::env;
 use libloading::{Library, Symbol};
 use once_cell::sync::Lazy;
 use crate::interpreter::debug_println;
+use crate::interpreter::value::Value;
 
 // 已加载库的缓存，使用Lazy静态变量确保线程安全的初始化
 static LOADED_LIBRARIES: Lazy<Arc<Mutex<HashMap<String, Arc<Library>>>>> = 
@@ -44,6 +45,18 @@ fn get_library_path(lib_name: &str) -> PathBuf {
     
     debug_println(&format!("尝试加载库文件: {:?}", path));
     path
+}
+
+// 添加一个函数来打印库中的所有函数
+pub fn debug_library_functions(lib_name: &str) -> Result<(), String> {
+    let functions = load_library(lib_name)?;
+    
+    debug_println(&format!("库 '{}' 中的所有函数:", lib_name));
+    for (func_name, _) in functions.iter() {
+        debug_println(&format!("  - {}", func_name));
+    }
+    
+    Ok(())
 }
 
 // 加载库并返回其函数映射
@@ -206,4 +219,33 @@ pub fn call_library_function(lib_name: &str, func_name: &str, args: Vec<String>)
         },
         None => Err(format!("库 '{}' 中未找到函数 '{}'", lib_name, func_name)),
     }
+} 
+
+// 新增函数，将Value类型转换为字符串参数
+pub fn convert_value_to_string_arg(value: &Value) -> String {
+    match value {
+        Value::Int(i) => i.to_string(),
+        Value::Float(f) => f.to_string(),
+        Value::Bool(b) => b.to_string(),
+        Value::String(s) => s.clone(),
+        Value::Long(l) => l.to_string(),
+        Value::Array(arr) => {
+            let elements: Vec<String> = arr.iter()
+                .map(|v| convert_value_to_string_arg(v))
+                .collect();
+            format!("[{}]", elements.join(", "))
+        },
+        Value::Map(map) => {
+            let entries: Vec<String> = map.iter()
+                .map(|(k, v)| format!("{}:{}", k, convert_value_to_string_arg(v)))
+                .collect();
+            format!("{{{}}}", entries.join(", "))
+        },
+        Value::None => "null".to_string(),
+    }
+}
+
+// 从Vector<Value>转换为Vector<String>，用于库函数调用
+pub fn convert_values_to_string_args(values: &[Value]) -> Vec<String> {
+    values.iter().map(|v| convert_value_to_string_arg(v)).collect()
 } 

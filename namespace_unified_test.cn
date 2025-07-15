@@ -1,0 +1,59 @@
+// 测试统一的命名空间机制
+
+// 导入库命名空间
+using lib <io>;
+
+// 创建并使用代码命名空间
+ns math {
+    fn add(a : int, b : int) : int {
+        return a + b;
+    };
+    
+    fn multiply(a : int, b : int) : int {
+        return a * b;
+    };
+};
+
+// 创建另一个命名空间
+ns string_utils {
+    fn concat(a : string, b : string) : string {
+        return a + b;
+    };
+    
+    fn repeat(text : string, count : int) : string {
+        result : string = "";
+        for (i : 0..count-1) {
+            result = result + text;
+        };
+        return result;
+    };
+};
+
+fn main() : int {
+    // 使用库命名空间函数
+    io::std::println("测试统一的命名空间机制");
+    
+    // 从代码命名空间导入函数
+    using ns math;
+    using ns string_utils;
+    
+    // 直接使用已导入的命名空间函数
+    sum : int = add(10, 20);
+    io::std::println("10 + 20 = " + sum);
+    
+    product : int = multiply(5, 6);
+    io::std::println("5 * 6 = " + product);
+    
+    // 使用string_utils命名空间函数
+    message : string = concat("Hello, ", "World!");
+    io::std::println(message);
+    
+    repeated : string = repeat("-=", 10);
+    io::std::println(repeated);
+    
+    // 使用完整的命名空间路径
+    full_sum : int = math::add(100, 200);
+    io::std::println("使用完整路径: 100 + 200 = " + full_sum);
+    
+    return 0;
+}; 

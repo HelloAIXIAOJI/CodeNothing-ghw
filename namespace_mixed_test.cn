@@ -1,0 +1,50 @@
+// 测试混合使用库命名空间和代码命名空间
+
+// 导入多个库
+using lib <io>;
+using lib <time>;
+using ns std;
+
+// 创建自定义命名空间，其函数可能与库函数同名
+ns my_std {
+    fn println(message : string) : void {
+        // 调用真正的io库函数，但添加时间戳
+        current_time : string = time::std::format_now("[%H:%M:%S] ");
+        io::std::println(current_time + message);
+    };
+    
+    fn get_timestamp() : string {
+        return time::std::now();
+    };
+};
+
+// 创建另一个命名空间
+ns app {
+    fn version() : string {
+        return "应用版本 2.0.0";
+    };
+};
+
+fn main() : int {
+    // 直接使用库命名空间函数
+    println("测试混合使用库命名空间和代码命名空间");
+    
+    // 导入自定义命名空间
+    using ns my_std;
+    
+    // 现在使用自定义命名空间的函数，它会调用真正的库函数
+    my_std::println("这条消息将带有时间戳");
+    
+    // 获取并显示时间戳
+    timestamp : string = my_std::get_timestamp();
+    println("当前时间戳: " + timestamp);
+    
+    // 导入并使用另一个命名空间
+    using ns app;
+    println(version());
+    
+    // 直接使用完整路径，避免命名空间冲突
+    io::std::println("这条消息直接使用io库，没有时间戳");
+    
+    return 0;
+}; 

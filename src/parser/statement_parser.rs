@@ -1,4 +1,4 @@
-use crate::ast::{Statement, Type, BinaryOperator, Expression};
+use crate::ast::{Statement, Type, BinaryOperator, Expression, NamespaceType};
 use crate::parser::parser_base::ParserBase;
 use crate::parser::expression_parser::ExpressionParser;
 
@@ -61,10 +61,12 @@ impl<'a> StatementParser for ParserBase<'a> {
                         }
                         
                         self.expect(";")?;
-                        Ok(Statement::UsingNamespace(path))
+                        
+                        // 使用代码命名空间类型
+                        Ok(Statement::ImportNamespace(NamespaceType::Code, path))
                     },
-                    Some(token) if token == "lib_once" => {
-                        self.consume(); // 消费 "lib_once" 关键字
+                    Some(token) if token == "lib_once" || token == "lib" => {
+                        self.consume(); // 消费 "lib_once" 或 "lib" 关键字
                         
                         // 期望 "<" 符号
                         self.expect("<")?;
@@ -78,24 +80,8 @@ impl<'a> StatementParser for ParserBase<'a> {
                         // 期望 ";" 符号
                         self.expect(";")?;
                         
-                        Ok(Statement::LibraryImport(lib_name))
-                    },
-                    Some(token) if token == "lib" => {
-                        self.consume(); // 消费 "lib" 关键字
-                        
-                        // 期望 "<" 符号
-                        self.expect("<")?;
-                        
-                        // 获取库名
-                        let lib_name = self.consume().ok_or_else(|| "期望库名".to_string())?;
-                        
-                        // 期望 ">" 符号
-                        self.expect(">")?;
-                        
-                        // 期望 ";" 符号
-                        self.expect(";")?;
-                        
-                        Ok(Statement::LibraryImport(lib_name))
+                        // 使用库命名空间类型
+                        Ok(Statement::ImportNamespace(NamespaceType::Library, vec![lib_name]))
                     },
                     Some(token) if token == "file" => {
                         self.consume(); // 消费 "file" 关键字
@@ -133,7 +119,7 @@ impl<'a> StatementParser for ParserBase<'a> {
                         }
                         
                         self.expect(";")?;
-                        Ok(Statement::UsingNamespace(path))
+                        Ok(Statement::ImportNamespace(NamespaceType::Code, path))
                     },
                     _ => Err("期望 'ns'、'namespace'、'lib'、'file' 或 'lib_once' 关键字".to_string()),
                 }

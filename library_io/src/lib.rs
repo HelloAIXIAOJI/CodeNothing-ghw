@@ -145,13 +145,13 @@ pub extern "C" fn cn_init() -> *mut HashMap<String, LibraryFunction> {
          .add_function("println", std::cn_println)
          .add_function("read_line", std::cn_read_line)
          .add_function("printf", std::cn_printf);
-    
+    /*
     // 同时注册为直接函数，不需要命名空间前缀
     registry.add_direct_function("print", std::cn_print)
             .add_direct_function("println", std::cn_println)
             .add_direct_function("read_line", std::cn_read_line)
             .add_direct_function("printf", std::cn_printf);
-    
+    */
     // 构建并返回库指针
     registry.build_library_pointer()
 } 

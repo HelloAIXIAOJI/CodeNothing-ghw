@@ -3,12 +3,12 @@ pub mod evaluator;
 pub mod executor;
 pub mod library_loader;
 
-use crate::ast::{Program, Expression, Statement, BinaryOperator, Type, Namespace, CompareOperator, LogicalOperator, Function};
+use crate::ast::{Program, Expression, Statement, BinaryOperator, Type, Namespace, CompareOperator, LogicalOperator, Function, NamespaceType};
 use std::collections::HashMap;
 use value::Value;
 use evaluator::{Evaluator, perform_binary_operation, evaluate_compare_operation};
 use executor::{Executor, ExecutionResult, update_variable_value, handle_increment, handle_decrement, execute_if_else};
-use library_loader::{load_library, call_library_function};
+use library_loader::{load_library, call_library_function, convert_values_to_string_args, convert_value_to_string_arg};
 use std::sync::Arc;
 use std::env;
 
@@ -28,30 +28,58 @@ pub fn interpret(program: &Program) -> Value {
     // 创建解释器
     let mut interpreter = Interpreter::new(program);
     
-    // 处理顶层的库导入
-    for lib_name in &program.library_imports {
-        debug_println(&format!("导入顶层动态库: {}", lib_name));
-        
-        // 尝试加载库
-        match load_library(lib_name) {
-            Ok(functions) => {
-                // 库加载成功，将其添加到已导入库列表
-                interpreter.imported_libraries.insert(lib_name.to_string(), functions);
-                debug_println(&format!("顶层库 '{}' 加载成功", lib_name));
+    // 处理顶层的命名空间导入
+    for (ns_type, path) in &program.imported_namespaces {
+        match ns_type {
+            NamespaceType::Library => {
+                if path.len() != 1 {
+                    panic!("库名称应该是单个标识符");
+                }
                 
-                // 将库中的所有函数添加到全局函数列表
-                if let Some(lib_functions) = interpreter.imported_libraries.get(lib_name) {
-                    debug_println(&format!("库 '{}' 中的函数:", lib_name));
-                    for (func_name, _) in lib_functions.iter() {
-                        debug_println(&format!("  - {}", func_name));
+                let lib_name = &path[0];
+                debug_println(&format!("导入顶层动态库: {}", lib_name));
+                
+                // 尝试加载库
+                match load_library(lib_name) {
+                    Ok(functions) => {
+                        // 库加载成功，将其添加到已导入库列表
+                        interpreter.imported_libraries.insert(lib_name.to_string(), functions);
+                        debug_println(&format!("顶层库 '{}' 加载成功", lib_name));
                         
-                        // 直接将库函数注册为全局函数，这样可以直接调用
-                        interpreter.library_functions.insert(func_name.to_string(), (lib_name.to_string(), func_name.to_string()));
+                        // 将库中的所有函数添加到全局函数列表
+                        if let Some(lib_functions) = interpreter.imported_libraries.get(lib_name) {
+                            debug_println(&format!("库 '{}' 中的函数:", lib_name));
+                            for (func_name, _) in lib_functions.iter() {
+                                debug_println(&format!("  - {}", func_name));
+                                
+                                // 检查是否是命名空间函数（包含::）
+                                if func_name.contains("::") {
+                                    let parts: Vec<&str> = func_name.split("::").collect();
+                                    if parts.len() >= 2 {
+                                        let ns_name = parts[0];
+                                        debug_println(&format!("  检测到命名空间: {} 在库 {}", ns_name, lib_name));
+                                        // 记录命名空间与库的映射关系
+                                        interpreter.library_namespaces.insert(ns_name.to_string(), lib_name.to_string());
+                                    }
+                                }
+                                
+                                // 直接将库函数注册为全局函数，这样可以直接调用
+                                interpreter.library_functions.insert(func_name.to_string(), (lib_name.to_string(), func_name.to_string()));
+                            }
+                        }
+                    },
+                    Err(err) => {
+                        panic!("无法加载顶层库 '{}': {}", lib_name, err);
                     }
                 }
             },
-            Err(err) => {
-                panic!("无法加载顶层库 '{}': {}", lib_name, err);
+            NamespaceType::Code => {
+                // 代码命名空间的导入在函数执行上下文中处理
+                let namespace_path = path.join("::");
+                debug_println(&format!("记录顶层命名空间导入: {}", namespace_path));
+                
+                // 将命名空间路径添加到全局导入列表，供后续函数使用
+                interpreter.global_namespace_imports.push(path.clone());
             }
         }
     }
@@ -74,6 +102,10 @@ struct Interpreter<'a> {
     global_env: HashMap<String, Value>,
     // 局部变量环境（函数内）
     local_env: HashMap<String, Value>,
+    // 全局命名空间导入（作为默认导入在所有函数中可用）
+    global_namespace_imports: Vec<Vec<String>>,
+    // 库命名空间映射，键是命名空间名称，值是库名
+    library_namespaces: HashMap<String, String>,
 }
 
 impl<'a> Interpreter<'a> {
@@ -100,6 +132,8 @@ impl<'a> Interpreter<'a> {
             library_functions: HashMap::new(),
             global_env: HashMap::new(),
             local_env: HashMap::new(),
+            global_namespace_imports: Vec::new(),
+            library_namespaces: HashMap::new(),
         }
     }
     
@@ -115,7 +149,7 @@ impl<'a> Interpreter<'a> {
             format!("{}::{}", prefix, namespace.name)
         };
         
-        debug_println(&format!("注册命名空间 '{}' 中的函数", current_prefix));
+        debug_println(&format!("注册命名空间 '{}' (类型: {:?}) 中的函数", current_prefix, namespace.ns_type));
         
         // 注册当前命名空间中的函数
         for function in &namespace.functions {
@@ -132,6 +166,30 @@ impl<'a> Interpreter<'a> {
     }
     
     fn run(&mut self) -> Value {
+        // 先应用全局命名空间导入
+        for path in &self.global_namespace_imports {
+            let namespace_path = path.join("::");
+            debug_println(&format!("应用全局命名空间导入: {}", namespace_path));
+            
+            // 遍历命名空间中的所有函数
+            for (full_path, _) in &self.namespaced_functions {
+                // 检查函数是否属于指定的命名空间
+                if full_path.starts_with(&namespace_path) {
+                    // 获取函数名（路径的最后一部分）
+                    let parts: Vec<&str> = full_path.split("::").collect();
+                    if let Some(func_name) = parts.last() {
+                        // 将函数添加到导入的命名空间列表
+                        self.imported_namespaces
+                            .entry(func_name.to_string())
+                            .or_insert_with(Vec::new)
+                            .push(full_path.clone());
+                        
+                        debug_println(&format!("  导入全局函数: {}", full_path));
+                    }
+                }
+            }
+        }
+        
         // 查找 main 函数并执行
         if let Some(main_fn) = self.functions.get("main") {
             self.execute_function(main_fn)
@@ -208,8 +266,8 @@ impl<'a> Evaluator for Interpreter<'a> {
                 if let Some((lib_name, func_name)) = self.library_functions.get(name) {
                     debug_println(&format!("调用库函数: {}::{}", lib_name, func_name));
                     
-                    // 将Value转换为String
-                    let string_args: Vec<String> = arg_values.iter().map(|v| v.to_string()).collect();
+                    // 使用新函数将参数转换为字符串
+                    let string_args = convert_values_to_string_args(&arg_values);
                     
                     // 调用库函数
                     match call_library_function(lib_name, func_name, string_args) {
@@ -246,8 +304,8 @@ impl<'a> Evaluator for Interpreter<'a> {
                         if self.imported_libraries.contains_key(lib_name) {
                             debug_println(&format!("库已加载，尝试调用函数: {}", func_name));
                             
-                            // 将Value转换为String
-                            let string_args: Vec<String> = arg_values.iter().map(|v| v.to_string()).collect();
+                            // 使用新函数将参数转换为字符串
+                            let string_args = convert_values_to_string_args(&arg_values);
                             
                             // 调用库函数
                             match call_library_function(lib_name, func_name, string_args) {
@@ -320,6 +378,62 @@ impl<'a> Evaluator for Interpreter<'a> {
                     } else {
                         // 有多个匹配的函数，需要解决歧义
                         panic!("函数名 '{}' 有多个匹配: {:?}", name, paths);
+                    }
+                }
+                
+                // 检查是否是std命名空间函数
+                let std_func_name = format!("std::{}", name);
+                if let Some(lib_name) = self.library_namespaces.get("std") {
+                    debug_println(&format!("尝试调用std命名空间函数: {} 在库 {}", std_func_name, lib_name));
+                    
+                    // 将参数转换为字符串
+                    let string_args = convert_values_to_string_args(&arg_values);
+                    
+                    // 尝试调用库函数
+                    match call_library_function(lib_name, &std_func_name, string_args) {
+                        Ok(result) => {
+                            debug_println(&format!("库函数调用成功: {}::{}", lib_name, std_func_name));
+                            // 尝试将结果转换为适当的值类型
+                            if let Ok(int_val) = result.parse::<i32>() {
+                                return Value::Int(int_val);
+                            } else if let Ok(float_val) = result.parse::<f64>() {
+                                return Value::Float(float_val);
+                            } else if result == "true" {
+                                return Value::Bool(true);
+                            } else if result == "false" {
+                                return Value::Bool(false);
+                            } else {
+                                return Value::String(result);
+                            }
+                        },
+                        Err(err) => {
+                            debug_println(&format!("调用库函数失败: {}", err));
+                            // 继续尝试其他方式
+                        }
+                    }
+                }
+                
+                // 尝试在所有库中查找该函数作为std命名空间函数
+                let string_args = convert_values_to_string_args(&arg_values);
+                for (lib_name, lib_functions) in &self.imported_libraries {
+                    // 先尝试完整的命名空间函数名 (std::func_name)
+                    debug_println(&format!("尝试在库 '{}' 中查找函数 '{}'", lib_name, std_func_name));
+                    
+                    if let Some(func) = lib_functions.get(&std_func_name) {
+                        debug_println(&format!("在库 '{}' 中找到函数 '{}'", lib_name, std_func_name));
+                        let result = func(string_args.clone());
+                        // 尝试将结果转换为适当的值类型
+                        if let Ok(int_val) = result.parse::<i32>() {
+                            return Value::Int(int_val);
+                        } else if let Ok(float_val) = result.parse::<f64>() {
+                            return Value::Float(float_val);
+                        } else if result == "true" {
+                            return Value::Bool(true);
+                        } else if result == "false" {
+                            return Value::Bool(false);
+                        } else {
+                            return Value::String(result);
+                        }
                     }
                 }
                 
@@ -695,7 +809,8 @@ impl<'a> Executor for Interpreter<'a> {
         match statement {
             Statement::Return(expr) => {
                 // 返回语句，计算表达式值并返回
-                ExecutionResult::Return(self.evaluate_expression(&expr))
+                let value = self.evaluate_expression(&expr);
+                ExecutionResult::Return(value)
             },
             Statement::VariableDeclaration(name, _type, expr) => {
                 let value = self.evaluate_expression(&expr);
@@ -767,61 +882,128 @@ impl<'a> Executor for Interpreter<'a> {
                 
                 ExecutionResult::None
             },
-            Statement::UsingNamespace(path) => {
-                // 导入命名空间
-                let namespace_path = path.join("::");
-                debug_println(&format!("导入命名空间: {}", namespace_path));
-                
-                // 遍历命名空间中的所有函数
-                let mut found = false;
-                for (full_path, _) in &self.namespaced_functions {
-                    // 检查函数是否属于指定的命名空间
-                    if full_path.starts_with(&namespace_path) {
-                        // 获取函数名（路径的最后一部分）
-                        let parts: Vec<&str> = full_path.split("::").collect();
-                        if let Some(func_name) = parts.last() {
-                            // 将函数添加到导入的命名空间列表
-                            self.imported_namespaces
-                                .entry(func_name.to_string())
-                                .or_insert_with(Vec::new)
-                                .push(full_path.clone());
-                            
-                            found = true;
-                            debug_println(&format!("  导入函数: {}", full_path));
-                        }
-                    }
-                }
-                
-                if !found {
-                    debug_println(&format!("警告: 命名空间 '{}' 中没有找到函数", namespace_path));
-                }
-                
-                ExecutionResult::None
-            },
-            Statement::LibraryImport(lib_name) => {
-                // 导入动态库
-                debug_println(&format!("导入动态库: {}", lib_name));
-                
-                // 尝试加载库
-                match load_library(&lib_name) {
-                    Ok(functions) => {
-                        // 库加载成功，将其添加到已导入库列表
-                        self.imported_libraries.insert(lib_name.clone(), functions);
-                        debug_println(&format!("库 '{}' 加载成功", lib_name));
+            Statement::ImportNamespace(ns_type, path) => {
+                match ns_type {
+                    NamespaceType::Code => {
+                        // 导入代码命名空间
+                        let namespace_path = path.join("::");
+                        debug_println(&format!("导入代码命名空间: {}", namespace_path));
                         
-                        // 将库中的所有函数添加到全局函数列表
-                        if let Some(lib_functions) = self.imported_libraries.get(&lib_name) {
-                            debug_println(&format!("库 '{}' 中的函数:", lib_name));
-                            for (func_name, _) in lib_functions.iter() {
-                                debug_println(&format!("  - {}", func_name));
-                                
-                                // 直接将库函数注册为全局函数，这样可以直接调用
-                                self.library_functions.insert(func_name.to_string(), (lib_name.clone(), func_name.to_string()));
+                        // 遍历命名空间中的所有函数
+                        let mut found = false;
+                        for (full_path, _) in &self.namespaced_functions {
+                            // 检查函数是否属于指定的命名空间
+                            if full_path.starts_with(&namespace_path) {
+                                // 获取函数名（路径的最后一部分）
+                                let parts: Vec<&str> = full_path.split("::").collect();
+                                if let Some(func_name) = parts.last() {
+                                    // 将函数添加到导入的命名空间列表
+                                    self.imported_namespaces
+                                        .entry(func_name.to_string())
+                                        .or_insert_with(Vec::new)
+                                        .push(full_path.clone());
+                                    
+                                    found = true;
+                                    debug_println(&format!("  导入函数: {}", full_path));
+                                }
                             }
                         }
+                        
+                        if !found {
+                            debug_println(&format!("警告: 命名空间 '{}' 中没有找到函数", namespace_path));
+                        }
                     },
-                    Err(err) => {
-                        panic!("无法加载库 '{}': {}", lib_name, err);
+                    NamespaceType::Library => {
+                        // 导入库命名空间
+                        if path.len() != 1 {
+                            panic!("库名称应该是单个标识符");
+                        }
+                        
+                        let lib_name = &path[0];
+                        debug_println(&format!("导入动态库: {}", lib_name));
+                        
+                        // 尝试加载库
+                        match load_library(lib_name) {
+                            Ok(functions) => {
+                                // 库加载成功，将其添加到已导入库列表
+                                self.imported_libraries.insert(lib_name.clone(), functions);
+                                debug_println(&format!("库 '{}' 加载成功", lib_name));
+                                
+                                // 将库中的所有函数添加到全局函数列表
+                                if let Some(lib_functions) = self.imported_libraries.get(lib_name) {
+                                    debug_println(&format!("库 '{}' 中的函数:", lib_name));
+                                    for (func_name, _) in lib_functions.iter() {
+                                        debug_println(&format!("  - {}", func_name));
+                                        
+                                        // 检查是否是命名空间函数（包含::）
+                                        if func_name.contains("::") {
+                                            let parts: Vec<&str> = func_name.split("::").collect();
+                                            if parts.len() >= 2 {
+                                                let ns_name = parts[0];
+                                                debug_println(&format!("  检测到命名空间: {} 在库 {}", ns_name, lib_name));
+                                                // 记录命名空间与库的映射关系
+                                                self.library_namespaces.insert(ns_name.to_string(), lib_name.to_string());
+                                            }
+                                        }
+                                        
+                                        // 直接将库函数注册为全局函数，这样可以直接调用
+                                        self.library_functions.insert(func_name.to_string(), (lib_name.clone(), func_name.to_string()));
+                                    }
+                                }
+                            },
+                            Err(err) => {
+                                // 尝试查找常见的库命名约定变体
+                                let lib_variants = [
+                                    format!("{}", lib_name),        // 原始名称
+                                    format!("cn_{}", lib_name),     // cn_前缀
+                                    format!("library_{}", lib_name) // library_前缀
+                                ];
+                                
+                                for variant in &lib_variants {
+                                    if variant == lib_name {
+                                        continue; // 跳过已尝试过的名称
+                                    }
+                                    
+                                    debug_println(&format!("尝试加载替代库名称: {}", variant));
+                                    match load_library(variant) {
+                                        Ok(functions) => {
+                                            // 库加载成功，将其添加到已导入库列表
+                                            self.imported_libraries.insert(lib_name.clone(), functions.clone());
+                                            debug_println(&format!("库 '{}' 通过替代名称 '{}' 加载成功", lib_name, variant));
+                                            
+                                            // 将库中的所有函数添加到全局函数列表
+                                            debug_println(&format!("库 '{}' 中的函数:", lib_name));
+                                            for (func_name, _) in functions.iter() {
+                                                debug_println(&format!("  - {}", func_name));
+                                                
+                                                // 检查是否是命名空间函数（包含::）
+                                                if func_name.contains("::") {
+                                                    let parts: Vec<&str> = func_name.split("::").collect();
+                                                    if parts.len() >= 2 {
+                                                        let ns_name = parts[0];
+                                                        debug_println(&format!("  检测到命名空间: {} 在库 {}", ns_name, lib_name));
+                                                        // 记录命名空间与库的映射关系
+                                                        self.library_namespaces.insert(ns_name.to_string(), lib_name.to_string());
+                                                    }
+                                                }
+                                                
+                                                // 直接将库函数注册为全局函数，这样可以直接调用
+                                                self.library_functions.insert(func_name.to_string(), (lib_name.clone(), func_name.to_string()));
+                                            }
+                                            
+                                            // 成功找到替代库名称，不需要继续尝试
+                                            return ExecutionResult::None;
+                                        },
+                                        Err(_) => {
+                                            // 继续尝试下一个名称
+                                        }
+                                    }
+                                }
+                                
+                                // 所有尝试都失败了，报告错误
+                                panic!("无法加载库 '{}': {}。尝试了替代名称但均失败。", lib_name, err);
+                            }
+                        }
                     }
                 }
                 
@@ -866,20 +1048,129 @@ impl<'a> Executor for Interpreter<'a> {
                     arg_values.push(self.evaluate_expression(&arg));
                 }
                 
-                // 特殊处理std命名空间
+                // 对于库命名空间函数，先检查是否是已导入的库
+                if let Some(lib_functions) = self.imported_libraries.get(&path[0]) {
+                    // 检查是否是两级以上的路径 (例如 io::std::println)
+                    if path.len() >= 3 && path[1] == "std" {
+                        // 这是类似 io::std::println 这样的库函数调用
+                        let func_name = &path[2]; // 取出真正的函数名
+                        debug_println(&format!("检查库 '{}' 中的 std 命名空间是否有函数 '{}'", path[0], func_name));
+                        
+                        // 构建完整的函数名称（库中的命名空间格式通常是 std::函数名）
+                        let full_func_name = format!("std::{}", func_name);
+                        
+                        if let Some(func) = lib_functions.get(&full_func_name) {
+                            // 使用新函数将参数转换为字符串
+                            let string_args = convert_values_to_string_args(&arg_values);
+                            
+                            // 调用库函数
+                            let result = func(string_args);
+                            debug_println(&format!("库函数调用成功: {}::{} -> {}", path[0], full_func_name, result));
+                            return ExecutionResult::None;
+                        } else if let Some(func) = lib_functions.get(func_name) {
+                            // 尝试直接以函数名查找
+                            let string_args = convert_values_to_string_args(&arg_values);
+                            let result = func(string_args);
+                            debug_println(&format!("库函数调用成功: {}::{} -> {}", path[0], func_name, result));
+                            return ExecutionResult::None;
+                        } else {
+                            // 尝试以省略std命名空间的方式查找
+                            // 有些库可能直接注册了函数，没有使用std命名空间
+                            let simplified_func_name = format!("cn_{}", func_name);
+                            if let Some(func) = lib_functions.get(&simplified_func_name) {
+                                let string_args = convert_values_to_string_args(&arg_values);
+                                let result = func(string_args);
+                                debug_println(&format!("库函数调用成功(cn_前缀): {}::{} -> {}", path[0], simplified_func_name, result));
+                                return ExecutionResult::None;
+                            }
+
+                            panic!("库 '{}' 中未找到函数 'std::{}' 或 '{}'", path[0], func_name, func_name);
+                        }
+                    } else if path.len() >= 2 {
+                        // 这是类似 io::print 这样的库函数调用
+                        let func_name = &path[1]; // 取出函数名
+                        debug_println(&format!("检查库 '{}' 中是否有函数 '{}'", path[0], func_name));
+                        
+                        // 尝试不同的函数名格式
+                        let variants = [
+                            func_name.to_string(),               // 原始函数名
+                            format!("cn_{}", func_name),         // cn_前缀（常见约定）
+                            format!("std::{}", func_name),       // std命名空间（常见约定）
+                        ];
+                        
+                        for variant in &variants {
+                            if let Some(func) = lib_functions.get(variant) {
+                                // 使用新函数将参数转换为字符串
+                                let string_args = convert_values_to_string_args(&arg_values);
+                                
+                                // 调用库函数
+                                let result = func(string_args);
+                                debug_println(&format!("库函数调用成功(变体{}): {}::{} -> {}", variant, path[0], variant, result));
+                                return ExecutionResult::None;
+                            }
+                        }
+                        
+                        panic!("库 '{}' 中未找到函数 '{}' 或其变体", path[0], func_name);
+                    }
+                }
+                
+                // 特殊处理std命名空间 (旧代码保留向后兼容)
                 if path[0] == "std" {
                     let func_name = &path[1];
                     debug_println(&format!("处理std命名空间函数: {}", func_name));
                     
                     // 将参数转换为字符串
-                    let string_args: Vec<String> = arg_values.iter().map(|v| v.to_string()).collect();
+                    let string_args = convert_values_to_string_args(&arg_values);
+                    
+                    // 检查是否有库明确注册了std命名空间
+                    if let Some(lib_name) = self.library_namespaces.get("std") {
+                        debug_println(&format!("找到注册了std命名空间的库: {}", lib_name));
+                        
+                        // 构建完整的函数名
+                        let full_func_name = format!("std::{}", func_name);
+                        
+                        // 尝试调用库函数
+                        match call_library_function(lib_name, &full_func_name, string_args.clone()) {
+                            Ok(result) => {
+                                debug_println(&format!("库函数调用成功: {}::{} -> {}", lib_name, full_func_name, result));
+                                return ExecutionResult::None;
+                            },
+                            Err(err) => {
+                                debug_println(&format!("调用库函数失败: {}", err));
+                                // 继续尝试其他方式
+                            }
+                        }
+                    }
                     
                     // 尝试在所有库中查找该函数
                     for (lib_name, lib_functions) in &self.imported_libraries {
+                        // 先尝试完整的命名空间函数名 (std::func_name)
+                        let full_func_name = format!("std::{}", func_name);
+                        debug_println(&format!("尝试在库 '{}' 中查找函数 '{}'", lib_name, full_func_name));
+                        
+                        if let Some(func) = lib_functions.get(&full_func_name) {
+                            debug_println(&format!("在库 '{}' 中找到函数 '{}' (完整路径)", lib_name, full_func_name));
+                            let result = func(string_args.clone());
+                            debug_println(&format!("库函数调用成功: {}::{} -> {}", lib_name, full_func_name, result));
+                            return ExecutionResult::None;
+                        }
+                        
+                        // 再尝试直接函数名
+                        debug_println(&format!("尝试在库 '{}' 中查找函数 '{}'", lib_name, func_name));
                         if let Some(func) = lib_functions.get(func_name) {
                             debug_println(&format!("在库 '{}' 中找到函数 '{}'", lib_name, func_name));
                             let result = func(string_args.clone());
                             debug_println(&format!("库函数调用成功: {}::{} -> {}", lib_name, func_name, result));
+                            return ExecutionResult::None;
+                        }
+                        
+                        // 尝试cn_前缀的函数名
+                        let cn_func_name = format!("cn_{}", func_name);
+                        debug_println(&format!("尝试在库 '{}' 中查找函数 '{}'", lib_name, cn_func_name));
+                        if let Some(func) = lib_functions.get(&cn_func_name) {
+                            debug_println(&format!("在库 '{}' 中找到函数 '{}' (cn_前缀)", lib_name, cn_func_name));
+                            let result = func(string_args.clone());
+                            debug_println(&format!("库函数调用成功: {}::{} -> {}", lib_name, cn_func_name, result));
                             return ExecutionResult::None;
                         }
                     }
@@ -889,71 +1180,81 @@ impl<'a> Executor for Interpreter<'a> {
                         debug_println(&format!("在库函数映射中找到: {} -> {}::{}", func_name, lib_name, lib_func_name));
                         
                         // 调用库函数
-                        match call_library_function(lib_name, lib_func_name, string_args) {
+                        match call_library_function(lib_name, lib_func_name, string_args.clone()) {
                             Ok(result) => {
                                 debug_println(&format!("库函数调用成功: {}::{} -> {}", lib_name, lib_func_name, result));
                                 return ExecutionResult::None;
                             },
                             Err(err) => {
-                                panic!("调用库函数 {}::{} 失败: {}", lib_name, lib_func_name, err);
+                                debug_println(&format!("调用库函数 {}::{} 失败: {}", lib_name, lib_func_name, err));
+                                // 尝试调用cn_前缀的函数
+                                let cn_func_name = format!("cn_{}", func_name);
+                                match call_library_function(lib_name, &cn_func_name, string_args.clone()) {
+                                    Ok(result) => {
+                                        debug_println(&format!("库函数调用成功(cn_前缀): {}::{} -> {}", lib_name, cn_func_name, result));
+                                        return ExecutionResult::None;
+                                    },
+                                    Err(_) => {}
+                                }
                             }
                         }
                     }
                     
-                    panic!("未找到std命名空间函数: {}", func_name);
-                }
-                
-                // 对于非std命名空间，先检查是否是库
-                if let Some(lib_functions) = self.imported_libraries.get(&path[0]) {
-                    // 是库函数调用
-                    let func_name = &path[1];
-                    debug_println(&format!("检查库 '{}' 中是否有函数 '{}'", path[0], func_name));
-                    
-                    if let Some(func) = lib_functions.get(func_name) {
-                        // 将参数转换为字符串
-                        let string_args: Vec<String> = arg_values.iter().map(|v| v.to_string()).collect();
-                        
-                        // 调用库函数
-                        let result = func(string_args);
-                        debug_println(&format!("库函数调用成功: {}::{} -> {}", path[0], func_name, result));
-                    } else {
-                        panic!("库 '{}' 中未找到函数 '{}'", path[0], func_name);
-                    }
-                } else {
-                    // 尝试作为普通命名空间函数调用
-                    debug_println(&format!("尝试作为普通命名空间函数调用: {}", full_path));
-                    
-                    // 直接查找完整路径函数
-                    if let Some(function) = self.namespaced_functions.get(&full_path) {
-                        // 调用命名空间函数
-                        debug_println(&format!("找到并调用命名空间函数: {}", full_path));
-                        self.call_function_impl(function, arg_values);
-                        return ExecutionResult::None;
-                    }
-                    
-                    // 如果是嵌套命名空间函数调用，需要特殊处理
-                    if path.len() > 2 {
-                        // 构建嵌套命名空间的完整路径
-                        let nested_path = path.join("::");
-                        debug_println(&format!("尝试调用嵌套命名空间函数: {}", nested_path));
-                        
-                        // 查找嵌套命名空间函数
-                        if let Some(function) = self.namespaced_functions.get(&nested_path) {
-                            debug_println(&format!("找到并调用嵌套命名空间函数: {}", nested_path));
-                            self.call_function_impl(function, arg_values);
+                    // 最后，尝试在io库中查找std命名空间函数
+                    debug_println("尝试在io库中查找std命名空间函数");
+                    let full_func_name = format!("std::{}", func_name);
+                    match call_library_function("io", &full_func_name, string_args.clone()) {
+                        Ok(result) => {
+                            debug_println(&format!("库函数调用成功: io::{} -> {}", full_func_name, result));
                             return ExecutionResult::None;
+                        },
+                        Err(_) => {
+                            // 尝试调用cn_前缀的函数
+                            let cn_func_name = format!("cn_{}", func_name);
+                            match call_library_function("io", &cn_func_name, string_args.clone()) {
+                                Ok(result) => {
+                                    debug_println(&format!("库函数调用成功(cn_前缀): io::{} -> {}", cn_func_name, result));
+                                    return ExecutionResult::None;
+                                },
+                                Err(_) => {
+                                    panic!("未找到std命名空间函数: {}", func_name);
+                                }
+                            }
                         }
                     }
-                    
-                    panic!("未找到命名空间函数: {}", full_path);
                 }
                 
-                ExecutionResult::None
+                // 尝试作为普通命名空间函数调用
+                debug_println(&format!("尝试作为普通命名空间函数调用: {}", full_path));
+                
+                // 直接查找完整路径函数
+                if let Some(function) = self.namespaced_functions.get(&full_path) {
+                    // 调用命名空间函数
+                    debug_println(&format!("找到并调用命名空间函数: {}", full_path));
+                    self.call_function_impl(function, arg_values);
+                    return ExecutionResult::None;
+                }
+                
+                // 如果是嵌套命名空间函数调用，需要特殊处理
+                if path.len() > 2 {
+                    // 构建嵌套命名空间的完整路径
+                    let nested_path = path.join("::");
+                    debug_println(&format!("尝试调用嵌套命名空间函数: {}", nested_path));
+                    
+                    // 查找嵌套命名空间函数
+                    if let Some(function) = self.namespaced_functions.get(&nested_path) {
+                        debug_println(&format!("找到并调用嵌套命名空间函数: {}", nested_path));
+                        self.call_function_impl(function, arg_values);
+                            return ExecutionResult::None;
+                    }
+                }
+                
+                panic!("未找到命名空间函数: {}", full_path);
             },
             Statement::LibraryFunctionCallStatement(lib_name, func_name, args) => {
                 // 库函数调用语句
                 debug_println(&format!("库函数调用语句: {}::{}", lib_name, func_name));
-
+                
                 // 计算参数值
                 let mut arg_values = Vec::new();
                 for arg in args {

@@ -318,42 +318,42 @@ impl<'a> ExpressionParser for ParserBase<'a> {
                             Ok(Expression::LibraryFunctionCall(lib_name, func_name, args))
                         } else {
                             // 命名空间函数调用
-                            let mut path = Vec::new();
-                            path.push(name); // 第一个命名空间名
-                            path.push(func_name); // 第二个部分（可能是函数名或下一级命名空间）
+                            debug_println(&format!("识别为命名空间函数调用: {}::{}", name, func_name));
                             
-                            // 解析命名空间路径
+                            // 构建命名空间路径
+                            let mut path = Vec::new();
+                            path.push(name);
+                            path.push(func_name);
+                            
+                            // 检查是否有更多的命名空间层级
                             while self.peek() == Some(&"::".to_string()) {
                                 self.consume(); // 消费 "::"
-                                if let Some(name) = self.consume() {
-                                    path.push(name);
-                                } else {
-                                    return Err("期望标识符".to_string());
+                                let next_name = self.consume().ok_or_else(|| "期望命名空间或函数名".to_string())?;
+                                path.push(next_name);
+                            }
+                            
+                            // 期望 "("
+                            self.expect("(")?;
+                            
+                            let mut args = Vec::new();
+                            
+                            if self.peek() != Some(&")".to_string()) {
+                                // 解析参数列表
+                                loop {
+                                    let arg = self.parse_expression()?;
+                                    args.push(arg);
+                                    
+                                    if self.peek() != Some(&",".to_string()) {
+                                        break;
+                                    }
+                                    
+                                    self.consume(); // 消费 ","
                                 }
                             }
                             
-                            // 最后一个是函数名
-                            if self.peek() == Some(&"(".to_string()) {
-                                self.consume(); // 消费 "("
-                                
-                                // 解析函数调用参数
-                                let mut args = Vec::new();
-                                if self.peek() != Some(&")".to_string()) {
-                                    // 至少有一个参数
-                                    args.push(self.parse_expression()?);
-                                    
-                                    // 解析剩余参数
-                                    while self.peek() == Some(&",".to_string()) {
-                                        self.consume(); // 消费逗号
-                                        args.push(self.parse_expression()?);
-                                    }
-                                }
-                                
-                                self.expect(")")?;
-                                Ok(Expression::NamespacedFunctionCall(path, args))
-                            } else {
-                                Err("期望 '('".to_string())
-                            }
+                            self.expect(")")?;
+                            
+                            Ok(Expression::NamespacedFunctionCall(path, args))
                         }
                     } else if self.peek() == Some(&"++".to_string()) {
                         // 后置自增

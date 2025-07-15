@@ -184,8 +184,47 @@ fn parse_program_collect_all_errors(parser: &mut ParserBase, errors: &mut Vec<St
                 }
                 
                 try_next_item = true;
+            } else if parser.peek() == Some(&"ns".to_string()) || parser.peek() == Some(&"namespace".to_string()) {
+                parser.consume(); // 消费 "ns" 或 "namespace"
+                
+                // 解析命名空间路径
+                let mut path = Vec::new();
+                
+                // 获取第一个命名空间名称
+                match parser.consume() {
+                    Some(name) => path.push(name),
+                    None => {
+                        errors.push("期望命名空间名".to_string());
+                        skip_to_next_top_level_item(parser);
+                        try_next_item = parser.position < parser.tokens.len();
+                        continue;
+                    }
+                }
+                
+                // 解析嵌套命名空间路径
+                while parser.peek() == Some(&"::".to_string()) {
+                    parser.consume(); // 消费 "::"
+                    
+                    match parser.consume() {
+                        Some(name) => path.push(name),
+                        None => {
+                            errors.push("期望命名空间名".to_string());
+                            break;
+                        }
+                    }
+                }
+                
+                // 期望 ";" 符号
+                if let Err(e) = parser.expect(";") {
+                    errors.push(e);
+                    skip_to_next_top_level_item(parser);
+                    try_next_item = parser.position < parser.tokens.len();
+                    continue;
+                }
+                
+                try_next_item = true;
             } else {
-                errors.push(format!("期望 'lib', 'lib_once' 或 'file', 但得到了 {:?} (位置: {})", parser.peek(), parser.position));
+                errors.push(format!("期望 'lib', 'lib_once', 'file', 'ns' 或 'namespace', 但得到了 {:?} (位置: {})", parser.peek(), parser.position));
                 skip_to_next_top_level_item(parser);
                 try_next_item = parser.position < parser.tokens.len();
             }
@@ -199,12 +238,26 @@ fn parse_program_collect_all_errors(parser: &mut ParserBase, errors: &mut Vec<St
 
 // 跳过当前项，找到下一个顶层项（函数、命名空间或导入）的开始
 fn skip_to_next_top_level_item(parser: &mut ParserBase) {
+    let mut brace_count = 0;
+    
     while parser.position < parser.tokens.len() {
         if let Some(token) = parser.peek() {
-            if token == "fn" || token == "ns" || token == "using" {
+            if brace_count == 0 && (token == "fn" || token == "ns" || token == "using") {
+                // 找到下一个顶层项
                 return;
+            } else if token == "{" {
+                brace_count += 1;
+                parser.consume();
+            } else if token == "}" {
+                if brace_count > 0 {
+                    brace_count -= 1;
+                }
+                parser.consume();
+            } else {
+                parser.consume();
             }
-            parser.consume();
+        } else {
+            break;
         }
     }
 }
@@ -287,7 +340,12 @@ fn parse_namespace_collect_errors(parser: &mut ParserBase, errors: &mut Vec<Stri
         println!("命名空间 {} 解析成功", name);
     }
     
-    Ok(Namespace { name, functions, namespaces })
+    Ok(Namespace { 
+        name, 
+        ns_type: crate::ast::NamespaceType::Code, // 设置为代码命名空间类型
+        functions, 
+        namespaces 
+    })
 }
 
 // 跳过命名空间内的当前项，找到下一个成员（函数或嵌套命名空间）的开始
@@ -497,12 +555,14 @@ fn skip_to_next_statement_or_end(parser: &mut ParserBase) {
 fn parse_program(parser: &mut ParserBase) -> Result<Program, String> {
     let mut functions = Vec::new();
     let mut namespaces = Vec::new();
-    let mut library_imports = Vec::new();
+    let mut imported_namespaces = Vec::new();
     let mut file_imports = Vec::new();
     
     while parser.position < parser.tokens.len() {
         if parser.peek() == Some(&"ns".to_string()) {
-            namespaces.push(parse_namespace(parser)?);
+            let mut namespace = parse_namespace(parser)?;
+            namespace.ns_type = crate::ast::NamespaceType::Code; // 设置为代码命名空间
+            namespaces.push(namespace);
         } else if parser.peek() == Some(&"fn".to_string()) {
             functions.push(parse_function(parser)?);
         } else if parser.peek() == Some(&"using".to_string()) {
@@ -510,7 +570,7 @@ fn parse_program(parser: &mut ParserBase) -> Result<Program, String> {
             parser.consume(); // 消费 "using"
             
             if parser.peek() == Some(&"lib_once".to_string()) || parser.peek() == Some(&"lib".to_string()) {
-                let lib_keyword = parser.consume().unwrap(); // 消费 "lib_once" 或 "lib"
+                let _lib_keyword = parser.consume().unwrap(); // 消费 "lib_once" 或 "lib"
                 
                 // 期望 "<" 符号
                 parser.expect("<")?;
@@ -524,8 +584,8 @@ fn parse_program(parser: &mut ParserBase) -> Result<Program, String> {
                 // 期望 ";" 符号
                 parser.expect(";")?;
                 
-                // 添加到库导入列表
-                library_imports.push(lib_name);
+                // 添加到命名空间导入列表，使用Library类型
+                imported_namespaces.push((crate::ast::NamespaceType::Library, vec![lib_name]));
             } else if parser.peek() == Some(&"file".to_string()) {
                 // 解析文件导入
                 parser.consume(); // 消费 "file"
@@ -548,15 +608,26 @@ fn parse_program(parser: &mut ParserBase) -> Result<Program, String> {
                 // 添加到文件导入列表
                 file_imports.push(file_path);
             } else if parser.peek() == Some(&"ns".to_string()) || parser.peek() == Some(&"namespace".to_string()) {
-                // 解析命名空间导入，但在顶层不做任何处理，因为命名空间导入只在函数内部有效
+                // 解析命名空间导入
                 parser.consume(); // 消费 "ns" 或 "namespace"
                 
                 // 解析命名空间路径
-                while parser.peek().is_some() && parser.peek() != Some(&";".to_string()) {
-                    parser.consume();
+                let mut path = Vec::new();
+                let first_name = parser.consume().ok_or_else(|| "期望命名空间名".to_string())?;
+                path.push(first_name);
+                
+                // 解析嵌套命名空间路径
+                while parser.peek() == Some(&"::".to_string()) {
+                    parser.consume(); // 消费 "::"
+                    let name = parser.consume().ok_or_else(|| "期望命名空间名".to_string())?;
+                    path.push(name);
                 }
                 
+                // 期望 ";" 符号
                 parser.expect(";")?;
+                
+                // 添加到命名空间导入列表，使用Code类型
+                imported_namespaces.push((crate::ast::NamespaceType::Code, path));
             } else {
                 return Err("期望 'lib_once'、'lib'、'file'、'ns' 或 'namespace' 关键字".to_string());
             }
@@ -568,7 +639,7 @@ fn parse_program(parser: &mut ParserBase) -> Result<Program, String> {
     Ok(Program { 
         functions, 
         namespaces,
-        library_imports,
+        imported_namespaces,
         file_imports,
     })
 }
@@ -601,7 +672,9 @@ fn parse_namespace(parser: &mut ParserBase) -> Result<Namespace, String> {
         } else if token == "fn" {
             functions.push(parse_function(parser)?);
         } else if token == "ns" {
-            namespaces.push(parse_namespace(parser)?);
+            let mut sub_namespace = parse_namespace(parser)?;
+            sub_namespace.ns_type = crate::ast::NamespaceType::Code; // 设置为代码命名空间
+            namespaces.push(sub_namespace);
         } else {
             return Err(format!("期望 'fn', 'ns' 或 '}}', 但得到了 '{}' (位置: {})", 
                 token, parser.position));
@@ -626,7 +699,13 @@ fn parse_namespace(parser: &mut ParserBase) -> Result<Namespace, String> {
         println!("命名空间 {} 解析成功", name);
     }
     
-    Ok(Namespace { name, functions, namespaces })
+    // 创建命名空间，ns_type默认为Code，将在调用处设置
+    Ok(Namespace { 
+        name, 
+        ns_type: crate::ast::NamespaceType::Code, // 默认为代码命名空间
+        functions, 
+        namespaces 
+    })
 }
 
 fn parse_function(parser: &mut ParserBase) -> Result<Function, String> {

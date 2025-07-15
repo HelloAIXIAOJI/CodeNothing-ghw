@@ -1,4 +1,5 @@
 use std::fs;
+use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::collections::HashSet;
 use std::env;
@@ -91,7 +92,7 @@ impl FilePreprocessor {
         self.processed_files.insert(canonical_path);
         
         // 读取文件内容
-        let content = fs::read_to_string(&resolved_path)
+        let content = read_file_with_encoding_detection(&resolved_path)
             .map_err(|e| format!("无法读取文件 '{}': {}", resolved_path.display(), e))?;
         
         debug_println(&format!("成功读取文件: {}", resolved_path.display()));
@@ -133,6 +134,34 @@ impl FilePreprocessor {
     }
 }
 
+// 添加处理文件编码的函数
+fn read_file_with_encoding_detection(path: &Path) -> Result<String, String> {
+    // 首先读取文件的二进制数据
+    let mut file = fs::File::open(path)
+        .map_err(|e| format!("无法打开文件: {}", e))?;
+    
+    let mut buffer = Vec::new();
+    file.read_to_end(&mut buffer)
+        .map_err(|e| format!("读取文件失败: {}", e))?;
+    
+    // 检测并移除BOM标记
+    if buffer.starts_with(&[0xEF, 0xBB, 0xBF]) {
+        // UTF-8 BOM
+        debug_println("检测到UTF-8 BOM标记，将移除");
+        buffer = buffer[3..].to_vec();
+    } else if buffer.starts_with(&[0xFE, 0xFF]) || buffer.starts_with(&[0xFF, 0xFE]) {
+        // UTF-16 BOM (BE or LE)
+        return Err("不支持UTF-16编码的文件".to_string());
+    } else if buffer.starts_with(&[0x00, 0x00, 0xFE, 0xFF]) || buffer.starts_with(&[0xFF, 0xFE, 0x00, 0x00]) {
+        // UTF-32 BOM (BE or LE)
+        return Err("不支持UTF-32编码的文件".to_string());
+    }
+    
+    // 尝试将二进制数据转换为UTF-8字符串
+    String::from_utf8(buffer)
+        .map_err(|_| "文件编码不是有效的UTF-8".to_string())
+}
+
 fn main() {
     let args: Vec<String> = std::env::args().collect();
     
@@ -144,6 +173,17 @@ fn main() {
     let file_path = &args[1];
     let debug_parser = args.iter().any(|arg| arg == "--cn-parser");
     let debug_lexer = args.iter().any(|arg| arg == "--cn-lexer");
+    let debug_mode = args.iter().any(|arg| arg == "--cn-debug");
+    
+    // 如果是调试模式，先调试io库中的函数
+    if debug_mode {
+        match interpreter::library_loader::debug_library_functions("io") {
+            Ok(_) => {},
+            Err(err) => {
+                println!("调试io库函数失败: {}", err);
+            }
+        }
+    }
     
     // 创建文件预处理器
     let mut preprocessor = FilePreprocessor::new();
