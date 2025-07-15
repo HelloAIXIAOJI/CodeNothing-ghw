@@ -409,7 +409,7 @@ impl<'a> Evaluator for Interpreter<'a> {
                     }
                     
                     if !found {
-                    panic!("未定义的函数: {}", name);
+                        panic!("未定义的函数: {}", name);
                     }
                     
                     // 这里不会执行到，只是为了编译通过
@@ -751,7 +751,7 @@ impl<'a> Evaluator for Interpreter<'a> {
         
         // 查找函数
         if let Some(function) = self.functions.get(function_name) {
-                    return self.call_function_impl(function, args);
+            return self.call_function_impl(function, args);
         }
         
         // 尝试查找命名空间函数
@@ -1214,20 +1214,20 @@ impl<'a> Interpreter<'a> {
             if !is_continue {
                 break;
             }
-                    
-                    // 执行循环体
+            
+            // 执行循环体
             for stmt in body {
-                        match self.execute_statement(stmt.clone()) {
-                            ExecutionResult::None => {},
-                            ExecutionResult::Return(value) => return ExecutionResult::Return(value),
+                match self.execute_statement(stmt.clone()) {
+                    ExecutionResult::None => {},
+                    ExecutionResult::Return(value) => return ExecutionResult::Return(value),
                     ExecutionResult::Break => return ExecutionResult::None, // 跳出循环
-                            ExecutionResult::Continue => break, // 跳过当前迭代的剩余语句，继续下一次迭代
+                    ExecutionResult::Continue => break, // 跳过当前迭代的剩余语句，继续下一次迭代
                     ExecutionResult::Error(err) => return ExecutionResult::Error(err),
-                        }
-                    }
                 }
-                
-                ExecutionResult::None
+            }
+        }
+        
+        ExecutionResult::None
     }
     
     fn execute_for_loop(&mut self, var_name: &str, start: &Expression, end: &Expression, body: &[Statement]) -> ExecutionResult {
@@ -1248,14 +1248,14 @@ impl<'a> Interpreter<'a> {
         for i in start_int..=end_int {
             // 更新循环变量
             self.local_env.insert(var_name.to_string(), Value::Int(i));
-                    
-                    // 执行循环体
+            
+            // 执行循环体
             for stmt in body {
-                        match self.execute_statement(stmt.clone()) {
-                            ExecutionResult::None => {},
-                            ExecutionResult::Return(value) => return ExecutionResult::Return(value),
+                match self.execute_statement(stmt.clone()) {
+                    ExecutionResult::None => {},
+                    ExecutionResult::Return(value) => return ExecutionResult::Return(value),
                     ExecutionResult::Break => return ExecutionResult::None, // 跳出循环
-                            ExecutionResult::Continue => break, // 跳过当前迭代的剩余语句，继续下一次迭代
+                    ExecutionResult::Continue => break, // 跳过当前迭代的剩余语句，继续下一次迭代
                     ExecutionResult::Error(err) => return ExecutionResult::Error(err),
                 }
             }
@@ -1264,7 +1264,7 @@ impl<'a> Interpreter<'a> {
         // 移除循环变量
         self.local_env.remove(var_name);
         
-                ExecutionResult::None
+        ExecutionResult::None
     }
     
     // 添加错误处理辅助方法
