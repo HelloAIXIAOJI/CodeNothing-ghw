@@ -1,0 +1,42 @@
+// 测试错误报告系统
+// 这个文件包含多个语法错误
+
+// 错误1：缺少函数参数类型
+fn test1(x) : int {
+    return x + 1;
+};
+
+// 错误2：缺少分号
+fn test2() : int {
+    return 42
+};
+
+// 错误3：缺少右大括号
+fn test3() : int {
+    return 10;
+
+// 错误4：错误的关键字
+funk test4() : int {
+    return 5;
+};
+
+// 错误5：重复参数名
+fn test5(x: int, x: int) : int {
+    return x + x;
+};
+
+// 错误6：缺少函数返回类型
+fn test6() {
+    return 100;
+};
+
+// 主函数包含错误的函数调用
+fn main() : int {
+    // 错误7：错误的函数调用语法
+    test1(10 20);
+    
+    // 错误8：错误的变量声明
+    let y = 5;
+    
+    return 0;
+}; 

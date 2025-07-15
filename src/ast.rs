@@ -110,6 +110,6 @@ pub struct Namespace {
 pub struct Program {
     pub functions: Vec<Function>,
     pub namespaces: Vec<Namespace>, // 顶层命名空间
-    pub library_imports: Vec<String>, // 顶层库导入
+    pub library_imports: Vec<(String, bool)>, // 顶层库导入，包含库名和是否为lib_once的标志
     pub file_imports: Vec<String>,   // 顶层文件导入
 } 
