@@ -10,7 +10,9 @@ $libraries = @(
     "library_os",
     "library_time",
     "library_http",
+    "library_fs",
     "library_json"
+
 )
 
 # create the target directory for release
