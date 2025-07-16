@@ -73,6 +73,7 @@ pub enum LogicalOperator {
 pub enum Statement {
     Return(Expression),
     VariableDeclaration(String, Type, Expression),
+    ConstantDeclaration(String, Type, Expression), // 新增：常量声明
     VariableAssignment(String, Expression),
     Increment(String), // 后置自增语句 (var++)
     Decrement(String), // 后置自减语句 (var--)
@@ -121,4 +122,5 @@ pub struct Program {
     pub namespaces: Vec<Namespace>, // 顶层命名空间
     pub imported_namespaces: Vec<(NamespaceType, Vec<String>)>, // 统一的导入记录
     pub file_imports: Vec<String>,   // 顶层文件导入
+    pub constants: Vec<(String, Type, Expression)>, // 新增：顶层常量定义
 } 
