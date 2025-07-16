@@ -75,6 +75,37 @@ impl<'a> StatementParser for ParserBase<'a> {
                 self.expect(";")?;
                 Ok(Statement::PreDecrement(var_name))
             },
+                "const" => {
+                    // 解析常量声明
+                    self.consume(); // 消费 "const"
+                    
+                    // 获取常量名
+                    let const_name = self.consume().ok_or_else(|| "期望常量名".to_string())?;
+                    
+                    self.expect(":")?;
+                    
+                    // 解析类型
+                    let type_name = self.consume().ok_or_else(|| "期望类型名".to_string())?;
+                    
+                    // 转换为内部类型
+                    let const_type = match type_name.as_str() {
+                        "int" => crate::ast::Type::Int,
+                        "float" => crate::ast::Type::Float,
+                        "bool" => crate::ast::Type::Bool,
+                        "string" => crate::ast::Type::String,
+                        "long" => crate::ast::Type::Long,
+                        _ => return Err(format!("不支持的常量类型: {}", type_name))
+                    };
+                    
+                    self.expect("=")?;
+                    
+                    // 解析初始值表达式
+                    let init_expr = self.parse_expression()?;
+                    
+                    self.expect(";")?;
+                    
+                    Ok(Statement::ConstantDeclaration(const_name, const_type, init_expr))
+                },
                 _ => {
                 // 检查是否是变量声明、赋值或函数调用
                 let var_name = self.consume().unwrap();
