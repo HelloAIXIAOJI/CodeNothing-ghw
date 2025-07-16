@@ -1,165 +1,104 @@
-use std::fs;
+use std::env;
+use std::fs::File;
 use std::io::Read;
 use std::path::{Path, PathBuf};
-use std::collections::HashSet;
-use std::env;
+use std::collections::HashMap;
 
-mod parser;
 mod ast;
+mod parser;
 mod interpreter;
 
-// 添加调试模式检查函数
-fn is_debug_mode() -> bool {
-    env::args().any(|arg| arg == "--cn-debug")
-}
-
-// 添加条件打印函数
-fn debug_println(msg: &str) {
-    if is_debug_mode() {
-        println!("{}", msg);
-    }
-}
+use ast::Program;
+use interpreter::value::Value;
 
 // 文件预处理器，处理文件导入
 struct FilePreprocessor {
-    // 已处理的文件路径集合，用于检测循环依赖
-    processed_files: HashSet<PathBuf>,
-    // 当前工作目录，用于解析相对路径
-    current_dir: PathBuf,
+    processed_files: HashMap<String, String>,
+    file_stack: Vec<String>,
 }
 
 impl FilePreprocessor {
     fn new() -> Self {
-        let current_dir = env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-        Self {
-            processed_files: HashSet::new(),
-            current_dir,
+        FilePreprocessor {
+            processed_files: HashMap::new(),
+            file_stack: Vec::new(),
         }
     }
     
-    // 解析文件路径（支持相对路径）
-    fn resolve_path(&self, file_path: &str, base_dir: Option<&Path>) -> PathBuf {
-        let path = Path::new(file_path);
+    // 处理文件，包括导入处理
+    fn process_file(&mut self, file_path: &str, current_dir: Option<&Path>) -> Result<String, String> {
+        // 规范化文件路径
+        let full_path = if Path::new(file_path).is_absolute() {
+            PathBuf::from(file_path)
+        } else if let Some(dir) = current_dir {
+            dir.join(file_path)
+        } else {
+            PathBuf::from(file_path)
+        };
         
-        // 如果是绝对路径，直接返回
-        if path.is_absolute() {
-            return path.to_path_buf();
+        let canonical_path = match full_path.canonicalize() {
+            Ok(path) => path,
+            Err(_) => return Err(format!("无法找到文件: {}", file_path)),
+        };
+        
+        let canonical_path_str = canonical_path.to_string_lossy().to_string();
+        
+        // 检查是否已处理过该文件
+        if let Some(content) = self.processed_files.get(&canonical_path_str) {
+            return Ok(content.clone());
         }
         
-        // 如果是相对路径，先尝试相对于基目录解析
-        if let Some(base) = base_dir {
-            let resolved = base.join(path);
-            if resolved.exists() {
-                return resolved;
-            }
+        // 检查循环导入
+        if self.file_stack.contains(&canonical_path_str) {
+            return Err(format!("检测到循环导入: {}", file_path));
         }
-        
-        // 如果是examples目录下的文件，尝试从examples目录解析
-        let examples_path = self.current_dir.join("examples").join(file_path);
-        if examples_path.exists() {
-            return examples_path;
-        }
-        
-        // 最后尝试相对于当前工作目录解析
-        self.current_dir.join(path)
-    }
-    
-    // 处理文件，提取并处理所有导入语句
-    fn process_file(&mut self, file_path: &str, base_dir: Option<&Path>) -> Result<String, String> {
-        // 解析文件路径
-        let resolved_path = self.resolve_path(file_path, base_dir);
-        
-        debug_println(&format!("处理文件: {}", resolved_path.display()));
-        
-        // 检查文件是否存在
-        if !resolved_path.exists() {
-            return Err(format!("文件不存在: {}", resolved_path.display()));
-        }
-        
-        // 获取文件所在目录，用于后续导入相对路径
-        let file_dir = resolved_path.parent();
-        
-        // 检查循环依赖
-        let canonical_path = resolved_path.canonicalize()
-            .map_err(|e| format!("无法获取文件 '{}' 的规范路径: {}", resolved_path.display(), e))?;
-        
-        if self.processed_files.contains(&canonical_path) {
-            // 文件已经处理过，检测到循环依赖
-            return Err(format!("检测到循环依赖: 文件 '{}' 已经被导入", resolved_path.display()));
-        }
-        
-        // 添加到已处理文件集合
-        self.processed_files.insert(canonical_path);
         
         // 读取文件内容
-        let content = read_file_with_encoding_detection(&resolved_path)
-            .map_err(|e| format!("无法读取文件 '{}': {}", resolved_path.display(), e))?;
+        let content = read_file(&canonical_path_str)?;
         
-        debug_println(&format!("成功读取文件: {}", resolved_path.display()));
+        // 将当前文件添加到处理栈中
+        self.file_stack.push(canonical_path_str.clone());
         
-        // 处理文件内容，提取导入语句
-        let mut processed_content = String::new();
-        let mut lines = content.lines();
+        // 处理文件内容
+        let processed_content = content;
         
-        while let Some(line) = lines.next() {
-            // 检查是否是文件导入语句
-            if line.trim().starts_with("using file") {
-                // 提取文件路径
-                let start = line.find('"');
-                let end = line.rfind('"');
-                
-                if let (Some(start), Some(end)) = (start, end) {
-                    let imported_file = &line[start + 1..end];
-                    
-                    // 递归处理导入的文件
-                    match self.process_file(imported_file, file_dir) {
-                        Ok(imported_content) => {
-                            // 添加导入的文件内容
-                            processed_content.push_str(&imported_content);
-                            processed_content.push_str("\n");
-                        },
-                        Err(err) => {
-                            return Err(format!("处理导入文件 '{}' 时出错: {}", imported_file, err));
-                        }
-                    }
-                }
-            } else {
-                // 保留非导入语句
-                processed_content.push_str(line);
-                processed_content.push_str("\n");
-            }
-        }
+        // 将处理结果存储到缓存中
+        self.processed_files.insert(canonical_path_str.clone(), processed_content.clone());
+        
+        // 从处理栈中移除当前文件
+        self.file_stack.pop();
         
         Ok(processed_content)
     }
 }
 
-// 添加处理文件编码的函数
-fn read_file_with_encoding_detection(path: &Path) -> Result<String, String> {
-    // 首先读取文件的二进制数据
-    let mut file = fs::File::open(path)
-        .map_err(|e| format!("无法打开文件: {}", e))?;
+// 读取文件内容
+fn read_file(file_path: &str) -> Result<String, String> {
+    let mut file = File::open(file_path)
+        .map_err(|err| format!("无法打开文件: {}", err))?;
     
-    let mut buffer = Vec::new();
-    file.read_to_end(&mut buffer)
-        .map_err(|e| format!("读取文件失败: {}", e))?;
+    let mut content = String::new();
+    file.read_to_string(&mut content)
+        .map_err(|err| format!("无法读取文件: {}", err))?;
     
-    // 检测并移除BOM标记
-    if buffer.starts_with(&[0xEF, 0xBB, 0xBF]) {
-        // UTF-8 BOM
-        debug_println("检测到UTF-8 BOM标记，将移除");
-        buffer = buffer[3..].to_vec();
-    } else if buffer.starts_with(&[0xFE, 0xFF]) || buffer.starts_with(&[0xFF, 0xFE]) {
-        // UTF-16 BOM (BE or LE)
-        return Err("不支持UTF-16编码的文件".to_string());
-    } else if buffer.starts_with(&[0x00, 0x00, 0xFE, 0xFF]) || buffer.starts_with(&[0xFF, 0xFE, 0x00, 0x00]) {
-        // UTF-32 BOM (BE or LE)
-        return Err("不支持UTF-32编码的文件".to_string());
+    Ok(content)
+}
+
+// 添加调试打印函数
+fn debug_println(msg: &str) {
+    if env::args().any(|arg| arg == "--cn-debug") {
+        println!("{}", msg);
     }
-    
-    // 尝试将二进制数据转换为UTF-8字符串
-    String::from_utf8(buffer)
-        .map_err(|_| "文件编码不是有效的UTF-8".to_string())
+}
+
+fn init_program() -> Program {
+    Program {
+        functions: Vec::new(),
+        namespaces: Vec::new(),
+        imported_namespaces: Vec::new(),
+        file_imports: Vec::new(),
+        constants: Vec::new(), // 初始化常量列表
+    }
 }
 
 fn main() {
@@ -174,6 +113,7 @@ fn main() {
     let debug_parser = args.iter().any(|arg| arg == "--cn-parser");
     let debug_lexer = args.iter().any(|arg| arg == "--cn-lexer");
     let debug_mode = args.iter().any(|arg| arg == "--cn-debug");
+    let show_return = args.iter().any(|arg| arg == "--cn-return");
     
     // 如果是调试模式，先调试io库中的函数
     if debug_mode {
@@ -227,7 +167,11 @@ fn main() {
                     
                     // 执行程序
                     let result = interpreter::interpret(&program);
-                    println!("程序执行结果: {}", result);
+                    
+                    // 只有当结果不是None且启用了--cn-return参数时才打印
+                    if show_return && !matches!(result, Value::None) {
+                        println!("程序执行结果: {}", result);
+                    }
                 },
                 Err(errors) => {
                     // 显示所有错误信息
