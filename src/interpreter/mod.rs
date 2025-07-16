@@ -114,13 +114,16 @@ struct Interpreter<'a> {
     global_namespace_imports: Vec<Vec<String>>,
     // 库命名空间映射，键是命名空间名称，值是库名
     library_namespaces: HashMap<String, String>,
+    // 常量环境，键是常量名，值是常量值
+    constants: HashMap<String, Value>,
 }
 
 impl<'a> Interpreter<'a> {
     fn new(program: &'a Program) -> Self {
         let mut functions = HashMap::new();
         let mut namespaced_functions = HashMap::new();
-        let mut library_namespaces = HashMap::new();
+        let library_namespaces = HashMap::new();
+        let mut constants = HashMap::new(); // 初始化常量环境
         
         // 注册全局函数
         for function in &program.functions {
@@ -132,7 +135,8 @@ impl<'a> Interpreter<'a> {
             Self::register_namespace_functions(namespace, &mut namespaced_functions, "");
         }
         
-        Interpreter {
+        // 初始化解释器
+        let mut interpreter = Interpreter {
             program,
             functions,
             namespaced_functions,
@@ -143,7 +147,18 @@ impl<'a> Interpreter<'a> {
             local_env: HashMap::new(),
             global_namespace_imports: Vec::new(),
             library_namespaces,
+            constants, // 添加常量环境
+        };
+        
+        // 初始化常量
+        for (name, _typ, expr) in &program.constants {
+            // 计算常量值
+            let value = interpreter.evaluate_expression(expr);
+            // 存储常量值
+            interpreter.constants.insert(name.clone(), value);
         }
+        
+        interpreter
     }
     
     // 递归注册命名空间中的所有函数
@@ -673,14 +688,23 @@ impl<'a> Evaluator for Interpreter<'a> {
                 }
             },
             Expression::Variable(name) => {
-                // 先检查局部变量，再检查全局变量
-                if let Some(value) = self.local_env.get(name) {
-                    value.clone()
-                } else if let Some(value) = self.global_env.get(name) {
-                    value.clone()
-                } else {
-                    panic!("未定义的变量: {}", name);
+                // 先检查常量
+                if let Some(value) = self.constants.get(name) {
+                    return value.clone();
                 }
+                
+                // 再检查局部变量
+                if let Some(value) = self.local_env.get(name) {
+                    return value.clone();
+                }
+                
+                // 最后检查全局变量
+                if let Some(value) = self.global_env.get(name) {
+                    return value.clone();
+                }
+                
+                // 如果都找不到，返回None
+                Value::None
             },
             Expression::BinaryOp(left, op, right) => {
                 let left_val = self.evaluate_expression(left);
@@ -970,7 +994,40 @@ impl<'a> Executor for Interpreter<'a> {
                 self.local_env.insert(name, value);
                 ExecutionResult::None
             },
+            Statement::ConstantDeclaration(name, typ, expr) => {
+                // 计算常量值
+                let value = self.evaluate_expression(&expr);
+                
+                // 检查类型是否匹配
+                let type_matches = match (&typ, &value) {
+                    (Type::Int, Value::Int(_)) => true,
+                    (Type::Float, Value::Float(_)) => true,
+                    (Type::Bool, Value::Bool(_)) => true,
+                    (Type::String, Value::String(_)) => true,
+                    (Type::Long, Value::Long(_)) => true,
+                    _ => false
+                };
+                
+                if !type_matches {
+                    panic!("常量 '{}' 的类型不匹配", name);
+                }
+                
+                // 检查是否已存在同名常量
+                if self.constants.contains_key(&name) {
+                    panic!("常量 '{}' 已定义", name);
+                }
+                
+                // 存储常量值
+                self.constants.insert(name, value);
+                
+                ExecutionResult::None
+            },
             Statement::VariableAssignment(name, expr) => {
+                // 检查是否尝试修改常量
+                if self.constants.contains_key(&name) {
+                    panic!("无法修改常量 '{}'", name);
+                }
+                
                 let value = self.evaluate_expression(&expr);
                 // 先检查局部变量，再检查全局变量
                 if self.local_env.contains_key(&name) {
