@@ -125,6 +125,83 @@ fn parse_program_collect_all_errors(parser: &mut ParserBase, errors: &mut Vec<St
                     try_next_item = parser.position < parser.tokens.len();
                 }
             }
+        } else if parser.peek() == Some(&"const".to_string()) {
+            // 解析常量定义
+            parser.consume(); // 消费 "const"
+            
+            // 获取常量名
+            let const_name = match parser.consume() {
+                Some(name) => name,
+                None => {
+                    errors.push("期望常量名".to_string());
+                    skip_to_next_top_level_item(parser);
+                    try_next_item = parser.position < parser.tokens.len();
+                    continue;
+                }
+            };
+            
+            // 期望 ":" 符号
+            if let Err(e) = parser.expect(":") {
+                errors.push(e);
+                skip_to_next_top_level_item(parser);
+                try_next_item = parser.position < parser.tokens.len();
+                continue;
+            }
+            
+            // 解析类型
+            let type_name = match parser.consume() {
+                Some(t) => t,
+                None => {
+                    errors.push("期望类型名".to_string());
+                    skip_to_next_top_level_item(parser);
+                    try_next_item = parser.position < parser.tokens.len();
+                    continue;
+                }
+            };
+            
+            // 转换为内部类型
+            let const_type = match type_name.as_str() {
+                "int" => crate::ast::Type::Int,
+                "float" => crate::ast::Type::Float,
+                "bool" => crate::ast::Type::Bool,
+                "string" => crate::ast::Type::String,
+                "long" => crate::ast::Type::Long,
+                _ => {
+                    errors.push(format!("不支持的常量类型: {}", type_name));
+                    skip_to_next_top_level_item(parser);
+                    try_next_item = parser.position < parser.tokens.len();
+                    continue;
+                }
+            };
+            
+            // 期望 "=" 符号
+            if let Err(e) = parser.expect("=") {
+                errors.push(e);
+                skip_to_next_top_level_item(parser);
+                try_next_item = parser.position < parser.tokens.len();
+                continue;
+            }
+            
+            // 解析初始值表达式
+            match parser.parse_expression() {
+                Ok(_) => {},
+                Err(e) => {
+                    errors.push(e);
+                    skip_to_next_top_level_item(parser);
+                    try_next_item = parser.position < parser.tokens.len();
+                    continue;
+                }
+            }
+            
+            // 期望 ";" 符号
+            if let Err(e) = parser.expect(";") {
+                errors.push(e);
+                skip_to_next_top_level_item(parser);
+                try_next_item = parser.position < parser.tokens.len();
+                continue;
+            }
+            
+            try_next_item = true;
         } else if parser.peek() == Some(&"using".to_string()) {
             parser.consume(); // 消费 "using"
             
@@ -168,12 +245,24 @@ fn parse_program_collect_all_errors(parser: &mut ParserBase, errors: &mut Vec<St
                 parser.consume(); // 消费 "file"
                 
                 // 获取文件路径
-                if parser.consume().is_none() {
-                    errors.push(format!("期望文件路径 (位置: {})", parser.position));
-                    skip_to_next_top_level_item(parser);
-                    try_next_item = parser.position < parser.tokens.len();
-                    continue;
-                }
+                let file_path_token = match parser.consume() {
+                    Some(path) => path,
+                    None => {
+                        errors.push(format!("期望文件路径 (位置: {})", parser.position));
+                        skip_to_next_top_level_item(parser);
+                        try_next_item = parser.position < parser.tokens.len();
+                        continue;
+                    }
+                };
+                
+                // 移除可能存在的引号
+                let _file_path = if file_path_token.starts_with("\"") && file_path_token.ends_with("\"") {
+                    file_path_token[1..file_path_token.len()-1].to_string()
+                } else if file_path_token.starts_with("'") && file_path_token.ends_with("'") {
+                    file_path_token[1..file_path_token.len()-1].to_string()
+                } else {
+                    file_path_token
+                };
                 
                 // 期望 ";" 符号
                 if let Err(e) = parser.expect(";") {
@@ -557,14 +646,50 @@ fn parse_program(parser: &mut ParserBase) -> Result<Program, String> {
     let mut namespaces = Vec::new();
     let mut imported_namespaces = Vec::new();
     let mut file_imports = Vec::new();
+    let mut constants = Vec::new(); // 新增：用于存储常量定义
     
     while parser.position < parser.tokens.len() {
         if parser.peek() == Some(&"ns".to_string()) {
-            let mut namespace = parse_namespace(parser)?;
-            namespace.ns_type = crate::ast::NamespaceType::Code; // 设置为代码命名空间
+            // 解析命名空间
+            let namespace = parse_namespace(parser)?;
             namespaces.push(namespace);
         } else if parser.peek() == Some(&"fn".to_string()) {
-            functions.push(parse_function(parser)?);
+            // 解析函数
+            let function = parse_function(parser)?;
+            functions.push(function);
+        } else if parser.peek() == Some(&"const".to_string()) {
+            // 解析常量定义
+            parser.consume(); // 消费 "const"
+            
+            // 获取常量名
+            let const_name = parser.consume()
+                .ok_or_else(|| "期望常量名".to_string())?;
+            
+            parser.expect(":")?;
+            
+            // 解析类型
+            let type_name = parser.consume()
+                .ok_or_else(|| "期望类型名".to_string())?;
+            
+            // 转换为内部类型
+            let const_type = match type_name.as_str() {
+                "int" => crate::ast::Type::Int,
+                "float" => crate::ast::Type::Float,
+                "bool" => crate::ast::Type::Bool,
+                "string" => crate::ast::Type::String,
+                "long" => crate::ast::Type::Long,
+                _ => return Err(format!("不支持的常量类型: {}", type_name))
+            };
+            
+            parser.expect("=")?;
+            
+            // 解析初始值表达式
+            let init_expr = parser.parse_expression()?;
+            
+            parser.expect(";")?;
+            
+            // 添加到常量列表
+            constants.push((const_name, const_type, init_expr));
         } else if parser.peek() == Some(&"using".to_string()) {
             // 解析using语句
             parser.consume(); // 消费 "using"
@@ -636,11 +761,12 @@ fn parse_program(parser: &mut ParserBase) -> Result<Program, String> {
         }
     }
     
-    Ok(Program { 
-        functions, 
+    Ok(Program {
+        functions,
         namespaces,
         imported_namespaces,
         file_imports,
+        constants, // 添加常量列表
     })
 }
 
