@@ -381,14 +381,9 @@ impl<'a> ExpressionParser for ParserBase<'a> {
                             
                             self.expect(")")?;
                             
-                            // 使用FunctionCall而不是NamespacedFunctionCall，以便直接匹配库函数
-                            if path.len() == 2 && (path[0] == "http" || path[0] == "std") {
-                                debug_println(&format!("使用FunctionCall处理: {}", full_name));
-                                Ok(Expression::FunctionCall(full_name, args))
-                            } else {
-                                debug_println(&format!("使用NamespacedFunctionCall处理: {:?}", path));
-                                Ok(Expression::NamespacedFunctionCall(path, args))
-                            }
+                            // 使用统一的接口处理所有命名空间函数调用，不再硬编码特定命名空间
+                            debug_println(&format!("使用NamespacedFunctionCall处理: {:?}", path));
+                            Ok(Expression::NamespacedFunctionCall(path, args))
                         }
                     } else if self.peek() == Some(&"++".to_string()) {
                         // 后置自增
