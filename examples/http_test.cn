@@ -1,5 +1,6 @@
-// 导入HTTP库
+// 导入HTTP库和JSON库
 using lib <http>;
+using lib <json>;
 using lib <io>;
 using ns std;
 
@@ -22,6 +23,35 @@ fn main() : int {
     // URL解码
     decoded : string = http::decode_url(encoded);
     println("URL解码结果: " + decoded);
+    
+    // 使用JSON库解析HTTP响应
+    println("\n===== JSON库测试 =====");
+    
+    // 创建JSON对象
+    json_obj : string = json::create_object("name", "张三", "age", "25", "city", "北京");
+    println("\n创建的JSON对象:");
+    println(json::format(json_obj));
+    
+    // 创建JSON数组
+    json_arr : string = json::create_array("苹果", "香蕉", "橙子", "葡萄");
+    println("\n创建的JSON数组:");
+    println(json_arr);
+    
+    // 合并JSON对象
+    address : string = json::create_object("country", "中国", "province", "北京");
+    merged : string = json::merge(json_obj, address);
+    println("\n合并后的JSON对象:");
+    println(json::format(merged));
+    
+    // 测试从对象中提取值
+    name_value : string = json::get_value(json_obj, "name");
+    println("\n提取的name值:");
+    println(name_value);
+    
+    // 测试检查JSON是否有效
+    is_valid : string = json::is_valid(json_obj);
+    println("\nJSON是否有效:");
+    println(is_valid);
     
     return 0;
 };
