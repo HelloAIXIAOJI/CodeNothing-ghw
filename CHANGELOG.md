@@ -1,4 +1,44 @@
 # CodeNothing 更新日志
+## [v0.2.5] - 2025-07-16
+
+### 新增
+- 添加了const关键字，支持常量定义和使用
+- 增加了fs库，支持文件操作
+  - 根命名空间函数
+    - exists(path) - 判断路径是否存在
+    - is_file(path) - 判断是否为文件
+    - is_dir(path) - 判断是否为目录
+  - 文件操作命名空间 (file::)
+    - file::read(path) - 读取文件内容
+    - file::read_bytes(path) - 读取文件内容为二进制（返回十六进制字符串）
+    - file::write(path, content) - 写入文件
+    - file::append(path, content) - 追加内容到文件
+    - file::delete(path) - 删除文件
+    - file::copy(src, dst) - 复制文件
+    - file::rename(old_path, new_path) - 重命名文件
+    - file::size(path) - 获取文件大小
+  - 目录操作命名空间 (dir::)
+    - dir::create(path) - 创建目录
+    - dir::delete(path) - 删除目录
+    - dir::delete_all(path) - 递归删除目录
+    - dir::list(path) - 列出目录内容
+    - dir::current() - 获取当前工作目录
+  - 路径操作命名空间 (path::)
+    - path::join(part1, part2, ...) - 连接路径
+    - path::parent(path) - 获取父目录
+    - path::filename(path) - 获取文件名
+    - path::extension(path) - 获取文件扩展名
+    - path::stem(path) - 获取不带扩展名的文件名
+    - path::is_absolute(path) - 判断路径是否为绝对路径
+- 增加了LICENSE文件。
+
+
+### 修复
+- 修复了常量定义和使用的问题
+- 修复了常量在函数内部使用的问题
+
+
+
 ## [v0.2.4] - 2025-07-16
 ### 新增
 - 添加了json库，支持JSON字符串解析和处理。
