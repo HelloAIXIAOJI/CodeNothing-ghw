@@ -1,4 +1,9 @@
 # CodeNothing 更新日志
+## [v0.2.6] - 2025-07-20
+
+## 优化
+- 拆分了src\parser\mod.rs与src\interpreter\mod.rs
+
 ## [v0.2.5] - 2025-07-16
 
 ### 新增
