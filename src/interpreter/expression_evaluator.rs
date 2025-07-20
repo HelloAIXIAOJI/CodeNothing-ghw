@@ -15,6 +15,24 @@ impl<'a> ExpressionEvaluator for Interpreter<'a> {
         if let Some(val) = jit::jit_eval_const_expr(expr) {
             return val;
         }
+        // 尝试整体JIT int型带变量表达式
+        if let Some(jit_expr) = jit::jit_compile_int_expr(expr) {
+            // 收集变量名和当前作用域变量值
+            let mut vars = std::collections::HashMap::new();
+            for name in &jit_expr.var_names {
+                // 只支持Int类型变量
+                let val = if let Some(Value::Int(i)) = self.local_env.get(name) {
+                    *i as i64
+                } else if let Some(Value::Int(i)) = self.global_env.get(name) {
+                    *i as i64
+                } else {
+                    panic!("JIT表达式变量{}未赋Int值", name);
+                };
+                vars.insert(name.clone(), val);
+            }
+            let result = jit_expr.call(&vars);
+            return Value::Int(result as i32);
+        }
         match expr {
             Expression::IntLiteral(value) => Value::Int(*value),
             Expression::FloatLiteral(value) => Value::Float(*value),
