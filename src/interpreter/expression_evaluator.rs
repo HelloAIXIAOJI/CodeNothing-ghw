@@ -2,6 +2,7 @@ use crate::ast::{Expression, BinaryOperator, CompareOperator, LogicalOperator};
 use super::value::Value;
 use super::interpreter_core::{Interpreter, debug_println};
 use super::function_calls::FunctionCallHandler;
+use super::jit;
 
 pub trait ExpressionEvaluator {
     fn evaluate_expression(&mut self, expr: &Expression) -> Value;
@@ -11,6 +12,9 @@ pub trait ExpressionEvaluator {
 
 impl<'a> ExpressionEvaluator for Interpreter<'a> {
     fn evaluate_expression(&mut self, expr: &Expression) -> Value {
+        if let Some(val) = jit::jit_eval_const_expr(expr) {
+            return val;
+        }
         match expr {
             Expression::IntLiteral(value) => Value::Int(*value),
             Expression::FloatLiteral(value) => Value::Float(*value),
@@ -131,48 +135,25 @@ impl<'a> Interpreter<'a> {
     fn evaluate_logical_operation(&mut self, left: &Expression, op: &LogicalOperator, right: &Expression) -> Value {
         match op {
             LogicalOperator::And => {
-                // 短路求值：如果左操作数为假，直接返回假
                 let left_val = self.evaluate_expression(left);
-                let left_bool = match left_val {
-                    Value::Bool(b) => b,
-                    _ => panic!("逻辑操作符的操作数必须是布尔类型"),
-                };
-                
-                if !left_bool {
-                    return Value::Bool(false);
-                }
-                
-                // 左操作数为真，计算右操作数
                 let right_val = self.evaluate_expression(right);
-                match right_val {
-                    Value::Bool(b) => Value::Bool(b),
+                match (left_val, right_val) {
+                    (Value::Bool(a), Value::Bool(b)) => Value::Bool(jit::jit_and_bool(a, b)),
                     _ => panic!("逻辑操作符的操作数必须是布尔类型"),
                 }
             },
             LogicalOperator::Or => {
-                // 短路求值：如果左操作数为真，直接返回真
                 let left_val = self.evaluate_expression(left);
-                let left_bool = match left_val {
-                    Value::Bool(b) => b,
-                    _ => panic!("逻辑操作符的操作数必须是布尔类型"),
-                };
-                
-                if left_bool {
-                    return Value::Bool(true);
-                }
-                
-                // 左操作数为假，计算右操作数
                 let right_val = self.evaluate_expression(right);
-                match right_val {
-                    Value::Bool(b) => Value::Bool(b),
+                match (left_val, right_val) {
+                    (Value::Bool(a), Value::Bool(b)) => Value::Bool(jit::jit_or_bool(a, b)),
                     _ => panic!("逻辑操作符的操作数必须是布尔类型"),
                 }
             },
             LogicalOperator::Not => {
-                // 逻辑非操作
                 let val = self.evaluate_expression(left);
                 match val {
-                    Value::Bool(b) => Value::Bool(!b),
+                    Value::Bool(b) => Value::Bool(jit::jit_not_bool(b)),
                     _ => panic!("逻辑操作符的操作数必须是布尔类型"),
                 }
             }
