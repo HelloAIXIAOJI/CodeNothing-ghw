@@ -501,6 +501,22 @@ pub fn jit_compile_int_expr(expr: &crate::ast::Expression) -> Option<JitCompiled
     use cranelift_jit::{JITBuilder, JITModule};
     use cranelift_module::Module;
     use crate::ast::{Expression, BinaryOperator};
+    
+    // 检查是否包含不支持的操作符
+    fn is_supported_for_jit(expr: &Expression) -> bool {
+        match expr {
+            Expression::IntLiteral(_) | Expression::Variable(_) => true,
+            Expression::BinaryOp(left, _, right) => {
+                is_supported_for_jit(left) && is_supported_for_jit(right)
+            },
+            _ => false,
+        }
+    }
+    
+    if !is_supported_for_jit(expr) {
+        return None;
+    }
+    
     // 1. 收集变量名
     let mut var_names = Vec::new();
     fn collect_vars(expr: &Expression, vars: &mut Vec<String>) {
