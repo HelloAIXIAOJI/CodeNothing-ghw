@@ -6,6 +6,7 @@ pub mod interpreter_core;
 pub mod function_calls;
 pub mod expression_evaluator;
 pub mod statement_executor;
+pub mod jit;
 
 // Re-export main types and functions
 pub use interpreter_core::{interpret, Interpreter, debug_println};
