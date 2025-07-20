@@ -8,6 +8,7 @@ pub enum Type {
     Void,    // 添加void类型
     Array(Box<Type>),
     Map(Box<Type>, Box<Type>),
+    Exception, // 新增：异常类型
     // 未来可以扩展更多类型
 }
 
@@ -33,6 +34,7 @@ pub enum Expression {
     PostIncrement(String), // 后置自增 (var++)
     PostDecrement(String), // 后置自减 (var--)
     TernaryOp(Box<Expression>, Box<Expression>, Box<Expression>), // 三元条件运算符 (cond ? expr1 : expr2)
+    Throw(Box<Expression>), // 新增：抛出异常
     // 未来可以扩展更多表达式类型
 }
 
@@ -91,6 +93,8 @@ pub enum Statement {
     Break, // 跳出当前循环
     Continue, // 跳过当前迭代，继续下一次迭代
     ForEachLoop(String, Expression, Vec<Statement>), // foreach循环，包含变量名、集合表达式和循环体
+    TryCatch(Vec<Statement>, Vec<(String, Type, Vec<Statement>)>, Option<Vec<Statement>>), // 新增：try-catch-finally 语句
+    Throw(Expression), // 新增：抛出异常语句
     // 未来可以扩展更多语句类型
 }
 
