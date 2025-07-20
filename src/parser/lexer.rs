@@ -145,6 +145,7 @@ pub fn tokenize(source: &str, debug: bool) -> Vec<String> {
         .replace(",", " , ")
         .replace("<", " < ")
         .replace(">", " > ")
+        .replace(".", " . ")
         .split_whitespace()
         .map(|s| {
             if s.starts_with("__STRING_") {
