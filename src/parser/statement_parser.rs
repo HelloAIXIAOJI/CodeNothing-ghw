@@ -20,6 +20,36 @@ pub trait StatementParser {
 impl<'a> StatementParser for ParserBase<'a> {
     fn parse_statement(&mut self) -> Result<Statement, String> {
         if let Some(token) = self.peek() {
+            // 支持 using ns xxx; 语句
+            if token == "using" {
+                self.consume(); // 消费 using
+                if self.peek() == Some(&"ns".to_string()) {
+                    self.consume(); // 消费 ns
+                    // 解析命名空间路径
+                    let mut path = Vec::new();
+                    let mut expect_id = true;
+                    while let Some(tok) = self.peek() {
+                        if expect_id {
+                            // 期望标识符
+                            if tok.chars().all(|c| c.is_alphanumeric() || c == '_') {
+                                path.push(self.consume().unwrap());
+                                expect_id = false;
+                            } else {
+                                break;
+                            }
+                        } else if tok == "::" {
+                            self.consume();
+                            expect_id = true;
+                        } else {
+                            break;
+                        }
+                    }
+                    self.expect(";")?;
+                    return Ok(Statement::ImportNamespace(crate::ast::NamespaceType::Code, path));
+                } else {
+                    return Err("不支持的using语句，仅支持using ns".to_string());
+                }
+            }
             match token.as_str() {
                 "return" => {
                     self.consume(); // 消费 "return" 关键字
