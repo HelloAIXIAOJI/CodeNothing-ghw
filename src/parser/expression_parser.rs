@@ -154,6 +154,11 @@ impl<'a> ExpressionParser for ParserBase<'a> {
                 } else {
                     return Err("前置自减操作符后期望变量名".to_string());
                 }
+            } else if op == "throw" {
+                // throw 表达式
+                self.consume(); // 消费 "throw"
+                let exception_expr = self.parse_primary_expression()?;
+                return Ok(Expression::Throw(Box::new(exception_expr)));
             }
         }
         
