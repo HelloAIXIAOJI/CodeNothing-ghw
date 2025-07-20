@@ -7,6 +7,7 @@ use std::collections::HashMap;
 mod ast;
 mod parser;
 mod interpreter;
+use interpreter::jit;
 
 use ast::Program;
 use interpreter::value::Value;
@@ -114,6 +115,7 @@ fn main() {
     let debug_lexer = args.iter().any(|arg| arg == "--cn-lexer");
     let debug_mode = args.iter().any(|arg| arg == "--cn-debug");
     let show_return = args.iter().any(|arg| arg == "--cn-return");
+    let query_jit = args.iter().any(|arg| arg == "--cn-query-jit");
     
     // 如果是调试模式，先调试io库中的函数
     if debug_mode {
@@ -171,6 +173,9 @@ fn main() {
                     // 只有当结果不是None且启用了--cn-return参数时才打印
                     if show_return && !matches!(result, Value::None) {
                         println!("程序执行结果: {}", result);
+                    }
+                    if query_jit && jit::was_jit_used() {
+                        print!("{}", jit::jit_stats());
                     }
                 },
                 Err(errors) => {
