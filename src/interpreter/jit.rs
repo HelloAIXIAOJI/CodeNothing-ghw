@@ -3,6 +3,7 @@ use cranelift_jit::{JITBuilder, JITModule};
 use cranelift_module::Module;
 use std::sync::atomic::{AtomicBool, Ordering, AtomicUsize};
 use std::sync::Once;
+use std::collections::HashMap;
 
 static JIT_USED: AtomicBool = AtomicBool::new(false);
 static JIT_ADD_COUNT: AtomicUsize = AtomicUsize::new(0);
@@ -477,4 +478,94 @@ pub fn jit_eval_const_expr(expr: &crate::ast::Expression) -> Option<crate::inter
         },
         _ => None,
     }
+} 
+
+pub struct JitCompiledExpr {
+    pub var_names: Vec<String>,
+    pub func: unsafe extern "C" fn(*const i64) -> i64,
+    pub code_ptr: *const u8, // 保证生命周期
+}
+
+impl JitCompiledExpr {
+    pub fn call(&self, vars: &HashMap<String, i64>) -> i64 {
+        let mut args = Vec::with_capacity(self.var_names.len());
+        for name in &self.var_names {
+            args.push(*vars.get(name).expect("变量未赋值"));
+        }
+        unsafe { (self.func)(args.as_ptr()) }
+    }
+}
+
+pub fn jit_compile_int_expr(expr: &crate::ast::Expression) -> Option<JitCompiledExpr> {
+    use cranelift::prelude::*;
+    use cranelift_jit::{JITBuilder, JITModule};
+    use cranelift_module::Module;
+    use crate::ast::{Expression, BinaryOperator};
+    // 1. 收集变量名
+    let mut var_names = Vec::new();
+    fn collect_vars(expr: &Expression, vars: &mut Vec<String>) {
+        match expr {
+            Expression::Variable(name) => {
+                if !vars.contains(name) {
+                    vars.push(name.clone());
+                }
+            },
+            Expression::BinaryOp(left, _, right) => {
+                collect_vars(left, vars);
+                collect_vars(right, vars);
+            },
+            Expression::IntLiteral(_) => {},
+            _ => {},
+        }
+    }
+    collect_vars(expr, &mut var_names);
+    // 2. 生成JIT代码
+    let mut builder = JITBuilder::new(cranelift_module::default_libcall_names()).expect("JITBuilder failed");
+    let mut module = JITModule::new(builder);
+    let mut ctx = module.make_context();
+    ctx.func.signature.returns.push(AbiParam::new(types::I64));
+    for _ in &var_names {
+        ctx.func.signature.params.push(AbiParam::new(types::I64));
+    }
+    {
+        let mut builder_ctx = FunctionBuilderContext::new();
+        let mut func_builder = FunctionBuilder::new(&mut ctx.func, &mut builder_ctx);
+        let block = func_builder.create_block();
+        func_builder.append_block_params_for_function_params(block);
+        func_builder.switch_to_block(block);
+        func_builder.seal_block(block);
+        fn codegen(expr: &Expression, func_builder: &mut FunctionBuilder, var_names: &Vec<String>, block: Block) -> Value {
+            match expr {
+                Expression::IntLiteral(i) => func_builder.ins().iconst(types::I64, *i as i64),
+                Expression::Variable(name) => {
+                    let idx = var_names.iter().position(|n| n == name).unwrap();
+                    func_builder.block_params(block)[idx]
+                },
+                Expression::BinaryOp(left, op, right) => {
+                    let l = codegen(left, func_builder, var_names, block);
+                    let r = codegen(right, func_builder, var_names, block);
+                    match op {
+                        BinaryOperator::Add => func_builder.ins().iadd(l, r),
+                        BinaryOperator::Subtract => func_builder.ins().isub(l, r),
+                        BinaryOperator::Multiply => func_builder.ins().imul(l, r),
+                        BinaryOperator::Divide => func_builder.ins().sdiv(l, r),
+                        BinaryOperator::Modulo => func_builder.ins().srem(l, r),
+                    }
+                },
+                _ => panic!("只支持int型变量和常量的算术表达式JIT"),
+            }
+        }
+        let result = codegen(expr, &mut func_builder, &var_names, block);
+        func_builder.ins().return_(&[result]);
+        func_builder.finalize();
+    }
+    let func_id = module
+        .declare_function("jit_expr", cranelift_module::Linkage::Export, &ctx.func.signature)
+        .unwrap();
+    module.define_function(func_id, &mut ctx).unwrap();
+    module.clear_context(&mut ctx);
+    let _ = module.finalize_definitions();
+    let code = module.get_finalized_function(func_id);
+    let func = unsafe { std::mem::transmute::<_, unsafe extern "C" fn(*const i64) -> i64>(code) };
+    Some(JitCompiledExpr { var_names, func, code_ptr: code })
 } 
