@@ -1,6 +1,7 @@
 use crate::ast::{Expression, BinaryOperator, CompareOperator, LogicalOperator};
 use crate::interpreter::value::Value;
 use std::collections::HashMap;
+use super::jit;
 
 pub trait Evaluator {
     fn evaluate_expression(&mut self, expr: &Expression) -> Value;
@@ -11,33 +12,23 @@ pub trait Evaluator {
 
 pub fn perform_binary_operation(left: &Value, op: &BinaryOperator, right: &Value) -> Value {
     match (left, op, right) {
-        // 整数运算
-        (Value::Int(l), BinaryOperator::Add, Value::Int(r)) => Value::Int(l + r),
-        (Value::Int(l), BinaryOperator::Subtract, Value::Int(r)) => Value::Int(l - r),
-        (Value::Int(l), BinaryOperator::Multiply, Value::Int(r)) => Value::Int(l * r),
-        (Value::Int(l), BinaryOperator::Divide, Value::Int(r)) => {
-            if *r == 0 {
-                panic!("除以零错误");
-            }
-            Value::Int(l / r)
-        },
-        (Value::Int(l), BinaryOperator::Modulo, Value::Int(r)) => {
-            if *r == 0 {
-                panic!("除以零错误");
-            }
-            Value::Int(l % r)
-        },
-        
-        // 浮点数运算
-        (Value::Float(l), BinaryOperator::Add, Value::Float(r)) => Value::Float(l + r),
-        (Value::Float(l), BinaryOperator::Subtract, Value::Float(r)) => Value::Float(l - r),
-        (Value::Float(l), BinaryOperator::Multiply, Value::Float(r)) => Value::Float(l * r),
-        (Value::Float(l), BinaryOperator::Divide, Value::Float(r)) => {
-            if *r == 0.0 {
-                panic!("除以零错误");
-            }
-            Value::Float(l / r)
-        },
+        // 整数运算（JIT）
+        (Value::Int(l), BinaryOperator::Add, Value::Int(r)) => Value::Int(jit::jit_add((*l).into(), (*r).into()).try_into().unwrap()),
+        (Value::Int(l), BinaryOperator::Subtract, Value::Int(r)) => Value::Int(jit::jit_sub((*l).into(), (*r).into()).try_into().unwrap()),
+        (Value::Int(l), BinaryOperator::Multiply, Value::Int(r)) => Value::Int(jit::jit_mul((*l).into(), (*r).into()).try_into().unwrap()),
+        (Value::Int(l), BinaryOperator::Divide, Value::Int(r)) => Value::Int(jit::jit_div((*l).into(), (*r).into()).try_into().unwrap()),
+        (Value::Int(l), BinaryOperator::Modulo, Value::Int(r)) => Value::Int(jit::jit_mod((*l).into(), (*r).into()).try_into().unwrap()),
+        // 浮点数运算（JIT）
+        (Value::Float(l), BinaryOperator::Add, Value::Float(r)) => Value::Float(jit::jit_add_f64(*l, *r)),
+        (Value::Float(l), BinaryOperator::Subtract, Value::Float(r)) => Value::Float(jit::jit_sub_f64(*l, *r)),
+        (Value::Float(l), BinaryOperator::Multiply, Value::Float(r)) => Value::Float(jit::jit_mul_f64(*l, *r)),
+        (Value::Float(l), BinaryOperator::Divide, Value::Float(r)) => Value::Float(jit::jit_div_f64(*l, *r)),
+        // 长整型运算（JIT）
+        (Value::Long(l), BinaryOperator::Add, Value::Long(r)) => Value::Long(jit::jit_add(*l, *r)),
+        (Value::Long(l), BinaryOperator::Subtract, Value::Long(r)) => Value::Long(jit::jit_sub(*l, *r)),
+        (Value::Long(l), BinaryOperator::Multiply, Value::Long(r)) => Value::Long(jit::jit_mul(*l, *r)),
+        (Value::Long(l), BinaryOperator::Divide, Value::Long(r)) => Value::Long(jit::jit_div(*l, *r)),
+        (Value::Long(l), BinaryOperator::Modulo, Value::Long(r)) => Value::Long(jit::jit_mod(*l, *r)),
         
         // 整数和浮点数混合运算
         (Value::Int(l), BinaryOperator::Add, Value::Float(r)) => Value::Float(*l as f64 + r),
@@ -57,23 +48,6 @@ pub fn perform_binary_operation(left: &Value, op: &BinaryOperator, right: &Value
                 panic!("除以零错误");
             }
             Value::Float(l / *r as f64)
-        },
-        
-        // 长整型运算
-        (Value::Long(l), BinaryOperator::Add, Value::Long(r)) => Value::Long(l + r),
-        (Value::Long(l), BinaryOperator::Subtract, Value::Long(r)) => Value::Long(l - r),
-        (Value::Long(l), BinaryOperator::Multiply, Value::Long(r)) => Value::Long(l * r),
-        (Value::Long(l), BinaryOperator::Divide, Value::Long(r)) => {
-            if *r == 0 {
-                panic!("除以零错误");
-            }
-            Value::Long(l / r)
-        },
-        (Value::Long(l), BinaryOperator::Modulo, Value::Long(r)) => {
-            if *r == 0 {
-                panic!("除以零错误");
-            }
-            Value::Long(l % r)
         },
         
         // 整数和长整型混合运算
@@ -118,29 +92,27 @@ pub fn perform_binary_operation(left: &Value, op: &BinaryOperator, right: &Value
 
 pub fn evaluate_compare_operation(left: &Value, op: &CompareOperator, right: &Value) -> Value {
     match (op, left, right) {
-        // 整数比较
-        (CompareOperator::Equal, Value::Int(l), Value::Int(r)) => Value::Bool(l == r),
-        (CompareOperator::NotEqual, Value::Int(l), Value::Int(r)) => Value::Bool(l != r),
-        (CompareOperator::Greater, Value::Int(l), Value::Int(r)) => Value::Bool(l > r),
-        (CompareOperator::Less, Value::Int(l), Value::Int(r)) => Value::Bool(l < r),
-        (CompareOperator::GreaterEqual, Value::Int(l), Value::Int(r)) => Value::Bool(l >= r),
-        (CompareOperator::LessEqual, Value::Int(l), Value::Int(r)) => Value::Bool(l <= r),
-        
-        // 浮点数比较
-        (CompareOperator::Equal, Value::Float(l), Value::Float(r)) => Value::Bool(l == r),
-        (CompareOperator::NotEqual, Value::Float(l), Value::Float(r)) => Value::Bool(l != r),
-        (CompareOperator::Greater, Value::Float(l), Value::Float(r)) => Value::Bool(l > r),
-        (CompareOperator::Less, Value::Float(l), Value::Float(r)) => Value::Bool(l < r),
-        (CompareOperator::GreaterEqual, Value::Float(l), Value::Float(r)) => Value::Bool(l >= r),
-        (CompareOperator::LessEqual, Value::Float(l), Value::Float(r)) => Value::Bool(l <= r),
-        
-        // 长整型比较
-        (CompareOperator::Equal, Value::Long(l), Value::Long(r)) => Value::Bool(l == r),
-        (CompareOperator::NotEqual, Value::Long(l), Value::Long(r)) => Value::Bool(l != r),
-        (CompareOperator::Greater, Value::Long(l), Value::Long(r)) => Value::Bool(l > r),
-        (CompareOperator::Less, Value::Long(l), Value::Long(r)) => Value::Bool(l < r),
-        (CompareOperator::GreaterEqual, Value::Long(l), Value::Long(r)) => Value::Bool(l >= r),
-        (CompareOperator::LessEqual, Value::Long(l), Value::Long(r)) => Value::Bool(l <= r),
+        // 整数比较（JIT）
+        (CompareOperator::Equal, Value::Int(l), Value::Int(r)) => Value::Bool(jit::jit_eq_i64((*l).into(), (*r).into())),
+        (CompareOperator::NotEqual, Value::Int(l), Value::Int(r)) => Value::Bool(jit::jit_ne_i64((*l).into(), (*r).into())),
+        (CompareOperator::Greater, Value::Int(l), Value::Int(r)) => Value::Bool(jit::jit_gt_i64((*l).into(), (*r).into())),
+        (CompareOperator::Less, Value::Int(l), Value::Int(r)) => Value::Bool(jit::jit_lt_i64((*l).into(), (*r).into())),
+        (CompareOperator::GreaterEqual, Value::Int(l), Value::Int(r)) => Value::Bool(jit::jit_ge_i64((*l).into(), (*r).into())),
+        (CompareOperator::LessEqual, Value::Int(l), Value::Int(r)) => Value::Bool(jit::jit_le_i64((*l).into(), (*r).into())),
+        // 浮点数比较（JIT）
+        (CompareOperator::Equal, Value::Float(l), Value::Float(r)) => Value::Bool(jit::jit_eq_f64(*l, *r)),
+        (CompareOperator::NotEqual, Value::Float(l), Value::Float(r)) => Value::Bool(jit::jit_ne_f64(*l, *r)),
+        (CompareOperator::Greater, Value::Float(l), Value::Float(r)) => Value::Bool(jit::jit_gt_f64(*l, *r)),
+        (CompareOperator::Less, Value::Float(l), Value::Float(r)) => Value::Bool(jit::jit_lt_f64(*l, *r)),
+        (CompareOperator::GreaterEqual, Value::Float(l), Value::Float(r)) => Value::Bool(jit::jit_ge_f64(*l, *r)),
+        (CompareOperator::LessEqual, Value::Float(l), Value::Float(r)) => Value::Bool(jit::jit_le_f64(*l, *r)),
+        // 长整型比较（JIT）
+        (CompareOperator::Equal, Value::Long(l), Value::Long(r)) => Value::Bool(jit::jit_eq_i64(*l, *r)),
+        (CompareOperator::NotEqual, Value::Long(l), Value::Long(r)) => Value::Bool(jit::jit_ne_i64(*l, *r)),
+        (CompareOperator::Greater, Value::Long(l), Value::Long(r)) => Value::Bool(jit::jit_gt_i64(*l, *r)),
+        (CompareOperator::Less, Value::Long(l), Value::Long(r)) => Value::Bool(jit::jit_lt_i64(*l, *r)),
+        (CompareOperator::GreaterEqual, Value::Long(l), Value::Long(r)) => Value::Bool(jit::jit_ge_i64(*l, *r)),
+        (CompareOperator::LessEqual, Value::Long(l), Value::Long(r)) => Value::Bool(jit::jit_le_i64(*l, *r)),
         
         // 字符串比较
         (CompareOperator::Equal, Value::String(l), Value::String(r)) => Value::Bool(l == r),
