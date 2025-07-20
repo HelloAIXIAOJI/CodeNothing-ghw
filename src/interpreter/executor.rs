@@ -10,6 +10,7 @@ pub enum ExecutionResult {
     Return(Value),       // 返回值
     Break,               // break语句
     Continue,            // continue语句
+    Throw(Value),        // 抛出异常
 }
 
 pub trait Executor: Evaluator {
