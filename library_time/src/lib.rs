@@ -170,35 +170,72 @@ mod std {
         day_num.to_string()
     }
     
-    // 延时指定的毫秒数
-    // 参数: milliseconds
+    // 延时指定的毫秒数（支持浮点数）
+    // 参数: milliseconds (可以是浮点数，如 0.5 表示 500 微秒)
     pub fn cn_sleep(args: Vec<String>) -> String {
         if args.is_empty() {
             return "错误: 缺少毫秒参数".to_string();
         }
         
-        let millis = match args[0].parse::<u64>() {
-            Ok(ms) => ms,
+        let millis = match args[0].parse::<f64>() {
+            Ok(ms) => {
+                if ms < 0.0 {
+                    return "错误: 毫秒数不能为负数".to_string();
+                }
+                ms
+            },
             Err(_) => return "错误: 无效的毫秒数".to_string(),
         };
         
-        thread::sleep(StdDuration::from_millis(millis));
+        // 将浮点数毫秒转换为纳秒，然后转换为 Duration
+        let nanos = (millis * 1_000_000.0) as u64;
+        thread::sleep(StdDuration::from_nanos(nanos));
         "ok".to_string()
     }
     
-    // 延时指定的秒数
-    // 参数: seconds
+    // 延时指定的秒数（支持浮点数）
+    // 参数: seconds (可以是浮点数，如 0.2 表示 200 毫秒)
     pub fn cn_sleep_seconds(args: Vec<String>) -> String {
         if args.is_empty() {
             return "错误: 缺少秒数参数".to_string();
         }
         
-        let seconds = match args[0].parse::<u64>() {
-            Ok(s) => s,
+        let seconds = match args[0].parse::<f64>() {
+            Ok(s) => {
+                if s < 0.0 {
+                    return "错误: 秒数不能为负数".to_string();
+                }
+                s
+            },
             Err(_) => return "错误: 无效的秒数".to_string(),
         };
         
-        thread::sleep(StdDuration::from_secs(seconds));
+        // 将浮点数秒转换为纳秒，然后转换为 Duration
+        let nanos = (seconds * 1_000_000_000.0) as u64;
+        thread::sleep(StdDuration::from_nanos(nanos));
+        "ok".to_string()
+    }
+    
+    // 延时指定的微秒数（支持浮点数）
+    // 参数: microseconds (可以是浮点数)
+    pub fn cn_sleep_microseconds(args: Vec<String>) -> String {
+        if args.is_empty() {
+            return "错误: 缺少微秒参数".to_string();
+        }
+        
+        let micros = match args[0].parse::<f64>() {
+            Ok(us) => {
+                if us < 0.0 {
+                    return "错误: 微秒数不能为负数".to_string();
+                }
+                us
+            },
+            Err(_) => return "错误: 无效的微秒数".to_string(),
+        };
+        
+        // 将浮点数微秒转换为纳秒，然后转换为 Duration
+        let nanos = (micros * 1_000.0) as u64;
+        thread::sleep(StdDuration::from_nanos(nanos));
         "ok".to_string()
     }
 }
@@ -228,14 +265,16 @@ pub extern "C" fn cn_init() -> *mut HashMap<String, LibraryFunction> {
           .add_function("add", std::cn_add)
           .add_function("weekday", std::cn_weekday)
           .add_function("sleep", std::cn_sleep)
-          .add_function("sleep_seconds", std::cn_sleep_seconds);
+          .add_function("sleep_seconds", std::cn_sleep_seconds)
+          .add_function("sleep_microseconds", std::cn_sleep_microseconds);
     
     // 同时注册为直接函数，不需要命名空间前缀
     registry.add_direct_function("now", std::cn_now)
             .add_direct_function("now_millis", std::cn_now_millis)
             .add_direct_function("format_now", std::cn_format_now)
             .add_direct_function("sleep", std::cn_sleep)
-            .add_direct_function("sleep_seconds", std::cn_sleep_seconds);
+            .add_direct_function("sleep_seconds", std::cn_sleep_seconds)
+            .add_direct_function("sleep_microseconds", std::cn_sleep_microseconds);
     
     // 构建并返回库指针
     registry.build_library_pointer()
