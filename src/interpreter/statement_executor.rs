@@ -102,7 +102,24 @@ impl<'a> StatementExecutor for Interpreter<'a> {
                 self.handle_compound_assignment(name, op, expr)
             },
             Statement::ImportNamespace(ns_type, path) => {
-                self.handle_import_namespace(ns_type, path)
+                match ns_type {
+                    NamespaceType::Code => {
+                        // 作用域级别导入：将命名空间下所有函数名映射到完整路径
+                        let ns_path = path.join("::");
+                        let mut import_map = self.namespace_import_stack.last_mut().unwrap();
+                        for (full_path, _) in &self.namespaced_functions {
+                            if full_path.starts_with(&ns_path) {
+                                // 获取函数名
+                                let parts: Vec<&str> = full_path.split("::").collect();
+                                if let Some(func_name) = parts.last() {
+                                    import_map.entry(func_name.to_string()).or_insert_with(Vec::new).push(full_path.clone());
+                                }
+                            }
+                        }
+                        ExecutionResult::None
+                    },
+                    _ => self.handle_import_namespace(ns_type, path)
+                }
             },
             Statement::FileImport(file_path) => {
                 // 导入文件
@@ -156,21 +173,32 @@ impl<'a> StatementExecutor for Interpreter<'a> {
     }
     
     fn execute_function(&mut self, function: &Function) -> Value {
+        // 进入新作用域，push一层导入表
+        self.namespace_import_stack.push(self.namespace_import_stack.last().cloned().unwrap_or_default());
         // 执行函数体
         for statement in &function.body {
             match self.execute_statement_direct(statement.clone()) {
-                ExecutionResult::Return(value) => return value,
+                ExecutionResult::Return(value) => {
+                    self.namespace_import_stack.pop();
+                    return value
+                },
                 ExecutionResult::None => {},
-                ExecutionResult::Break => panic!("break语句只能在循环内部使用"),
-                ExecutionResult::Continue => panic!("continue语句只能在循环内部使用"),
+                ExecutionResult::Break => {
+                    self.namespace_import_stack.pop();
+                    panic!("break语句只能在循环内部使用")
+                },
+                ExecutionResult::Continue => {
+                    self.namespace_import_stack.pop();
+                    panic!("continue语句只能在循环内部使用")
+                },
                 ExecutionResult::Throw(value) => {
-                    // 异常会向上传播，直到被 try-catch 捕获
+                    self.namespace_import_stack.pop();
                     panic!("未捕获的异常: {:?}", value);
                 }
             }
         }
-        
         // 如果函数没有明确的返回语句，则返回空值
+        self.namespace_import_stack.pop();
         Value::None
     }
     
@@ -179,6 +207,19 @@ impl<'a> StatementExecutor for Interpreter<'a> {
     }
     
     fn call_function(&mut self, function_name: &str, args: Vec<Value>) -> Value {
+        // 优先查找当前作用域导入的命名空间
+        if let Some(import_map) = self.namespace_import_stack.last() {
+            if let Some(paths) = import_map.get(function_name) {
+                if paths.len() == 1 {
+                    let full_path = &paths[0];
+                    if let Some(function) = self.namespaced_functions.get(full_path) {
+                        return self.call_function_impl(function, args);
+                    }
+                } else if paths.len() > 1 {
+                    panic!("函数名 '{}' 有多个匹配: {:?}", function_name, paths);
+                }
+            }
+        }
         // 先检查是否是导入的命名空间函数
         if let Some(paths) = self.imported_namespaces.get(function_name) {
             if paths.len() == 1 {
@@ -414,6 +455,16 @@ impl<'a> Interpreter<'a> {
             debug_println(&format!("找到并调用命名空间函数: {}", full_path));
             self.call_function_impl(function, arg_values);
             return ExecutionResult::None;
+        }
+
+        // 新增：在所有已导入库的函数表里查找完整路径（如std::println、path::join等）
+        for (lib_name, lib_functions) in &self.imported_libraries {
+            if let Some(func) = lib_functions.get(&full_path) {
+                debug_println(&format!("在库 '{}' 中找到命名空间函数 '{}', 调用之", lib_name, full_path));
+                let string_args = convert_values_to_string_args(&arg_values);
+                let _ = func(string_args); // 忽略返回值（如有需要可处理）
+                return ExecutionResult::None;
+            }
         }
         
         // 如果是嵌套命名空间函数调用，需要特殊处理
