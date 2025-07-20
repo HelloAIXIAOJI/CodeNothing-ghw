@@ -96,6 +96,12 @@ impl<'a> ExpressionEvaluator for Interpreter<'a> {
             },
             Expression::LibraryFunctionCall(lib_name, func_name, args) => {
                 self.handle_library_function_call(lib_name, func_name, args)
+            },
+            Expression::Throw(exception_expr) => {
+                // 计算异常表达式并抛出
+                let exception_value = self.evaluate_expression(exception_expr);
+                // 注意：这里我们返回异常值，但实际的抛出逻辑在语句执行器中处理
+                exception_value
             }
         }
     }
