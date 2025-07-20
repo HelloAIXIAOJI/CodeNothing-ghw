@@ -12,6 +12,8 @@ pub trait StatementParser {
     fn parse_for_loop(&mut self) -> Result<Statement, String>;
     fn parse_foreach_loop(&mut self) -> Result<Statement, String>;
     fn parse_while_loop(&mut self) -> Result<Statement, String>;
+    fn parse_try_catch(&mut self) -> Result<Statement, String>;
+    fn parse_throw_statement(&mut self) -> Result<Statement, String>;
     fn parse_type(&mut self) -> Result<Type, String>;
 }
 
@@ -45,6 +47,12 @@ impl<'a> StatementParser for ParserBase<'a> {
                 },
                 "while" => {
                     self.parse_while_loop()
+                },
+                "try" => {
+                    self.parse_try_catch()
+                },
+                "throw" => {
+                    self.parse_throw_statement()
                 },
                 "break" => {
                 self.consume(); // 消费 "break"
@@ -420,6 +428,7 @@ impl<'a> StatementParser for ParserBase<'a> {
             "string" => Ok(Type::String),
             "long" => Ok(Type::Long),
             "void" => Ok(Type::Void),
+            "Exception" => Ok(Type::Exception),
             "array" => {
                 // 解析数组元素类型
                 self.expect("<")?;
@@ -470,5 +479,54 @@ impl<'a> StatementParser for ParserBase<'a> {
         self.expect(";")?;
         
         Ok(Statement::ForEachLoop(variable_name, collection_expr, loop_body))
+    }
+
+    fn parse_try_catch(&mut self) -> Result<Statement, String> {
+        self.consume(); // 消费 "try"
+        
+        // 解析 try 块
+        let try_block = self.parse_statement_block()?;
+        
+        // 解析 catch 块
+        let mut catch_blocks = Vec::new();
+        
+        while self.peek() == Some(&"catch".to_string()) {
+            self.consume(); // 消费 "catch"
+            
+            // 解析异常参数
+            self.expect("(")?;
+            let exception_name = self.consume().ok_or_else(|| "期望异常变量名".to_string())?;
+            self.expect(":")?;
+            let exception_type = self.parse_type()?;
+            self.expect(")")?;
+            
+            // 解析 catch 块
+            let catch_block = self.parse_statement_block()?;
+            
+            catch_blocks.push((exception_name, exception_type, catch_block));
+        }
+        
+        // 解析 finally 块（可选）
+        let finally_block = if self.peek() == Some(&"finally".to_string()) {
+            self.consume(); // 消费 "finally"
+            Some(self.parse_statement_block()?)
+        } else {
+            None
+        };
+        
+        self.expect(";")?;
+        
+        Ok(Statement::TryCatch(try_block, catch_blocks, finally_block))
+    }
+
+    fn parse_throw_statement(&mut self) -> Result<Statement, String> {
+        self.consume(); // 消费 "throw"
+        
+        // 解析要抛出的异常表达式
+        let exception_expr = self.parse_expression()?;
+        
+        self.expect(";")?;
+        
+        Ok(Statement::Throw(exception_expr))
     }
 }

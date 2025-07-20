@@ -1,9 +1,42 @@
 # CodeNothing 更新日志
 ## [v0.2.6] - 2025-07-20
 
-## 优化
+### 新增
+- 添加了完整的异常处理机制，支持 try-catch-finally 语法
+  - try-catch 语句：捕获和处理异常
+    ```
+    try {
+        // 可能抛出异常的代码
+    } catch (exception : Exception) {
+        // 异常处理代码
+    };
+    ```
+  - try-catch-finally 语句：确保清理代码总是执行
+    ```
+    try {
+        // 可能抛出异常的代码
+    } catch (exception : Exception) {
+        // 异常处理代码
+    } finally {
+        // 总是执行的清理代码
+    };
+    ```
+  - throw 语句：抛出异常
+    ```
+    throw "异常信息";
+    throw someVariable;
+    ```
+  - 支持嵌套的 try-catch 结构
+  - 异常会在函数调用栈中向上传播，直到被捕获
+  - 支持异常变量的类型声明（Exception 类型）
+
+### 优化
 - 拆分了src\parser\mod.rs与src\interpreter\mod.rs
-- 更改了time Library的sleep_seconds与sleep部分逻辑。
+- 更改了time Library的sleep_seconds与sleep部分逻辑，支持浮点数参数
+  - sleep_seconds(0.2) 现在可以正常工作，表示 0.2 秒（200 毫秒）
+  - sleep(0.5) 现在可以正常工作，表示 0.5 毫秒
+  - 新增 sleep_microseconds() 函数支持微秒级别延时
+  - 使用纳秒级别精度，提供更精确的延时控制
 
 ## [v0.2.5] - 2025-07-16
 
