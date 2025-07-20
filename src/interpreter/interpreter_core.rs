@@ -55,20 +55,22 @@ pub fn interpret(program: &Program) -> Value {
                         // 将库中的所有函数添加到全局函数列表
                         if let Some(lib_functions) = interpreter.imported_libraries.get(lib_name) {
                             debug_println(&format!("库 '{}' 中的函数:", lib_name));
+                            let mut found_namespaces = std::collections::HashSet::new();
                             for (func_name, _) in lib_functions.iter() {
                                 debug_println(&format!("  - {}", func_name));
-                                
                                 // 检查是否是命名空间函数（包含::）
                                 if func_name.contains("::") {
                                     let parts: Vec<&str> = func_name.split("::").collect();
                                     if parts.len() >= 2 {
                                         let ns_name = parts[0];
-                                        debug_println(&format!("  检测到命名空间: {} 在库 {}", ns_name, lib_name));
-                                        // 记录命名空间与库的映射关系
-                                        interpreter.library_namespaces.insert(ns_name.to_string(), lib_name.to_string());
+                                        // 自动注册所有命名空间前缀到library_namespaces
+                                        if !found_namespaces.contains(ns_name) {
+                                            debug_println(&format!("  自动注册命名空间: {} -> 库 {}", ns_name, lib_name));
+                                            interpreter.library_namespaces.insert(ns_name.to_string(), lib_name.to_string());
+                                            found_namespaces.insert(ns_name);
+                                        }
                                     }
                                 }
-                                
                                 // 直接将库函数注册为全局函数，这样可以直接调用
                                 interpreter.library_functions.insert(func_name.to_string(), (lib_name.to_string(), func_name.to_string()));
                             }
@@ -114,6 +116,8 @@ pub struct Interpreter<'a> {
     pub library_namespaces: HashMap<String, String>,
     // 常量环境，键是常量名，值是常量值
     pub constants: HashMap<String, Value>,
+    // 作用域级别命名空间导入栈（每层是一个map: 函数名->完整路径）
+    pub namespace_import_stack: Vec<HashMap<String, Vec<String>>>,
 }
 
 impl<'a> Interpreter<'a> {
@@ -146,6 +150,7 @@ impl<'a> Interpreter<'a> {
             global_namespace_imports: Vec::new(),
             library_namespaces,
             constants, // 添加常量环境
+            namespace_import_stack: vec![HashMap::new()], // 初始化栈，最外层一层
         };
         
         // 初始化常量
