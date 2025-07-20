@@ -3,6 +3,7 @@
 
 ## 优化
 - 拆分了src\parser\mod.rs与src\interpreter\mod.rs
+- 更改了time Library的sleep_seconds与sleep部分逻辑。
 
 ## [v0.2.5] - 2025-07-16
 
