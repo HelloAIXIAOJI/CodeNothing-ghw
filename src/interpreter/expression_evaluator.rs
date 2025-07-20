@@ -8,30 +8,34 @@ pub trait ExpressionEvaluator {
     fn evaluate_expression(&mut self, expr: &Expression) -> Value;
     fn perform_binary_operation(&self, left: &Value, op: &BinaryOperator, right: &Value) -> Value;
     fn get_variable(&self, name: &str) -> Option<Value>;
+    fn is_pure_int_expression(&self, expr: &Expression) -> bool;
 }
 
 impl<'a> ExpressionEvaluator for Interpreter<'a> {
     fn evaluate_expression(&mut self, expr: &Expression) -> Value {
-        if let Some(val) = jit::jit_eval_const_expr(expr) {
-            return val;
-        }
-        // 尝试整体JIT int型带变量表达式
-        if let Some(jit_expr) = jit::jit_compile_int_expr(expr) {
-            // 收集变量名和当前作用域变量值
-            let mut vars = std::collections::HashMap::new();
-            for name in &jit_expr.var_names {
-                // 只支持Int类型变量
-                let val = if let Some(Value::Int(i)) = self.local_env.get(name) {
-                    *i as i64
-                } else if let Some(Value::Int(i)) = self.global_env.get(name) {
-                    *i as i64
-                } else {
-                    panic!("JIT表达式变量{}未赋Int值", name);
-                };
-                vars.insert(name.clone(), val);
+        // 检查是否包含方法调用，如果包含则跳过JIT编译
+        if !self.contains_method_call(expr) && self.is_pure_int_expression(expr) {
+            if let Some(val) = jit::jit_eval_const_expr(expr) {
+                return val;
             }
-            let result = jit_expr.call(&vars);
-            return Value::Int(result as i32);
+            // 尝试整体JIT int型带变量表达式
+            if let Some(jit_expr) = jit::jit_compile_int_expr(expr) {
+                // 收集变量名和当前作用域变量值
+                let mut vars = std::collections::HashMap::new();
+                for name in &jit_expr.var_names {
+                    // 只支持Int类型变量
+                    let val = if let Some(Value::Int(i)) = self.local_env.get(name) {
+                        *i as i64
+                    } else if let Some(Value::Int(i)) = self.global_env.get(name) {
+                        *i as i64
+                    } else {
+                        panic!("JIT表达式变量{}未赋Int值", name);
+                    };
+                    vars.insert(name.clone(), val);
+                }
+                let result = jit_expr.call(&vars);
+                return Value::Int(result as i32);
+            }
         }
         match expr {
             Expression::IntLiteral(value) => Value::Int(*value),
@@ -119,6 +123,12 @@ impl<'a> ExpressionEvaluator for Interpreter<'a> {
             Expression::LibraryFunctionCall(lib_name, func_name, args) => {
                 self.handle_library_function_call(lib_name, func_name, args)
             },
+            Expression::MethodCall(obj_expr, method_name, args) => {
+                self.handle_method_call(obj_expr, method_name, args)
+            },
+            Expression::ChainCall(obj_expr, chain_calls) => {
+                self.handle_chain_call(obj_expr, chain_calls)
+            },
             Expression::Throw(exception_expr) => {
                 // 计算异常表达式并抛出
                 let exception_value = self.evaluate_expression(exception_expr);
@@ -142,6 +152,36 @@ impl<'a> ExpressionEvaluator for Interpreter<'a> {
             None
         }
     }
+    
+    fn is_pure_int_expression(&self, expr: &Expression) -> bool {
+        match expr {
+            Expression::IntLiteral(_) => true,
+            Expression::Variable(name) => {
+                // 检查变量是否为int类型
+                if let Some(Value::Int(_)) = self.local_env.get(name) {
+                    true
+                } else if let Some(Value::Int(_)) = self.global_env.get(name) {
+                    true
+                } else {
+                    false
+                }
+            },
+            Expression::BinaryOp(left, _, right) => {
+                self.is_pure_int_expression(left) && self.is_pure_int_expression(right)
+            },
+            Expression::CompareOp(left, _, right) => {
+                self.is_pure_int_expression(left) && self.is_pure_int_expression(right)
+            },
+            Expression::LogicalOp(left, _, right) => {
+                self.is_pure_int_expression(left) && self.is_pure_int_expression(right)
+            },
+            Expression::TernaryOp(cond, true_expr, false_expr) => {
+                self.is_pure_int_expression(cond) && self.is_pure_int_expression(true_expr) && self.is_pure_int_expression(false_expr)
+            },
+            _ => false,
+        }
+    }
+    
 }
 
 impl<'a> Interpreter<'a> {
@@ -311,5 +351,236 @@ impl<'a> Interpreter<'a> {
         
         // 返回原值
         value
+    }
+    
+    fn handle_method_call(&mut self, obj_expr: &Expression, method_name: &str, args: &[Expression]) -> Value {
+        // 计算对象表达式
+        let obj_value = self.evaluate_expression(obj_expr);
+        
+        // 计算参数
+        let mut evaluated_args = Vec::new();
+        for arg in args {
+            let arg_value = self.evaluate_expression(arg);
+            evaluated_args.push(arg_value.to_string());
+        }
+        
+        // 根据对象类型调用相应的方法
+        match obj_value {
+            Value::String(s) => {
+                // 字符串方法调用
+                self.handle_string_method(&s, method_name, &evaluated_args)
+            },
+            Value::Array(arr) => {
+                // 数组方法调用
+                self.handle_array_method(&arr, method_name, &evaluated_args)
+            },
+            Value::Map(map) => {
+                // 映射方法调用
+                self.handle_map_method(&map, method_name, &evaluated_args)
+            },
+            _ => {
+                // 不支持的对象类型
+                panic!("不支持对类型 {:?} 调用方法 {}", obj_value, method_name)
+            }
+        }
+    }
+    
+    fn handle_chain_call(&mut self, obj_expr: &Expression, chain_calls: &[(String, Vec<Expression>)]) -> Value {
+        // 计算初始对象
+        let mut current_value = self.evaluate_expression(obj_expr);
+        
+        // 依次执行链式调用
+        for (method_name, args) in chain_calls {
+            // 计算参数
+            let mut evaluated_args = Vec::new();
+            for arg in args {
+                let arg_value = self.evaluate_expression(arg);
+                evaluated_args.push(arg_value.to_string());
+            }
+            
+            // 根据当前值类型调用相应的方法
+            current_value = match &current_value {
+                Value::String(s) => {
+                    self.handle_string_method(s, method_name, &evaluated_args)
+                },
+                Value::Array(arr) => {
+                    self.handle_array_method(arr, method_name, &evaluated_args)
+                },
+                Value::Map(map) => {
+                    self.handle_map_method(map, method_name, &evaluated_args)
+                },
+                _ => {
+                    // 不支持的对象类型
+                    panic!("不支持对类型 {:?} 调用方法 {}", current_value, method_name)
+                }
+            };
+        }
+        
+        current_value
+    }
+    
+    fn handle_string_method(&mut self, s: &str, method_name: &str, args: &[String]) -> Value {
+        match method_name {
+            "length" => {
+                if args.is_empty() {
+                    Value::Int(s.len() as i32)
+                } else {
+                    panic!("length方法不接受参数")
+                }
+            },
+            "substring" => {
+                if args.len() == 2 {
+                    if let (Ok(start), Ok(end)) = (args[0].parse::<usize>(), args[1].parse::<usize>()) {
+                        if start < s.len() && end <= s.len() && start < end {
+                            Value::String(s[start..end].to_string())
+                        } else {
+                            Value::String("".to_string())
+                        }
+                    } else {
+                        panic!("substring方法的参数必须是整数")
+                    }
+                } else {
+                    panic!("substring方法需要两个参数")
+                }
+            },
+            "to_upper" => {
+                if args.is_empty() {
+                    Value::String(s.to_uppercase())
+                } else {
+                    panic!("to_upper方法不接受参数")
+                }
+            },
+            "to_lower" => {
+                if args.is_empty() {
+                    Value::String(s.to_lowercase())
+                } else {
+                    panic!("to_lower方法不接受参数")
+                }
+            },
+            "trim" => {
+                if args.is_empty() {
+                    Value::String(s.trim().to_string())
+                } else {
+                    panic!("trim方法不接受参数")
+                }
+            },
+            _ => {
+                // 未知的字符串方法
+                panic!("未知的字符串方法: {}", method_name)
+            }
+        }
+    }
+    
+    fn handle_array_method(&mut self, arr: &[Value], method_name: &str, args: &[String]) -> Value {
+        match method_name {
+            "length" => {
+                if args.is_empty() {
+                    Value::Int(arr.len() as i32)
+                } else {
+                    panic!("length方法不接受参数")
+                }
+            },
+            "push" => {
+                if args.len() == 1 {
+                    let mut new_arr = arr.to_vec();
+                    new_arr.push(Value::String(args[0].clone()));
+                    Value::Array(new_arr)
+                } else {
+                    panic!("push方法需要一个参数")
+                }
+            },
+            "pop" => {
+                if args.is_empty() {
+                    let mut new_arr = arr.to_vec();
+                    if let Some(last) = new_arr.pop() {
+                        last
+                    } else {
+                        Value::None
+                    }
+                } else {
+                    panic!("pop方法不接受参数")
+                }
+            },
+            _ => {
+                panic!("未知的数组方法: {}", method_name)
+            }
+        }
+    }
+    
+    fn handle_map_method(&mut self, map: &std::collections::HashMap<String, Value>, method_name: &str, args: &[String]) -> Value {
+        match method_name {
+            "size" => {
+                if args.is_empty() {
+                    Value::Int(map.len() as i32)
+                } else {
+                    panic!("size方法不接受参数")
+                }
+            },
+            "get" => {
+                if args.len() == 1 {
+                    if let Some(value) = map.get(&args[0]) {
+                        value.clone()
+                    } else {
+                        Value::None
+                    }
+                } else {
+                    panic!("get方法需要一个参数")
+                }
+            },
+            "set" => {
+                if args.len() == 2 {
+                    let mut new_map = map.clone();
+                    new_map.insert(args[0].clone(), Value::String(args[1].clone()));
+                    Value::Map(new_map)
+                } else {
+                    panic!("set方法需要两个参数")
+                }
+            },
+            _ => {
+                panic!("未知的映射方法: {}", method_name)
+            }
+        }
+    }
+    
+    fn contains_method_call(&self, expr: &Expression) -> bool {
+        match expr {
+            Expression::MethodCall(_, _, _) | Expression::ChainCall(_, _) => true,
+            Expression::BinaryOp(left, _, right) => {
+                self.contains_method_call(left) || self.contains_method_call(right)
+            },
+            Expression::CompareOp(left, _, right) => {
+                self.contains_method_call(left) || self.contains_method_call(right)
+            },
+            Expression::LogicalOp(left, _, right) => {
+                self.contains_method_call(left) || self.contains_method_call(right)
+            },
+            Expression::TernaryOp(cond, true_expr, false_expr) => {
+                self.contains_method_call(cond) || self.contains_method_call(true_expr) || self.contains_method_call(false_expr)
+            },
+            Expression::FunctionCall(_, args) => {
+                args.iter().any(|arg| self.contains_method_call(arg))
+            },
+            Expression::NamespacedFunctionCall(_, args) => {
+                args.iter().any(|arg| self.contains_method_call(arg))
+            },
+            Expression::GlobalFunctionCall(_, args) => {
+                args.iter().any(|arg| self.contains_method_call(arg))
+            },
+            Expression::LibraryFunctionCall(_, _, args) => {
+                args.iter().any(|arg| self.contains_method_call(arg))
+            },
+            Expression::ArrayLiteral(elements) => {
+                elements.iter().any(|elem| self.contains_method_call(elem))
+            },
+            Expression::MapLiteral(entries) => {
+                entries.iter().any(|(key, value)| {
+                    self.contains_method_call(key) || self.contains_method_call(value)
+                })
+            },
+            Expression::Throw(expr) => {
+                self.contains_method_call(expr)
+            },
+            _ => false,
+        }
     }
 } 
