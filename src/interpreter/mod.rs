@@ -17,3 +17,4 @@ pub use value::Value;
 pub use evaluator::{Evaluator, perform_binary_operation, evaluate_compare_operation};
 pub use executor::{Executor, ExecutionResult, update_variable_value, handle_increment, handle_decrement, execute_if_else};
 pub use library_loader::{load_library, call_library_function, convert_values_to_string_args, convert_value_to_string_arg}; 
+pub use jit::{jit_eval_const_expr}; 
