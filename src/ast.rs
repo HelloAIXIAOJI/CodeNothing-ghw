@@ -35,6 +35,9 @@ pub enum Expression {
     PostDecrement(String), // 后置自减 (var--)
     TernaryOp(Box<Expression>, Box<Expression>, Box<Expression>), // 三元条件运算符 (cond ? expr1 : expr2)
     Throw(Box<Expression>), // 新增：抛出异常
+    // 链式调用相关
+    MethodCall(Box<Expression>, String, Vec<Expression>), // 方法调用 (obj.method(args))
+    ChainCall(Box<Expression>, Vec<(String, Vec<Expression>)>), // 链式调用 (obj.method1().method2())
     // 未来可以扩展更多表达式类型
 }
 
