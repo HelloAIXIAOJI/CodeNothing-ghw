@@ -400,6 +400,81 @@ impl<'a> ExpressionParser for ParserBase<'a> {
                         let var_name = self.consume().unwrap();
                         self.consume(); // 消费 "--"
                         Ok(Expression::PostDecrement(var_name))
+                    } else if self.peek() == Some(&".".to_string()) {
+                        // 方法调用或链式调用
+                        self.consume(); // 消费 "."
+                        
+                        // 获取方法名
+                        let method_name = self.consume().ok_or_else(|| "期望方法名".to_string())?;
+                        
+                        // 检查是否有参数
+                        if self.peek() == Some(&"(".to_string()) {
+                            self.consume(); // 消费 "("
+                            
+                            let mut args = Vec::new();
+                            
+                            if self.peek() != Some(&")".to_string()) {
+                                // 解析参数列表
+                                loop {
+                                    let arg = self.parse_expression()?;
+                                    args.push(arg);
+                                    
+                                    if self.peek() != Some(&",".to_string()) {
+                                        break;
+                                    }
+                                    
+                                    self.consume(); // 消费 ","
+                                }
+                            }
+                            
+                            self.expect(")")?;
+                            
+                            // 检查是否有更多的链式调用
+                            let mut all_calls = Vec::new();
+                            all_calls.push((method_name.clone(), args.clone()));
+                            
+                            while self.peek() == Some(&".".to_string()) {
+                                self.consume(); // 消费 "."
+                                
+                                let next_method = self.consume().ok_or_else(|| "期望方法名".to_string())?;
+                                
+                                if self.peek() == Some(&"(".to_string()) {
+                                    self.consume(); // 消费 "("
+                                    
+                                    let mut next_args = Vec::new();
+                                    
+                                    if self.peek() != Some(&")".to_string()) {
+                                        // 解析参数列表
+                                        loop {
+                                            let arg = self.parse_expression()?;
+                                            next_args.push(arg);
+                                            
+                                            if self.peek() != Some(&",".to_string()) {
+                                                break;
+                                            }
+                                            
+                                            self.consume(); // 消费 ","
+                                        }
+                                    }
+                                    
+                                    self.expect(")")?;
+                                    
+                                    all_calls.push((next_method, next_args));
+                                } else {
+                                    return Err("方法调用后期望左括号".to_string());
+                                }
+                            }
+                            
+                            if all_calls.len() == 1 {
+                                // 只有一个方法调用
+                                Ok(Expression::MethodCall(Box::new(Expression::Variable(name.clone())), method_name, args))
+                            } else {
+                                // 多个方法调用，构建链式调用
+                                Ok(Expression::ChainCall(Box::new(Expression::Variable(name)), all_calls))
+                            }
+                        } else {
+                            return Err("方法调用后期望左括号".to_string());
+                        }
                     } else {
                         // 变量
                         Ok(Expression::Variable(name))
