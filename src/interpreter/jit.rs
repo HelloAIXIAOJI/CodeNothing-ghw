@@ -26,6 +26,9 @@ static JIT_LT_F64_COUNT: AtomicUsize = AtomicUsize::new(0);
 static JIT_LE_F64_COUNT: AtomicUsize = AtomicUsize::new(0);
 static JIT_GT_F64_COUNT: AtomicUsize = AtomicUsize::new(0);
 static JIT_GE_F64_COUNT: AtomicUsize = AtomicUsize::new(0);
+static JIT_AND_BOOL_COUNT: AtomicUsize = AtomicUsize::new(0);
+static JIT_OR_BOOL_COUNT: AtomicUsize = AtomicUsize::new(0);
+static JIT_NOT_BOOL_COUNT: AtomicUsize = AtomicUsize::new(0);
 
 pub fn mark_jit_used() {
     JIT_USED.store(true, Ordering::Relaxed);
@@ -268,6 +271,103 @@ pub fn jit_ge_f64(a: f64, b: f64) -> bool {
     jit_cmp_f64(a, b, |builder, x, y| builder.ins().fcmp(FloatCC::GreaterThanOrEqual, x, y))
 } 
 
+pub fn jit_and_bool(a: bool, b: bool) -> bool {
+    JIT_AND_BOOL_COUNT.fetch_add(1, Ordering::Relaxed);
+    mark_jit_used();
+    let mut builder = JITBuilder::new(cranelift_module::default_libcall_names()).expect("JITBuilder failed");
+    let mut module = JITModule::new(builder);
+    let mut ctx = module.make_context();
+    ctx.func.signature.returns.push(AbiParam::new(types::I8));
+    ctx.func.signature.params.push(AbiParam::new(types::I8));
+    ctx.func.signature.params.push(AbiParam::new(types::I8));
+    {
+        let mut builder_ctx = FunctionBuilderContext::new();
+        let mut func_builder = FunctionBuilder::new(&mut ctx.func, &mut builder_ctx);
+        let block = func_builder.create_block();
+        func_builder.append_block_params_for_function_params(block);
+        func_builder.switch_to_block(block);
+        func_builder.seal_block(block);
+        let x = func_builder.block_params(block)[0];
+        let y = func_builder.block_params(block)[1];
+        let result = func_builder.ins().band(x, y);
+        func_builder.ins().return_(&[result]);
+        func_builder.finalize();
+    }
+    let func_id = module
+        .declare_function("and_bool", cranelift_module::Linkage::Export, &ctx.func.signature)
+        .unwrap();
+    module.define_function(func_id, &mut ctx).unwrap();
+    module.clear_context(&mut ctx);
+    let _ = module.finalize_definitions();
+    let code = module.get_finalized_function(func_id);
+    let func = unsafe { std::mem::transmute::<_, fn(i8, i8) -> i8>(code) };
+    func(a as i8, b as i8) != 0
+}
+
+pub fn jit_or_bool(a: bool, b: bool) -> bool {
+    JIT_OR_BOOL_COUNT.fetch_add(1, Ordering::Relaxed);
+    mark_jit_used();
+    let mut builder = JITBuilder::new(cranelift_module::default_libcall_names()).expect("JITBuilder failed");
+    let mut module = JITModule::new(builder);
+    let mut ctx = module.make_context();
+    ctx.func.signature.returns.push(AbiParam::new(types::I8));
+    ctx.func.signature.params.push(AbiParam::new(types::I8));
+    ctx.func.signature.params.push(AbiParam::new(types::I8));
+    {
+        let mut builder_ctx = FunctionBuilderContext::new();
+        let mut func_builder = FunctionBuilder::new(&mut ctx.func, &mut builder_ctx);
+        let block = func_builder.create_block();
+        func_builder.append_block_params_for_function_params(block);
+        func_builder.switch_to_block(block);
+        func_builder.seal_block(block);
+        let x = func_builder.block_params(block)[0];
+        let y = func_builder.block_params(block)[1];
+        let result = func_builder.ins().bor(x, y);
+        func_builder.ins().return_(&[result]);
+        func_builder.finalize();
+    }
+    let func_id = module
+        .declare_function("or_bool", cranelift_module::Linkage::Export, &ctx.func.signature)
+        .unwrap();
+    module.define_function(func_id, &mut ctx).unwrap();
+    module.clear_context(&mut ctx);
+    let _ = module.finalize_definitions();
+    let code = module.get_finalized_function(func_id);
+    let func = unsafe { std::mem::transmute::<_, fn(i8, i8) -> i8>(code) };
+    func(a as i8, b as i8) != 0
+}
+
+pub fn jit_not_bool(a: bool) -> bool {
+    JIT_NOT_BOOL_COUNT.fetch_add(1, Ordering::Relaxed);
+    mark_jit_used();
+    let mut builder = JITBuilder::new(cranelift_module::default_libcall_names()).expect("JITBuilder failed");
+    let mut module = JITModule::new(builder);
+    let mut ctx = module.make_context();
+    ctx.func.signature.returns.push(AbiParam::new(types::I8));
+    ctx.func.signature.params.push(AbiParam::new(types::I8));
+    {
+        let mut builder_ctx = FunctionBuilderContext::new();
+        let mut func_builder = FunctionBuilder::new(&mut ctx.func, &mut builder_ctx);
+        let block = func_builder.create_block();
+        func_builder.append_block_params_for_function_params(block);
+        func_builder.switch_to_block(block);
+        func_builder.seal_block(block);
+        let x = func_builder.block_params(block)[0];
+        let result = func_builder.ins().bnot(x);
+        func_builder.ins().return_(&[result]);
+        func_builder.finalize();
+    }
+    let func_id = module
+        .declare_function("not_bool", cranelift_module::Linkage::Export, &ctx.func.signature)
+        .unwrap();
+    module.define_function(func_id, &mut ctx).unwrap();
+    module.clear_context(&mut ctx);
+    let _ = module.finalize_definitions();
+    let code = module.get_finalized_function(func_id);
+    let func = unsafe { std::mem::transmute::<_, fn(i8) -> i8>(code) };
+    func(a as i8) != 0
+}
+
 pub fn jit_stats() -> String {
     let mut s = String::new();
     if was_jit_used() {
@@ -304,6 +404,77 @@ pub fn jit_stats() -> String {
         s.push_str(&format!("  float小于等于: {}\n", JIT_LE_F64_COUNT.load(Ordering::Relaxed)));
         s.push_str(&format!("  float大于: {}\n", JIT_GT_F64_COUNT.load(Ordering::Relaxed)));
         s.push_str(&format!("  float大于等于: {}\n", JIT_GE_F64_COUNT.load(Ordering::Relaxed)));
+        s.push_str(&format!("  bool与: {}\n", JIT_AND_BOOL_COUNT.load(Ordering::Relaxed)));
+        s.push_str(&format!("  bool或: {}\n", JIT_OR_BOOL_COUNT.load(Ordering::Relaxed)));
+        s.push_str(&format!("  bool非: {}\n", JIT_NOT_BOOL_COUNT.load(Ordering::Relaxed)));
     }
     s
+} 
+
+pub fn jit_eval_const_expr(expr: &crate::ast::Expression) -> Option<crate::interpreter::value::Value> {
+    use crate::ast::{Expression, BinaryOperator, LogicalOperator, CompareOperator};
+    use crate::interpreter::value::Value;
+    match expr {
+        Expression::IntLiteral(i) => Some(Value::Int(*i)),
+        Expression::LongLiteral(l) => Some(Value::Long(*l)),
+        Expression::FloatLiteral(f) => Some(Value::Float(*f)),
+        Expression::BoolLiteral(b) => Some(Value::Bool(*b)),
+        Expression::BinaryOp(left, op, right) => {
+            let l = jit_eval_const_expr(left)?;
+            let r = jit_eval_const_expr(right)?;
+            match (l, r, op) {
+                (Value::Int(a), Value::Int(b), BinaryOperator::Add) => Some(Value::Int(jit_add(a as i64, b as i64) as i32)),
+                (Value::Int(a), Value::Int(b), BinaryOperator::Subtract) => Some(Value::Int(jit_sub(a as i64, b as i64) as i32)),
+                (Value::Int(a), Value::Int(b), BinaryOperator::Multiply) => Some(Value::Int(jit_mul(a as i64, b as i64) as i32)),
+                (Value::Int(a), Value::Int(b), BinaryOperator::Divide) => Some(Value::Int(jit_div(a as i64, b as i64) as i32)),
+                (Value::Int(a), Value::Int(b), BinaryOperator::Modulo) => Some(Value::Int(jit_mod(a as i64, b as i64) as i32)),
+                (Value::Long(a), Value::Long(b), BinaryOperator::Add) => Some(Value::Long(jit_add(a, b))),
+                (Value::Long(a), Value::Long(b), BinaryOperator::Subtract) => Some(Value::Long(jit_sub(a, b))),
+                (Value::Long(a), Value::Long(b), BinaryOperator::Multiply) => Some(Value::Long(jit_mul(a, b))),
+                (Value::Long(a), Value::Long(b), BinaryOperator::Divide) => Some(Value::Long(jit_div(a, b))),
+                (Value::Long(a), Value::Long(b), BinaryOperator::Modulo) => Some(Value::Long(jit_mod(a, b))),
+                (Value::Float(a), Value::Float(b), BinaryOperator::Add) => Some(Value::Float(jit_add_f64(a, b))),
+                (Value::Float(a), Value::Float(b), BinaryOperator::Subtract) => Some(Value::Float(jit_sub_f64(a, b))),
+                (Value::Float(a), Value::Float(b), BinaryOperator::Multiply) => Some(Value::Float(jit_mul_f64(a, b))),
+                (Value::Float(a), Value::Float(b), BinaryOperator::Divide) => Some(Value::Float(jit_div_f64(a, b))),
+                _ => None,
+            }
+        },
+        Expression::LogicalOp(left, op, right) => {
+            let l = jit_eval_const_expr(left)?;
+            let r = if let LogicalOperator::Not = op { None } else { jit_eval_const_expr(right) };
+            match (l, r, op) {
+                (Value::Bool(a), Some(Value::Bool(b)), LogicalOperator::And) => Some(Value::Bool(jit_and_bool(a, b))),
+                (Value::Bool(a), Some(Value::Bool(b)), LogicalOperator::Or) => Some(Value::Bool(jit_or_bool(a, b))),
+                (Value::Bool(a), None, LogicalOperator::Not) => Some(Value::Bool(jit_not_bool(a))),
+                _ => None,
+            }
+        },
+        Expression::CompareOp(left, op, right) => {
+            let l = jit_eval_const_expr(left)?;
+            let r = jit_eval_const_expr(right)?;
+            match (l, r, op) {
+                (Value::Int(a), Value::Int(b), CompareOperator::Equal) => Some(Value::Bool(jit_eq_i64(a as i64, b as i64))),
+                (Value::Int(a), Value::Int(b), CompareOperator::NotEqual) => Some(Value::Bool(jit_ne_i64(a as i64, b as i64))),
+                (Value::Int(a), Value::Int(b), CompareOperator::Greater) => Some(Value::Bool(jit_gt_i64(a as i64, b as i64))),
+                (Value::Int(a), Value::Int(b), CompareOperator::Less) => Some(Value::Bool(jit_lt_i64(a as i64, b as i64))),
+                (Value::Int(a), Value::Int(b), CompareOperator::GreaterEqual) => Some(Value::Bool(jit_ge_i64(a as i64, b as i64))),
+                (Value::Int(a), Value::Int(b), CompareOperator::LessEqual) => Some(Value::Bool(jit_le_i64(a as i64, b as i64))),
+                (Value::Long(a), Value::Long(b), CompareOperator::Equal) => Some(Value::Bool(jit_eq_i64(a, b))),
+                (Value::Long(a), Value::Long(b), CompareOperator::NotEqual) => Some(Value::Bool(jit_ne_i64(a, b))),
+                (Value::Long(a), Value::Long(b), CompareOperator::Greater) => Some(Value::Bool(jit_gt_i64(a, b))),
+                (Value::Long(a), Value::Long(b), CompareOperator::Less) => Some(Value::Bool(jit_lt_i64(a, b))),
+                (Value::Long(a), Value::Long(b), CompareOperator::GreaterEqual) => Some(Value::Bool(jit_ge_i64(a, b))),
+                (Value::Long(a), Value::Long(b), CompareOperator::LessEqual) => Some(Value::Bool(jit_le_i64(a, b))),
+                (Value::Float(a), Value::Float(b), CompareOperator::Equal) => Some(Value::Bool(jit_eq_f64(a, b))),
+                (Value::Float(a), Value::Float(b), CompareOperator::NotEqual) => Some(Value::Bool(jit_ne_f64(a, b))),
+                (Value::Float(a), Value::Float(b), CompareOperator::Greater) => Some(Value::Bool(jit_gt_f64(a, b))),
+                (Value::Float(a), Value::Float(b), CompareOperator::Less) => Some(Value::Bool(jit_lt_f64(a, b))),
+                (Value::Float(a), Value::Float(b), CompareOperator::GreaterEqual) => Some(Value::Bool(jit_ge_f64(a, b))),
+                (Value::Float(a), Value::Float(b), CompareOperator::LessEqual) => Some(Value::Bool(jit_le_f64(a, b))),
+                _ => None,
+            }
+        },
+        _ => None,
+    }
 } 
