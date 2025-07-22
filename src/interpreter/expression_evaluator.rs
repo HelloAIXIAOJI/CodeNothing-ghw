@@ -390,6 +390,10 @@ impl<'a> Interpreter<'a> {
                 // 映射方法调用
                 self.handle_map_method(&map, method_name, &evaluated_args)
             },
+            Value::Object(_) => {
+                // 对象方法调用
+                self.call_method(obj_expr, method_name, args)
+            },
             _ => {
                 // 不支持的对象类型
                 panic!("不支持对类型 {:?} 调用方法 {}", obj_value, method_name)
@@ -632,15 +636,37 @@ impl<'a> Interpreter<'a> {
             fields.insert(field.name.clone(), default_value);
         }
         
-        let object = ObjectInstance {
-            class_name: class_name.to_string(),
-            fields,
-        };
-        
-        // TODO: 调用构造函数
-        // 这里需要实现构造函数的调用逻辑
-        
-        Value::Object(object)
+        // 调用构造函数
+        if let Some(constructor) = class.constructors.first() {
+            // 创建临时的this上下文
+            let mut this_context = ObjectInstance {
+                class_name: class_name.to_string(),
+                fields: fields.clone(),
+            };
+            
+            // 创建构造函数参数环境
+            let mut constructor_env = HashMap::new();
+            for (i, param) in constructor.parameters.iter().enumerate() {
+                if i < arg_values.len() {
+                    constructor_env.insert(param.name.clone(), arg_values[i].clone());
+                }
+            }
+            
+            // 执行构造函数体
+            for statement in &constructor.body {
+                self.execute_constructor_statement(statement, &mut this_context, &constructor_env);
+            }
+            
+            // 使用构造函数执行后的字段
+            Value::Object(this_context)
+        } else {
+            // 没有构造函数，使用默认字段
+            let object = ObjectInstance {
+                class_name: class_name.to_string(),
+                fields,
+            };
+            Value::Object(object)
+        }
     }
     
     fn access_field(&mut self, obj_expr: &Expression, field_name: &str) -> Value {
@@ -660,6 +686,123 @@ impl<'a> Interpreter<'a> {
                 eprintln!("错误: 尝试访问非对象的字段");
                 Value::None
             }
+        }
+    }
+    
+    fn execute_constructor_statement(&mut self, statement: &crate::ast::Statement, this_obj: &mut ObjectInstance, constructor_env: &HashMap<String, Value>) {
+        use crate::ast::Statement;
+        
+        match statement {
+            Statement::FieldAssignment(obj_expr, field_name, value_expr) => {
+                // 检查是否是this.field = value
+                if let crate::ast::Expression::This = **obj_expr {
+                    let value = self.evaluate_expression_with_constructor_context(value_expr, this_obj, constructor_env);
+                    this_obj.fields.insert(field_name.clone(), value);
+                }
+            },
+            _ => {
+                // 其他语句暂时跳过
+            }
+        }
+    }
+    
+    fn evaluate_expression_with_constructor_context(&mut self, expr: &Expression, _this_obj: &ObjectInstance, constructor_env: &HashMap<String, Value>) -> Value {
+        match expr {
+            Expression::Variable(var_name) => {
+                // 首先检查构造函数参数
+                if let Some(value) = constructor_env.get(var_name) {
+                    return value.clone();
+                }
+                // 然后检查常量
+                if let Some(value) = self.constants.get(var_name) {
+                    return value.clone();
+                }
+                // 最后检查全局变量
+                if let Some(value) = self.global_env.get(var_name) {
+                    return value.clone();
+                }
+                // 如果都没找到，返回None
+                Value::None
+            },
+            _ => self.evaluate_expression(expr),
+        }
+    }
+    
+    fn call_method(&mut self, obj_expr: &Expression, method_name: &str, args: &[Expression]) -> Value {
+        let obj_value = self.evaluate_expression(obj_expr);
+        
+        match obj_value {
+            Value::Object(obj) => {
+                // 查找类定义
+                let class = match self.classes.get(&obj.class_name) {
+                    Some(class) => *class,
+                    None => {
+                        eprintln!("错误: 未找到类 '{}'", obj.class_name);
+                        return Value::None;
+                    }
+                };
+                
+                // 查找方法
+                let method = match class.methods.iter().find(|m| m.name == method_name) {
+                    Some(method) => method,
+                    None => {
+                        eprintln!("错误: 类 '{}' 没有方法 '{}'", obj.class_name, method_name);
+                        return Value::None;
+                    }
+                };
+                
+                // 计算参数
+                let mut arg_values = Vec::new();
+                for arg in args {
+                    arg_values.push(self.evaluate_expression(arg));
+                }
+                
+                // 执行方法体
+                self.execute_method_body(&method.body, &obj)
+            },
+            _ => {
+                eprintln!("错误: 尝试在非对象上调用方法");
+                Value::None
+            }
+        }
+    }
+    
+    fn execute_method_body(&mut self, statements: &[crate::ast::Statement], this_obj: &ObjectInstance) -> Value {
+        use crate::ast::Statement;
+        
+        for statement in statements {
+            match statement {
+                Statement::Return(expr) => {
+                    // 在方法执行期间，需要设置this上下文
+                    return self.evaluate_expression_with_this(expr, this_obj);
+                },
+                _ => {
+                    // 其他语句暂时跳过
+                }
+            }
+        }
+        
+        Value::None
+    }
+    
+    fn evaluate_expression_with_this(&mut self, expr: &Expression, this_obj: &ObjectInstance) -> Value {
+        match expr {
+            Expression::This => Value::Object(this_obj.clone()),
+            Expression::FieldAccess(obj_expr, field_name) => {
+                if let Expression::This = **obj_expr {
+                    // this.field 访问
+                    match this_obj.fields.get(field_name) {
+                        Some(value) => value.clone(),
+                        None => {
+                            eprintln!("错误: 对象 '{}' 没有字段 '{}'", this_obj.class_name, field_name);
+                            Value::None
+                        }
+                    }
+                } else {
+                    self.evaluate_expression(expr)
+                }
+            },
+            _ => self.evaluate_expression(expr),
         }
     }
 } 
