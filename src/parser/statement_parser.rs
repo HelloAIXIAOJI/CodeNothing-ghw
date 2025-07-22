@@ -180,7 +180,9 @@ impl<'a> StatementParser for ParserBase<'a> {
                                 "bool" => Type::Bool,
                                 "string" => Type::String,
                                 "long" => Type::Long,
-                                _ => return Err(format!("不支持的类型: {}", base_type)),
+                                "void" => Type::Void,
+                                "Exception" => Type::Exception,
+                                _ => Type::Class(base_type), // 假设是类类型
                             }
                         };
                         
@@ -318,7 +320,21 @@ impl<'a> StatementParser for ParserBase<'a> {
                         // 返回函数调用语句
                         Ok(Statement::FunctionCallStatement(func_call_expr))
                     } else {
-                        Err(format!("不支持的语句: {} {}", var_name, next_token))
+                        // 检查是否是 this.field = value 的情况
+                        if var_name == "this" && next_token == "." {
+                            self.consume(); // 消费 "."
+                            let field_name = self.consume().ok_or_else(|| "期望字段名".to_string())?;
+                            self.expect("=")?;
+                            let value_expr = self.parse_expression()?;
+                            self.expect(";")?;
+                            Ok(Statement::FieldAssignment(
+                                Box::new(Expression::This),
+                                field_name,
+                                value_expr
+                            ))
+                        } else {
+                            Err(format!("不支持的语句: {} {}", var_name, next_token))
+                        }
                     }
                 } else {
                     Err("不完整的语句".to_string())
@@ -475,7 +491,7 @@ impl<'a> StatementParser for ParserBase<'a> {
                 self.expect(">")?;
                 Ok(Type::Map(Box::new(key_type), Box::new(value_type)))
             },
-            _ => Err(format!("未知类型: {}", type_name)),
+            _ => Ok(Type::Class(type_name)), // 假设是类类型
         }
     }
 
