@@ -8,6 +8,7 @@ use crate::parser::namespace_parser::{parse_namespace, parse_namespace_collect_e
 use crate::parser::function_parser::{parse_function, parse_function_collect_errors};
 use crate::parser::statement_parser::StatementParser;
 use crate::parser::expression_parser::ExpressionParser;
+use crate::parser::class_parser::ClassParser;
 
 /// 解析程序
 pub fn parse_program(parser: &mut ParserBase) -> Result<Program, String> {
@@ -16,6 +17,7 @@ pub fn parse_program(parser: &mut ParserBase) -> Result<Program, String> {
     let mut imported_namespaces = Vec::new();
     let mut file_imports = Vec::new();
     let mut constants = Vec::new(); // 新增：用于存储常量定义
+    let mut classes = Vec::new(); // 新增：用于存储类定义
     
     while parser.position < parser.tokens.len() {
         if parser.peek() == Some(&"ns".to_string()) {
@@ -26,6 +28,10 @@ pub fn parse_program(parser: &mut ParserBase) -> Result<Program, String> {
             // 解析函数
             let function = parse_function(parser)?;
             functions.push(function);
+        } else if parser.peek() == Some(&"class".to_string()) {
+            // 解析类
+            let class = parser.parse_class()?;
+            classes.push(class);
         } else if parser.peek() == Some(&"const".to_string()) {
             // 解析常量定义
             parser.consume(); // 消费 "const"
@@ -126,7 +132,7 @@ pub fn parse_program(parser: &mut ParserBase) -> Result<Program, String> {
                 return Err("期望 'lib_once'、'lib'、'file'、'ns' 或 'namespace' 关键字".to_string());
             }
         } else {
-            return Err(format!("期望 'fn', 'ns', 或 'using', 但得到了 '{:?}'", parser.peek()));
+            return Err(format!("期望 'fn', 'ns', 'class' 或 'using', 但得到了 '{:?}'", parser.peek()));
         }
     }
     
@@ -136,6 +142,7 @@ pub fn parse_program(parser: &mut ParserBase) -> Result<Program, String> {
         imported_namespaces,
         file_imports,
         constants, // 添加常量列表
+        classes, // 添加类列表
     })
 }
 
@@ -160,6 +167,16 @@ pub fn parse_program_collect_all_errors(parser: &mut ParserBase, errors: &mut Ve
                 Ok(_) => try_next_item = true,
                 Err(_) => {
                     // 跳过当前函数，尝试在下一个 ns、fn 或 using 关键字处继续解析
+                    skip_to_next_top_level_item(parser);
+                    try_next_item = parser.position < parser.tokens.len();
+                }
+            }
+        } else if parser.peek() == Some(&"class".to_string()) {
+            match parser.parse_class() {
+                Ok(_) => try_next_item = true,
+                Err(error) => {
+                    errors.push(error);
+                    // 跳过当前类，尝试在下一个关键字处继续解析
                     skip_to_next_top_level_item(parser);
                     try_next_item = parser.position < parser.tokens.len();
                 }
