@@ -9,6 +9,7 @@ pub enum Type {
     Array(Box<Type>),
     Map(Box<Type>, Box<Type>),
     Exception, // 新增：异常类型
+    Class(String), // 新增：类类型
     // 未来可以扩展更多类型
 }
 
@@ -38,6 +39,10 @@ pub enum Expression {
     // 链式调用相关
     MethodCall(Box<Expression>, String, Vec<Expression>), // 方法调用 (obj.method(args))
     ChainCall(Box<Expression>, Vec<(String, Vec<Expression>)>), // 链式调用 (obj.method1().method2())
+    // OOP相关表达式
+    ObjectCreation(String, Vec<Expression>), // 对象创建 (new ClassName(args))
+    FieldAccess(Box<Expression>, String), // 字段访问 (obj.field)
+    This, // this 关键字
     // 未来可以扩展更多表达式类型
 }
 
@@ -98,6 +103,9 @@ pub enum Statement {
     ForEachLoop(String, Expression, Vec<Statement>), // foreach循环，包含变量名、集合表达式和循环体
     TryCatch(Vec<Statement>, Vec<(String, Type, Vec<Statement>)>, Option<Vec<Statement>>), // 新增：try-catch-finally 语句
     Throw(Expression), // 新增：抛出异常语句
+    // OOP相关语句
+    ClassDeclaration(Class), // 类声明
+    FieldAssignment(Box<Expression>, String, Expression), // 字段赋值 (obj.field = value)
     // 未来可以扩展更多语句类型
 }
 
@@ -124,10 +132,49 @@ pub struct Namespace {
 }
 
 #[derive(Debug, Clone)]
+pub enum Visibility {
+    Private,
+    Protected,
+    Public,
+}
+
+#[derive(Debug, Clone)]
+pub struct Field {
+    pub name: String,
+    pub field_type: Type,
+    pub visibility: Visibility,
+    pub initial_value: Option<Expression>,
+}
+
+#[derive(Debug, Clone)]
+pub struct Method {
+    pub name: String,
+    pub parameters: Vec<Parameter>,
+    pub return_type: Type,
+    pub body: Vec<Statement>,
+    pub visibility: Visibility,
+}
+
+#[derive(Debug, Clone)]
+pub struct Constructor {
+    pub parameters: Vec<Parameter>,
+    pub body: Vec<Statement>,
+}
+
+#[derive(Debug, Clone)]
+pub struct Class {
+    pub name: String,
+    pub fields: Vec<Field>,
+    pub methods: Vec<Method>,
+    pub constructors: Vec<Constructor>,
+}
+
+#[derive(Debug, Clone)]
 pub struct Program {
     pub functions: Vec<Function>,
     pub namespaces: Vec<Namespace>, // 顶层命名空间
     pub imported_namespaces: Vec<(NamespaceType, Vec<String>)>, // 统一的导入记录
     pub file_imports: Vec<String>,   // 顶层文件导入
     pub constants: Vec<(String, Type, Expression)>, // 新增：顶层常量定义
+    pub classes: Vec<Class>, // 新增：类定义
 } 
