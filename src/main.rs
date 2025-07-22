@@ -99,6 +99,7 @@ fn init_program() -> Program {
         imported_namespaces: Vec::new(),
         file_imports: Vec::new(),
         constants: Vec::new(), // 初始化常量列表
+        classes: Vec::new(), // 初始化类列表
     }
 }
 
