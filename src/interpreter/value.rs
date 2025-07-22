@@ -11,7 +11,14 @@ pub enum Value {
     Long(i64),
     Array(Vec<Value>),
     Map(HashMap<String, Value>),
+    Object(ObjectInstance), // 新增：对象实例
     None, // 表示空值或未定义的值
+}
+
+#[derive(Debug, Clone)]
+pub struct ObjectInstance {
+    pub class_name: String,
+    pub fields: HashMap<String, Value>,
 }
 
 impl Value {
@@ -44,6 +51,9 @@ impl Value {
                 }
                 result.push('}');
                 result
+            },
+            Value::Object(obj) => {
+                format!("{}@{:p}", obj.class_name, obj)
             },
             Value::None => "null".to_string(),
         }
@@ -78,6 +88,7 @@ impl fmt::Display for Value {
                 }
                 write!(f, "}}")
             },
+            Value::Object(obj) => write!(f, "{}@{:p}", obj.class_name, obj),
             Value::None => write!(f, "null"),
         }
     }
