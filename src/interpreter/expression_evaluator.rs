@@ -757,8 +757,16 @@ impl<'a> Interpreter<'a> {
                     arg_values.push(self.evaluate_expression(arg));
                 }
                 
-                // 执行方法体
-                self.execute_method_body(&method.body, &obj)
+                // 创建方法参数环境
+                let mut method_env = HashMap::new();
+                for (i, param) in method.parameters.iter().enumerate() {
+                    if i < arg_values.len() {
+                        method_env.insert(param.name.clone(), arg_values[i].clone());
+                    }
+                }
+                
+                // 执行方法体，传递this对象和参数环境
+                self.execute_method_body_with_context(&method.body, &obj, &method_env)
             },
             _ => {
                 eprintln!("错误: 尝试在非对象上调用方法");
@@ -767,25 +775,15 @@ impl<'a> Interpreter<'a> {
         }
     }
     
-    fn execute_method_body(&mut self, statements: &[crate::ast::Statement], this_obj: &ObjectInstance) -> Value {
+    fn execute_method_body_with_context(&mut self, statements: &[crate::ast::Statement], this_obj: &ObjectInstance, method_env: &HashMap<String, Value>) -> Value {
         use crate::ast::Statement;
         
         for statement in statements {
             match statement {
                 Statement::Return(expr) => {
-                    // 在方法执行期间，需要设置this上下文
-                    return self.evaluate_expression_with_this(expr, this_obj);
+                    // 在方法执行期间，需要设置this上下文和参数环境
+                    return self.evaluate_expression_with_full_context(expr, this_obj, method_env);
                 },
-                // 暂时注释掉不存在的语句类型
-                // Statement::Expression(expr) => {
-                //     // 执行表达式语句
-                //     self.evaluate_expression_with_this(expr, this_obj);
-                // },
-                // Statement::Assignment(var_name, expr) => {
-                //     // 变量赋值
-                //     let value = self.evaluate_expression_with_this(expr, this_obj);
-                //     self.local_env.insert(var_name.clone(), value);
-                // },
                 _ => {
                     // 其他语句暂时跳过
                 }
@@ -795,7 +793,7 @@ impl<'a> Interpreter<'a> {
         Value::None
     }
     
-    fn evaluate_expression_with_this(&mut self, expr: &Expression, this_obj: &ObjectInstance) -> Value {
+    fn evaluate_expression_with_full_context(&mut self, expr: &Expression, this_obj: &ObjectInstance, method_env: &HashMap<String, Value>) -> Value {
         match expr {
             Expression::This => Value::Object(this_obj.clone()),
             Expression::FieldAccess(obj_expr, field_name) => {
@@ -812,7 +810,7 @@ impl<'a> Interpreter<'a> {
                     }
                 } else {
                     // 递归处理其他字段访问
-                    let obj_value = self.evaluate_expression_with_this(obj_expr, this_obj);
+                    let obj_value = self.evaluate_expression_with_full_context(obj_expr, this_obj, method_env);
                     match obj_value {
                         Value::Object(obj) => {
                             match obj.fields.get(field_name) {
@@ -824,7 +822,8 @@ impl<'a> Interpreter<'a> {
                             }
                         },
                         _ => {
-                            eprintln!("错误: 尝试访问非对象的字段");
+                            eprintln!("错误: 尝试访问非对象的字段，对象值: {:?}", obj_value);
+                            eprintln!("调试: obj_expr = {:?}", obj_expr);
                             Value::None
                         }
                     }
@@ -832,8 +831,8 @@ impl<'a> Interpreter<'a> {
             },
             Expression::BinaryOp(left, op, right) => {
                 // 处理二元操作，确保this上下文传递
-                let left_val = self.evaluate_expression_with_this(left, this_obj);
-                let right_val = self.evaluate_expression_with_this(right, this_obj);
+                let left_val = self.evaluate_expression_with_full_context(left, this_obj, method_env);
+                let right_val = self.evaluate_expression_with_full_context(right, this_obj, method_env);
                 // 使用现有的二元操作评估方法
                 match op {
                     crate::ast::BinaryOperator::Add => {
@@ -866,7 +865,15 @@ impl<'a> Interpreter<'a> {
                 }
             },
             Expression::Variable(var_name) => {
-                // 首先检查局部变量
+                // 特殊处理this关键字
+                if var_name == "this" {
+                    return Value::Object(this_obj.clone());
+                }
+                // 首先检查方法参数
+                if let Some(value) = method_env.get(var_name) {
+                    return value.clone();
+                }
+                // 然后检查局部变量
                 if let Some(value) = self.local_env.get(var_name) {
                     return value.clone();
                 }
