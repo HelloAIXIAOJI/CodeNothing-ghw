@@ -72,15 +72,17 @@ pub fn remove_comments(source: &str) -> String {
 
 // 词法分析：将源代码转换为词法单元
 pub fn tokenize(source: &str, debug: bool) -> Vec<String> {
-    // 预处理字符串，保留字符串字面量
+    // 1. 移除注释
+    let source_without_comments = remove_comments(source);
+
+    // 2. 将字符串字面量替换为占位符
     let mut processed_source = String::new();
+    let mut string_placeholders = Vec::new();
     let mut in_string = false;
     let mut escape = false;
     let mut current_string = String::new();
-    let mut string_placeholders = Vec::new();
-    
-    // 先处理字符串
-    for c in source.chars() {
+
+    for c in source_without_comments.chars() {
         if in_string {
             if escape {
                 current_string.push(c);
@@ -91,7 +93,7 @@ pub fn tokenize(source: &str, debug: bool) -> Vec<String> {
             } else if c == '"' {
                 in_string = false;
                 string_placeholders.push(current_string.clone());
-                processed_source.push_str(&format!(" __STRING_{} ", string_placeholders.len() - 1));
+                processed_source.push_str(&format!(" __STRING_{}__ ", string_placeholders.len() - 1));
                 current_string.clear();
             } else {
                 current_string.push(c);
@@ -103,110 +105,73 @@ pub fn tokenize(source: &str, debug: bool) -> Vec<String> {
         }
     }
     
-    // 特殊处理命名空间分隔符，确保它被当作一个整体处理
-    processed_source = processed_source.replace("::", " __NS_SEP__ ");
-    
-    // 特殊处理范围操作符，确保它被当作一个整体处理
-    processed_source = processed_source.replace("..", " __RANGE_OP__ ");
-    
-    // 特殊处理复合操作符，必须在处理单个符号之前
-    processed_source = processed_source
-        .replace("++", " __INC_OP__ ")
-        .replace("--", " __DEC_OP__ ")
-        .replace("+=", " __ADD_ASSIGN__ ")
-        .replace("-=", " __SUB_ASSIGN__ ")
-        .replace("*=", " __MUL_ASSIGN__ ")
-        .replace("/=", " __DIV_ASSIGN__ ")
-        .replace("%=", " __MOD_ASSIGN__ ")
-        .replace("==", " __EQ__ ")
-        .replace("!=", " __NEQ__ ")
-        .replace(">=", " __GTE__ ")
-        .replace("<=", " __LTE__ ")
-        .replace("&&", " __AND__ ")
-        .replace("||", " __OR__ ")
-        .replace("!", " __NOT__ ");
-
+    // 3. 逐字符进行词法分析
     let mut tokens = Vec::new();
     let mut chars = processed_source.chars().peekable();
 
     while let Some(&c) = chars.peek() {
         if c.is_whitespace() {
-            chars.next(); // skip whitespace
-        } else if c.is_digit(10) {
-            let mut number = String::new();
-            while let Some(&next_c) = chars.peek() {
-                if next_c.is_digit(10) || next_c == '.' {
-                    number.push(chars.next().unwrap());
+            chars.next(); // Skip whitespace
+            continue;
+        }
+
+        // 检查多字符运算符
+        let next_char = chars.clone().nth(1);
+        if let Some(nc) = next_char {
+            let two_char_op = format!("{}{}", c, nc);
+            if ["==", "!=", ">=", "<=", "&&", "||", "::", "..", "++", "--", "+=", "-=", "*=", "/=", "%="].contains(&two_char_op.as_str()) {
+                tokens.push(two_char_op);
+                chars.next();
+                chars.next();
+                continue;
+            }
+        }
+
+        // 检查标识符、关键字、或字符串占位符
+        if c.is_alphabetic() || c == '_' {
+            let mut s = String::new();
+            while let Some(&p) = chars.peek() {
+                if p.is_alphanumeric() || p == '_' {
+                    s.push(chars.next().unwrap());
                 } else {
                     break;
                 }
             }
-            tokens.push(number);
-        } else if c.is_alphabetic() || c == '_' {
-            let mut identifier = String::new();
-            while let Some(&next_c) = chars.peek() {
-                if next_c.is_alphanumeric() || next_c == '_' {
-                    identifier.push(chars.next().unwrap());
+            tokens.push(s);
+        }
+        // 检查数字 (整数或浮点数)
+        else if c.is_digit(10) || (c == '.' && chars.clone().nth(1).map_or(false, |c| c.is_digit(10))) {
+            let mut s = String::new();
+            while let Some(&p) = chars.peek() {
+                if p.is_digit(10) || p == '.' {
+                    s.push(chars.next().unwrap());
                 } else {
                     break;
                 }
             }
-            tokens.push(identifier);
-        } else {
-            // Handle single-character tokens
-            tokens.push(c.to_string());
-            chars.next();
+            tokens.push(s);
+        }
+        // 单字符符号
+        else {
+            tokens.push(chars.next().unwrap().to_string());
         }
     }
-    
-    // 处理其他分隔符 (this part is now replaced by the manual loop)
-    let final_tokens = tokens
-        .into_iter()
-        .map(|s| {
-            if s.starts_with("__STRING_") {
-                let idx = s.trim_start_matches("__STRING_").parse::<usize>().unwrap();
-                format!("\"{}\"", string_placeholders[idx])
-            } else if s == "__NS_SEP__" {
-                "::".to_string()
-            } else if s == "__RANGE_OP__" {
-                "..".to_string()
-            } else if s == "__INC_OP__" {
-                "++".to_string()
-            } else if s == "__DEC_OP__" {
-                "--".to_string()
-            } else if s == "__ADD_ASSIGN__" {
-                "+=".to_string()
-            } else if s == "__SUB_ASSIGN__" {
-                "-=".to_string()
-            } else if s == "__MUL_ASSIGN__" {
-                "*=".to_string()
-            } else if s == "__DIV_ASSIGN__" {
-                "/=".to_string()
-            } else if s == "__MOD_ASSIGN__" {
-                "%=".to_string()
-            } else if s == "__EQ__" {
-                "==".to_string()
-            } else if s == "__NEQ__" {
-                "!=".to_string()
-            } else if s == "__GTE__" {
-                ">=".to_string()
-            } else if s == "__LTE__" {
-                "<=".to_string()
-            } else if s == "__AND__" {
-                "&&".to_string()
-            } else if s == "__OR__" {
-                "||".to_string()
-            } else if s == "__NOT__" {
-                "!".to_string()
-            } else {
-                s.to_string()
+
+    // 4. 恢复字符串占位符
+    let final_tokens = tokens.into_iter().map(|s| {
+        if s.starts_with("__STRING_") && s.ends_with("__") {
+            if let Ok(idx) = s.trim_start_matches("__STRING_").trim_end_matches("__").parse::<usize>() {
+                if idx < string_placeholders.len() {
+                    return format!("\"{}\"", string_placeholders[idx]);
+                }
             }
-        })
-        .collect::<Vec<String>>();
-    
+        }
+        s
+    }).collect::<Vec<String>>();
+
     if debug {
         debug_println(&format!("词法分析结果: {:?}", final_tokens));
     }
-    
+
     final_tokens
 } 
