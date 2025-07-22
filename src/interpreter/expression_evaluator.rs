@@ -147,6 +147,14 @@ impl<'a> ExpressionEvaluator for Interpreter<'a> {
                 // TODO: 实现this关键字，需要当前对象上下文
                 Value::None
             },
+            Expression::Super => {
+                // TODO: 实现super关键字
+                Value::None
+            },
+            Expression::StaticAccess(class_name, member_name) => {
+                // TODO: 实现静态访问
+                Value::None
+            },
         }
     }
     
