@@ -257,6 +257,26 @@ impl<'a> ExpressionParser for ParserBase<'a> {
                     self.consume();
                     Ok(Expression::BoolLiteral(false))
                 },
+                "new" => {
+                    // 解析对象创建: new ClassName(args)
+                    self.consume(); // 消费 "new"
+                    let class_name = self.consume().ok_or_else(|| "期望类名".to_string())?;
+                    self.expect("(")?;
+                    
+                    let mut args = Vec::new();
+                    if self.peek() != Some(&")".to_string()) {
+                        loop {
+                            args.push(self.parse_expression()?);
+                            if self.peek() != Some(&",".to_string()) {
+                                break;
+                            }
+                            self.consume(); // 消费 ","
+                        }
+                    }
+                    self.expect(")")?;
+                    
+                    Ok(Expression::ObjectCreation(class_name, args))
+                },
                 _ => {
                     // 检查是否是字符串字面量
                     if token.starts_with('"') && token.ends_with('"') {
@@ -401,7 +421,7 @@ impl<'a> ExpressionParser for ParserBase<'a> {
                         self.consume(); // 消费 "--"
                         Ok(Expression::PostDecrement(var_name))
                     } else if self.peek() == Some(&".".to_string()) {
-                        // 方法调用或链式调用
+                        // 字段访问或方法调用或链式调用
                         self.consume(); // 消费 "."
                         
                         // 获取方法名
@@ -473,7 +493,8 @@ impl<'a> ExpressionParser for ParserBase<'a> {
                                 Ok(Expression::ChainCall(Box::new(Expression::Variable(name)), all_calls))
                             }
                         } else {
-                            return Err("方法调用后期望左括号".to_string());
+                            // 字段访问
+                            Ok(Expression::FieldAccess(Box::new(Expression::Variable(name)), method_name))
                         }
                     } else {
                         // 变量
