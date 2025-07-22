@@ -6,7 +6,7 @@ use crate::parser::expression_parser::ExpressionParser;
 
 pub trait ClassParser {
     fn parse_class(&mut self) -> Result<Class, String>;
-    fn parse_visibility(&mut self) -> Visibility;
+    fn parse_visibility(&mut self) -> (Visibility, bool, bool, bool, bool);
     fn parse_field(&mut self) -> Result<Field, String>;
     fn parse_method(&mut self) -> Result<Method, String>;
     fn parse_constructor(&mut self) -> Result<Constructor, String>;
@@ -14,11 +14,27 @@ pub trait ClassParser {
 
 impl<'a> ClassParser for ParserBase<'a> {
     fn parse_class(&mut self) -> Result<Class, String> {
+        // 检查是否为抽象类
+        let is_abstract = if self.peek() == Some(&"abstract".to_string()) {
+            self.consume(); // 消费 "abstract"
+            true
+        } else {
+            false
+        };
+        
         // 消费 "class" 关键字
         self.consume(); // class
         
         // 获取类名
         let class_name = self.consume().ok_or_else(|| "期望类名".to_string())?;
+        
+        // 检查是否有继承
+        let super_class = if self.peek() == Some(&"extends".to_string()) {
+            self.consume(); // 消费 "extends"
+            Some(self.consume().ok_or_else(|| "期望父类名".to_string())?)
+        } else {
+            None
+        };
         
         // 解析类体
         self.expect("{")?;
@@ -28,8 +44,8 @@ impl<'a> ClassParser for ParserBase<'a> {
         let mut constructors = Vec::new();
         
         while self.peek() != Some(&"}".to_string()) {
-            // 解析访问修饰符
-            let visibility = self.parse_visibility();
+            // 解析访问修饰符和其他修饰符
+            let (visibility, is_static, is_virtual, is_override, is_abstract) = self.parse_visibility();
             
             if self.peek() == Some(&"constructor".to_string()) {
                 // 解析构造函数
@@ -39,11 +55,16 @@ impl<'a> ClassParser for ParserBase<'a> {
                 // 解析方法
                 let mut method = self.parse_method()?;
                 method.visibility = visibility;
+                method.is_static = is_static;
+                method.is_virtual = is_virtual;
+                method.is_override = is_override;
+                method.is_abstract = is_abstract;
                 methods.push(method);
             } else if self.peek().is_some() {
                 // 解析字段
                 let mut field = self.parse_field()?;
                 field.visibility = visibility;
+                field.is_static = is_static;
                 fields.push(field);
             } else {
                 return Err("期望字段、方法或构造函数".to_string());
@@ -55,28 +76,57 @@ impl<'a> ClassParser for ParserBase<'a> {
         
         Ok(Class {
             name: class_name,
+            super_class,
             fields,
             methods,
             constructors,
+            is_abstract,
         })
     }
     
-    fn parse_visibility(&mut self) -> Visibility {
-        match self.peek() {
-            Some(token) if token == "private" => {
-                self.consume();
-                Visibility::Private
-            },
-            Some(token) if token == "protected" => {
-                self.consume();
-                Visibility::Protected
-            },
-            Some(token) if token == "public" => {
-                self.consume();
-                Visibility::Public
-            },
-            _ => Visibility::Public, // 默认为public
+    fn parse_visibility(&mut self) -> (Visibility, bool, bool, bool, bool) {
+        let mut visibility = Visibility::Public;
+        let mut is_static = false;
+        let mut is_virtual = false;
+        let mut is_override = false;
+        let mut is_abstract = false;
+        
+        // 解析修饰符
+        while let Some(token) = self.peek() {
+            match token.as_str() {
+                "private" => {
+                    self.consume();
+                    visibility = Visibility::Private;
+                },
+                "protected" => {
+                    self.consume();
+                    visibility = Visibility::Protected;
+                },
+                "public" => {
+                    self.consume();
+                    visibility = Visibility::Public;
+                },
+                "static" => {
+                    self.consume();
+                    is_static = true;
+                },
+                "virtual" => {
+                    self.consume();
+                    is_virtual = true;
+                },
+                "override" => {
+                    self.consume();
+                    is_override = true;
+                },
+                "abstract" => {
+                    self.consume();
+                    is_abstract = true;
+                },
+                _ => break,
+            }
         }
+        
+        (visibility, is_static, is_virtual, is_override, is_abstract)
     }
     
     fn parse_field(&mut self) -> Result<Field, String> {
@@ -103,6 +153,7 @@ impl<'a> ClassParser for ParserBase<'a> {
             field_type,
             visibility: Visibility::Public, // 将在调用处设置
             initial_value,
+            is_static: false, // 将在调用处设置
         })
     }
     
@@ -158,6 +209,10 @@ impl<'a> ClassParser for ParserBase<'a> {
             return_type,
             body,
             visibility: Visibility::Public, // 将在调用处设置
+            is_static: false, // 将在调用处设置
+            is_virtual: false, // 将在调用处设置
+            is_override: false, // 将在调用处设置
+            is_abstract: false, // 将在调用处设置
         })
     }
     
