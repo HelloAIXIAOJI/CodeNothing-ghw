@@ -1,0 +1,53 @@
+using lib <io>;
+
+// 静态成员测试类
+class MathUtils {
+    static PI : float = 3.14159;
+    static counter : int = 0;
+    
+    static fn add(a : int, b : int) : int {
+        return a + b;
+    };
+    
+    static fn getPI() : float {
+        return MathUtils::PI;
+    };
+};
+
+class Person {
+    public name : string;
+    static totalCount : int = 0;
+    
+    constructor(name : string) {
+        this.name = name;
+    };
+    
+    public fn getName() : string {
+        return this.name;
+    };
+};
+
+fn main() : int {
+    std::println("=== CodeNothing 静态成员测试 ===");
+    
+    // 测试静态字段访问
+    std::println("1. 测试静态字段访问");
+    pi : float = MathUtils::PI;
+    std::println("PI = " + pi);
+    std::println("✅ 静态字段访问成功");
+    
+    // 测试对象创建
+    std::println("2. 测试对象创建");
+    person : Person = new Person("Alice");
+    std::println("Person name: " + person.getName());
+    std::println("✅ 对象创建成功");
+    
+    // 测试静态字段访问
+    std::println("3. 测试多个静态字段");
+    count : int = Person::totalCount;
+    std::println("Total count: " + count);
+    std::println("✅ 静态成员测试成功");
+    
+    std::println("=== 静态成员测试完成 ===");
+    return 0;
+};
