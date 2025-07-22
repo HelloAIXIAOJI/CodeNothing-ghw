@@ -1,6 +1,7 @@
 use crate::ast::{Expression, BinaryOperator, CompareOperator, LogicalOperator};
-use super::value::Value;
+use super::value::{Value, ObjectInstance};
 use super::interpreter_core::{Interpreter, debug_println};
+use std::collections::HashMap;
 use super::function_calls::FunctionCallHandler;
 use super::jit;
 
@@ -134,7 +135,18 @@ impl<'a> ExpressionEvaluator for Interpreter<'a> {
                 let exception_value = self.evaluate_expression(exception_expr);
                 // 注意：这里我们返回异常值，但实际的抛出逻辑在语句执行器中处理
                 exception_value
-            }
+            },
+            // OOP相关表达式的实现
+            Expression::ObjectCreation(class_name, args) => {
+                self.create_object(class_name, args)
+            },
+            Expression::FieldAccess(obj_expr, field_name) => {
+                self.access_field(obj_expr, field_name)
+            },
+            Expression::This => {
+                // TODO: 实现this关键字，需要当前对象上下文
+                Value::None
+            },
         }
     }
     
@@ -581,6 +593,73 @@ impl<'a> Interpreter<'a> {
                 self.contains_method_call(expr)
             },
             _ => false,
+        }
+    }
+    
+    // OOP相关方法
+    fn create_object(&mut self, class_name: &str, args: &[Expression]) -> Value {
+        // 查找类定义
+        let class = match self.classes.get(class_name) {
+            Some(class) => *class,
+            None => {
+                eprintln!("错误: 未找到类 '{}'", class_name);
+                return Value::None;
+            }
+        };
+        
+        // 计算构造函数参数
+        let mut arg_values = Vec::new();
+        for arg in args {
+            arg_values.push(self.evaluate_expression(arg));
+        }
+        
+        // 创建对象实例
+        let mut fields = HashMap::new();
+        
+        // 初始化字段为默认值
+        for field in &class.fields {
+            let default_value = match field.initial_value {
+                Some(ref expr) => self.evaluate_expression(expr),
+                None => match field.field_type {
+                    crate::ast::Type::Int => Value::Int(0),
+                    crate::ast::Type::Float => Value::Float(0.0),
+                    crate::ast::Type::Bool => Value::Bool(false),
+                    crate::ast::Type::String => Value::String(String::new()),
+                    crate::ast::Type::Long => Value::Long(0),
+                    _ => Value::None,
+                }
+            };
+            fields.insert(field.name.clone(), default_value);
+        }
+        
+        let object = ObjectInstance {
+            class_name: class_name.to_string(),
+            fields,
+        };
+        
+        // TODO: 调用构造函数
+        // 这里需要实现构造函数的调用逻辑
+        
+        Value::Object(object)
+    }
+    
+    fn access_field(&mut self, obj_expr: &Expression, field_name: &str) -> Value {
+        let obj_value = self.evaluate_expression(obj_expr);
+        
+        match obj_value {
+            Value::Object(obj) => {
+                match obj.fields.get(field_name) {
+                    Some(value) => value.clone(),
+                    None => {
+                        eprintln!("错误: 对象 '{}' 没有字段 '{}'", obj.class_name, field_name);
+                        Value::None
+                    }
+                }
+            },
+            _ => {
+                eprintln!("错误: 尝试访问非对象的字段");
+                Value::None
+            }
         }
     }
 } 
