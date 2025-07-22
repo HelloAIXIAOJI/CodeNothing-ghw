@@ -776,6 +776,16 @@ impl<'a> Interpreter<'a> {
                     // 在方法执行期间，需要设置this上下文
                     return self.evaluate_expression_with_this(expr, this_obj);
                 },
+                // 暂时注释掉不存在的语句类型
+                // Statement::Expression(expr) => {
+                //     // 执行表达式语句
+                //     self.evaluate_expression_with_this(expr, this_obj);
+                // },
+                // Statement::Assignment(var_name, expr) => {
+                //     // 变量赋值
+                //     let value = self.evaluate_expression_with_this(expr, this_obj);
+                //     self.local_env.insert(var_name.clone(), value);
+                // },
                 _ => {
                     // 其他语句暂时跳过
                 }
@@ -799,8 +809,62 @@ impl<'a> Interpreter<'a> {
                         }
                     }
                 } else {
-                    self.evaluate_expression(expr)
+                    // 递归处理其他字段访问
+                    let obj_value = self.evaluate_expression_with_this(obj_expr, this_obj);
+                    match obj_value {
+                        Value::Object(obj) => {
+                            match obj.fields.get(field_name) {
+                                Some(value) => value.clone(),
+                                None => {
+                                    eprintln!("错误: 对象 '{}' 没有字段 '{}'", obj.class_name, field_name);
+                                    Value::None
+                                }
+                            }
+                        },
+                        _ => {
+                            eprintln!("错误: 尝试访问非对象的字段");
+                            Value::None
+                        }
+                    }
                 }
+            },
+            Expression::BinaryOp(left, op, right) => {
+                // 处理二元操作，确保this上下文传递
+                let left_val = self.evaluate_expression_with_this(left, this_obj);
+                let right_val = self.evaluate_expression_with_this(right, this_obj);
+                // 使用现有的二元操作评估方法
+                match op {
+                    crate::ast::BinaryOperator::Add => {
+                        match (left_val, right_val) {
+                            (Value::String(s1), Value::String(s2)) => Value::String(s1 + &s2),
+                            (Value::String(s), Value::Int(i)) => Value::String(s + &i.to_string()),
+                            (Value::String(s), Value::Float(f)) => Value::String(s + &f.to_string()),
+                            (Value::Int(i), Value::String(s)) => Value::String(i.to_string() + &s),
+                            (Value::Float(f), Value::String(s)) => Value::String(f.to_string() + &s),
+                            (Value::Int(i1), Value::Int(i2)) => Value::Int(i1 + i2),
+                            (Value::Float(f1), Value::Float(f2)) => Value::Float(f1 + f2),
+                            (Value::Int(i), Value::Float(f)) => Value::Float(i as f64 + f),
+                            (Value::Float(f), Value::Int(i)) => Value::Float(f + i as f64),
+                            _ => Value::None,
+                        }
+                    },
+                    _ => Value::None, // 其他操作暂时返回None
+                }
+            },
+            Expression::Variable(var_name) => {
+                // 首先检查局部变量
+                if let Some(value) = self.local_env.get(var_name) {
+                    return value.clone();
+                }
+                // 然后检查常量
+                if let Some(value) = self.constants.get(var_name) {
+                    return value.clone();
+                }
+                // 最后检查全局变量
+                if let Some(value) = self.global_env.get(var_name) {
+                    return value.clone();
+                }
+                Value::None
             },
             _ => self.evaluate_expression(expr),
         }
