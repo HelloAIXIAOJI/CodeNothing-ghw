@@ -152,9 +152,18 @@ impl<'a> ExpressionEvaluator for Interpreter<'a> {
                 Value::None
             },
             Expression::StaticAccess(class_name, member_name) => {
-                // TODO: 临时实现静态访问
-                eprintln!("静态访问 {}::{} 暂未完全实现", class_name, member_name);
-                Value::None
+                // 简化的静态访问实现
+                if let Some(static_members) = self.static_members.get(class_name) {
+                    if let Some(value) = static_members.static_fields.get(member_name) {
+                        value.clone()
+                    } else {
+                        eprintln!("静态成员 {}::{} 不存在", class_name, member_name);
+                        Value::None
+                    }
+                } else {
+                    eprintln!("类 {} 不存在", class_name);
+                    Value::None
+                }
             },
         }
     }
@@ -173,6 +182,7 @@ impl<'a> ExpressionEvaluator for Interpreter<'a> {
             None
         }
     }
+    
     
     fn is_pure_int_expression(&self, expr: &Expression) -> bool {
         match expr {
