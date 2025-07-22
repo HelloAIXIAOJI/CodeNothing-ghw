@@ -1,6 +1,61 @@
 # CodeNothing 更新日志
 
-## [v0.3.1] - 2025-07-22
+## [v0.3.1] - 2025-07-23
+
+### 🎉 重大更新：面向对象编程（OOP）支持
+
+#### 新增功能
+- **完整的类系统**：支持类定义、对象创建、字段访问
+  - 类定义语法：`class ClassName { ... };`
+  - 字段定义：`public/private/protected fieldName : Type;`
+  - 方法定义：`public fn methodName() : ReturnType { ... };`
+  - 构造函数：`constructor(params) { ... };`
+  
+- **对象操作**：
+  - 对象创建：`new ClassName(args)`
+  - 字段访问：`obj.field`
+  - this关键字：`this.field = value`
+  
+- **访问控制**：
+  - `public` - 公共访问
+  - `private` - 私有访问
+  - `protected` - 保护访问
+  
+- **类型系统扩展**：
+  - 新增 `Type::Class(String)` 类型
+  - 支持自定义类类型声明
+  - 完整的类型推断和检查
+
+#### 技术实现
+- **AST扩展**：新增 `Class`, `Field`, `Method`, `Constructor`, `Visibility` 等结构体
+- **解析器增强**：新增 `class_parser.rs` 模块，支持完整的OOP语法解析
+- **解释器核心**：新增 `Value::Object(ObjectInstance)` 类型，支持对象实例化
+- **表达式系统**：新增 `ObjectCreation`, `FieldAccess`, `This` 表达式类型
+- **语句系统**：新增 `ClassDeclaration`, `FieldAssignment` 语句类型
+
+#### 测试文件
+- `test_oop_basic.cn` - 基础OOP功能测试
+- `test_oop_advanced.cn` - 高级OOP特性测试  
+- `test_oop_complex.cn` - 复杂多类交互测试
+
+#### 当前状态
+- ✅ 类定义和解析 - 完全支持
+- ✅ 对象创建 - 完全支持
+- ✅ 字段访问 - 完全支持
+- ⏳ 方法调用 - 待实现
+- ⏳ 构造函数执行 - 待实现
+- ⏳ 继承系统 - 待实现
+
+这是CodeNothing语言发展史上的一个重要里程碑，标志着从过程式编程向面向对象编程的重大跃进！
+
+### 修复
+- 修复：重写了词法分析器，以正确处理浮点数、链式调用（`.`）和多字符运算符。
+- 修复：现在可以正确解析 `variable.method()` 形式的链式调用，解决了“期望 ';', 但得到了 '.identifier'”的错误。
+- 修复：现在可以正确解析浮点数字面量（如 `0.2`），解决了“期望 ')', 但得到了 '.'”的错误。
+
+---
+
+## [v0.3.0] - 2025-07-22
 - 修复：重写了词法分析器，以正确处理浮点数、链式调用（`.`）和多字符运算符。
 - 修复：现在可以正确解析 `variable.method()` 形式的链式调用，解决了“期望 ';', 但得到了 '.identifier'”的错误。
 - 修复：现在可以正确解析浮点数字面量（如 `0.2`），解决了“期望 ')', 但得到了 '.'”的错误。
