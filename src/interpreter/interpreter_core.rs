@@ -120,6 +120,8 @@ pub struct Interpreter<'a> {
     pub namespace_import_stack: Vec<HashMap<String, Vec<String>>>,
     // 类定义存储
     pub classes: HashMap<String, &'a Class>,
+    // 静态成员存储
+    pub static_members: HashMap<String, crate::interpreter::value::StaticMembers>,
 }
 
 impl<'a> Interpreter<'a> {
@@ -154,6 +156,7 @@ impl<'a> Interpreter<'a> {
             constants, // 添加常量环境
             namespace_import_stack: vec![HashMap::new()], // 初始化栈，最外层一层
             classes: HashMap::new(),
+            static_members: HashMap::new(),
         };
         
         // 初始化常量
@@ -167,6 +170,29 @@ impl<'a> Interpreter<'a> {
         // 注册类定义
         for class in &program.classes {
             interpreter.classes.insert(class.name.clone(), class);
+            
+            // 初始化静态成员
+            let mut static_fields = HashMap::new();
+            for field in &class.fields {
+                if field.is_static {
+                    let initial_value = match field.initial_value {
+                        Some(ref expr) => interpreter.evaluate_expression_direct(expr),
+                        None => match field.field_type {
+                            crate::ast::Type::Int => crate::interpreter::value::Value::Int(0),
+                            crate::ast::Type::Float => crate::interpreter::value::Value::Float(0.0),
+                            crate::ast::Type::Bool => crate::interpreter::value::Value::Bool(false),
+                            crate::ast::Type::String => crate::interpreter::value::Value::String(String::new()),
+                            crate::ast::Type::Long => crate::interpreter::value::Value::Long(0),
+                            _ => crate::interpreter::value::Value::None,
+                        }
+                    };
+                    static_fields.insert(field.name.clone(), initial_value);
+                }
+            }
+            
+            interpreter.static_members.insert(class.name.clone(), crate::interpreter::value::StaticMembers {
+                static_fields,
+            });
         }
         
         interpreter
