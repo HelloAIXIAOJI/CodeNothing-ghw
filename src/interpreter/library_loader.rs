@@ -272,6 +272,9 @@ pub fn convert_value_to_string_arg(value: &Value) -> String {
                 .collect();
             format!("{{{}}}", entries.join(", "))
         },
+        Value::Object(obj) => {
+            format!("{}@{:p}", obj.class_name, obj)
+        },
         Value::None => "null".to_string(),
     }
 }
