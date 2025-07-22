@@ -148,11 +148,12 @@ impl<'a> ExpressionEvaluator for Interpreter<'a> {
                 Value::None
             },
             Expression::Super => {
-                // TODO: 实现super关键字
+                // TODO: 实现super关键字，需要当前类上下文
                 Value::None
             },
             Expression::StaticAccess(class_name, member_name) => {
-                // TODO: 实现静态访问
+                // TODO: 临时实现静态访问
+                eprintln!("静态访问 {}::{} 暂未完全实现", class_name, member_name);
                 Value::None
             },
         }
@@ -236,6 +237,42 @@ impl<'a> Interpreter<'a> {
                 }
             }
         }
+    }
+    
+    // 收集类的所有字段（包括继承的）
+    fn collect_all_fields(&self, class: &crate::ast::Class) -> Vec<crate::ast::Field> {
+        let mut all_fields = Vec::new();
+        
+        // 递归收集父类字段
+        if let Some(ref super_class_name) = class.super_class {
+            if let Some(super_class) = self.classes.get(super_class_name) {
+                let parent_fields = self.collect_all_fields(super_class);
+                all_fields.extend(parent_fields);
+            }
+        }
+        
+        // 添加当前类的字段
+        all_fields.extend(class.fields.clone());
+        
+        all_fields
+    }
+    
+    // 查找方法（支持继承）
+    fn find_method(&self, class_name: &str, method_name: &str) -> Option<(&crate::ast::Class, &crate::ast::Method)> {
+        if let Some(class) = self.classes.get(class_name) {
+            // 首先在当前类中查找
+            for method in &class.methods {
+                if method.name == method_name && !method.is_static {
+                    return Some((class, method));
+                }
+            }
+            
+            // 如果没找到，在父类中查找
+            if let Some(ref super_class_name) = class.super_class {
+                return self.find_method(super_class_name, method_name);
+            }
+        }
+        None
     }
     
     fn evaluate_ternary_operation(&mut self, condition: &Expression, true_expr: &Expression, false_expr: &Expression) -> Value {
@@ -619,29 +656,40 @@ impl<'a> Interpreter<'a> {
             }
         };
         
+        // 检查是否为抽象类
+        if class.is_abstract {
+            eprintln!("错误: 不能实例化抽象类 '{}'", class_name);
+            return Value::None;
+        }
+        
         // 计算构造函数参数
         let mut arg_values = Vec::new();
         for arg in args {
             arg_values.push(self.evaluate_expression(arg));
         }
         
-        // 创建对象实例
+        // 创建对象实例，包含继承的字段
         let mut fields = HashMap::new();
         
+        // 收集所有字段（包括继承的）
+        let all_fields = self.collect_all_fields(class);
+        
         // 初始化字段为默认值
-        for field in &class.fields {
-            let default_value = match field.initial_value {
-                Some(ref expr) => self.evaluate_expression(expr),
-                None => match field.field_type {
-                    crate::ast::Type::Int => Value::Int(0),
-                    crate::ast::Type::Float => Value::Float(0.0),
-                    crate::ast::Type::Bool => Value::Bool(false),
-                    crate::ast::Type::String => Value::String(String::new()),
-                    crate::ast::Type::Long => Value::Long(0),
-                    _ => Value::None,
-                }
-            };
-            fields.insert(field.name.clone(), default_value);
+        for field in &all_fields {
+            if !field.is_static { // 只初始化非静态字段
+                let default_value = match field.initial_value {
+                    Some(ref expr) => self.evaluate_expression(expr),
+                    None => match field.field_type {
+                        crate::ast::Type::Int => Value::Int(0),
+                        crate::ast::Type::Float => Value::Float(0.0),
+                        crate::ast::Type::Bool => Value::Bool(false),
+                        crate::ast::Type::String => Value::String(String::new()),
+                        crate::ast::Type::Long => Value::Long(0),
+                        _ => Value::None,
+                    }
+                };
+                fields.insert(field.name.clone(), default_value);
+            }
         }
         
         // 调用构造函数
@@ -741,23 +789,20 @@ impl<'a> Interpreter<'a> {
         
         match obj_value {
             Value::Object(obj) => {
-                // 查找类定义
-                let class = match self.classes.get(&obj.class_name) {
-                    Some(class) => *class,
-                    None => {
-                        eprintln!("错误: 未找到类 '{}'", obj.class_name);
-                        return Value::None;
-                    }
-                };
-                
-                // 查找方法
-                let method = match class.methods.iter().find(|m| m.name == method_name) {
-                    Some(method) => method,
+                // 使用继承支持的方法查找，克隆方法以避免借用冲突
+                let method_clone = match self.find_method(&obj.class_name, method_name) {
+                    Some((_class, method)) => method.clone(),
                     None => {
                         eprintln!("错误: 类 '{}' 没有方法 '{}'", obj.class_name, method_name);
                         return Value::None;
                     }
                 };
+                
+                // 检查抽象方法
+                if method_clone.is_abstract {
+                    eprintln!("错误: 不能调用抽象方法 '{}'", method_name);
+                    return Value::None;
+                }
                 
                 // 计算参数
                 let mut arg_values = Vec::new();
@@ -767,14 +812,14 @@ impl<'a> Interpreter<'a> {
                 
                 // 创建方法参数环境
                 let mut method_env = HashMap::new();
-                for (i, param) in method.parameters.iter().enumerate() {
+                for (i, param) in method_clone.parameters.iter().enumerate() {
                     if i < arg_values.len() {
                         method_env.insert(param.name.clone(), arg_values[i].clone());
                     }
                 }
                 
                 // 执行方法体，传递this对象和参数环境
-                self.execute_method_body_with_context(&method.body, &obj, &method_env)
+                self.execute_method_body_with_context(&method_clone.body, &obj, &method_env)
             },
             _ => {
                 eprintln!("错误: 尝试在非对象上调用方法");
