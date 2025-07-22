@@ -170,6 +170,13 @@ impl<'a> StatementExecutor for Interpreter<'a> {
                 let exception_value = self.evaluate_expression(&exception_expr);
                 ExecutionResult::Throw(exception_value)
             },
+            // OOP相关语句的临时实现
+            Statement::ClassDeclaration(_) => {
+                ExecutionResult::Continue // 临时跳过，后续实现
+            },
+            Statement::FieldAssignment(_, _, _) => {
+                ExecutionResult::Continue // 临时跳过，后续实现
+            },
         }
     }
     
