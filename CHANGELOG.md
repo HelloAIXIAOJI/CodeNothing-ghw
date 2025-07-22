@@ -1,5 +1,41 @@
 # CodeNothing 更新日志
 
+## [v0.3.6] - 2025-01-XX
+
+### 🚀 高级OOP特性 - 企业级面向对象编程
+
+#### 新增高级特性
+- **✅ 继承系统** - 完整的extends关键字支持
+- **✅ 抽象类** - abstract class和abstract method支持
+- **✅ 方法重写** - override关键字和虚方法支持
+- **✅ 静态成员** - static字段和方法支持
+- **✅ 访问修饰符增强** - virtual、override、abstract修饰符
+- **✅ super关键字** - 父类访问支持
+
+#### AST扩展
+- **Class结构增强** - 添加super_class、is_abstract字段
+- **Field结构增强** - 添加is_static字段
+- **Method结构增强** - 添加is_static、is_virtual、is_override、is_abstract字段
+- **新增表达式** - Super、StaticAccess表达式类型
+
+#### 解析器完善
+- **类解析器增强** - 支持所有高级OOP语法解析
+- **修饰符解析** - 完整的访问修饰符和特性修饰符解析
+- **继承解析** - extends关键字和父类解析
+- **抽象类解析** - abstract class语法支持
+
+#### 当前状态
+- ✅ 基础OOP功能 - 完全支持
+- ✅ 继承语法 - 完全支持
+- ✅ 抽象类语法 - 完全支持
+- ✅ 静态成员语法 - 完全支持
+- ✅ 方法重写语法 - 完全支持
+- ⏳ 高级特性执行 - 语法解析完成，运行时实现进行中
+
+这标志着CodeNothing从基础OOP语言进化为企业级面向对象编程语言！
+
+---
+
 ## [v0.3.5] - 2025-07-23
 
 ### 🎯 彻底修复this问题 - 完美OOP系统
