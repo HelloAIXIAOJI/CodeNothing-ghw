@@ -28,8 +28,8 @@ pub fn parse_program(parser: &mut ParserBase) -> Result<Program, String> {
             // 解析函数
             let function = parse_function(parser)?;
             functions.push(function);
-        } else if parser.peek() == Some(&"class".to_string()) {
-            // 解析类
+        } else if parser.peek() == Some(&"class".to_string()) || parser.peek() == Some(&"abstract".to_string()) {
+            // 解析类（包括抽象类）
             let class = parser.parse_class()?;
             classes.push(class);
         } else if parser.peek() == Some(&"const".to_string()) {
@@ -132,7 +132,7 @@ pub fn parse_program(parser: &mut ParserBase) -> Result<Program, String> {
                 return Err("期望 'lib_once'、'lib'、'file'、'ns' 或 'namespace' 关键字".to_string());
             }
         } else {
-            return Err(format!("期望 'fn', 'ns', 'class' 或 'using', 但得到了 '{:?}'", parser.peek()));
+            return Err(format!("期望 'fn', 'ns', 'class', 'abstract' 或 'using', 但得到了 '{:?}'", parser.peek()));
         }
     }
     
@@ -374,7 +374,7 @@ pub fn parse_program_collect_all_errors(parser: &mut ParserBase, errors: &mut Ve
                 try_next_item = parser.position < parser.tokens.len();
             }
         } else {
-            errors.push(format!("期望 'fn', 'ns' 或 'using', 但得到了 {:?} (位置: {})", parser.peek(), parser.position));
+            errors.push(format!("期望 'fn', 'ns', 'class', 'abstract' 或 'using', 但得到了 {:?} (位置: {})", parser.peek(), parser.position));
             skip_to_next_top_level_item(parser);
             try_next_item = parser.position < parser.tokens.len();
         }
