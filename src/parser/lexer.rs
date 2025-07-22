@@ -125,28 +125,43 @@ pub fn tokenize(source: &str, debug: bool) -> Vec<String> {
         .replace("&&", " __AND__ ")
         .replace("||", " __OR__ ")
         .replace("!", " __NOT__ ");
+
+    let mut tokens = Vec::new();
+    let mut chars = processed_source.chars().peekable();
+
+    while let Some(&c) = chars.peek() {
+        if c.is_whitespace() {
+            chars.next(); // skip whitespace
+        } else if c.is_digit(10) {
+            let mut number = String::new();
+            while let Some(&next_c) = chars.peek() {
+                if next_c.is_digit(10) || next_c == '.' {
+                    number.push(chars.next().unwrap());
+                } else {
+                    break;
+                }
+            }
+            tokens.push(number);
+        } else if c.is_alphabetic() || c == '_' {
+            let mut identifier = String::new();
+            while let Some(&next_c) = chars.peek() {
+                if next_c.is_alphanumeric() || next_c == '_' {
+                    identifier.push(chars.next().unwrap());
+                } else {
+                    break;
+                }
+            }
+            tokens.push(identifier);
+        } else {
+            // Handle single-character tokens
+            tokens.push(c.to_string());
+            chars.next();
+        }
+    }
     
-    // 处理其他分隔符
-    let tokens = processed_source
-        .replace(";", " ; ")
-        .replace("(", " ( ")
-        .replace(")", " ) ")
-        .replace("{", " { ")
-        .replace("}", " } ")
-        .replace(":", " : ")
-        .replace("=", " = ")
-        .replace("+", " + ")
-        .replace("-", " - ")
-        .replace("*", " * ")
-        .replace("/", " / ")
-        .replace("%", " % ")
-        .replace("[", " [ ")
-        .replace("]", " ] ")
-        .replace(",", " , ")
-        .replace("<", " < ")
-        .replace(">", " > ")
-        .replace(".", " . ")
-        .split_whitespace()
+    // 处理其他分隔符 (this part is now replaced by the manual loop)
+    let final_tokens = tokens
+        .into_iter()
         .map(|s| {
             if s.starts_with("__STRING_") {
                 let idx = s.trim_start_matches("__STRING_").parse::<usize>().unwrap();
@@ -190,8 +205,8 @@ pub fn tokenize(source: &str, debug: bool) -> Vec<String> {
         .collect::<Vec<String>>();
     
     if debug {
-        debug_println(&format!("词法分析结果: {:?}", tokens));
+        debug_println(&format!("词法分析结果: {:?}", final_tokens));
     }
     
-    tokens
+    final_tokens
 } 

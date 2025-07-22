@@ -124,7 +124,20 @@ impl<'a> ExpressionEvaluator for Interpreter<'a> {
                 self.handle_library_function_call(lib_name, func_name, args)
             },
             Expression::MethodCall(obj_expr, method_name, args) => {
-                self.handle_method_call(obj_expr, method_name, args)
+                let object_value = self.evaluate_expression(obj_expr);
+                let arg_values: Vec<Value> = args.iter().map(|arg| self.evaluate_expression(arg)).collect();
+
+                match object_value {
+                    Value::String(s) => {
+                        match method_name.as_str() {
+                            "to_upper" => Value::String(s.to_uppercase()),
+                            "to_lower" => Value::String(s.to_lowercase()),
+                            "trim" => Value::String(s.trim().to_string()),
+                            _ => panic!("Unknown method '{}' for type String.", method_name),
+                        }
+                    },
+                    _ => panic!("Method calls are only supported on Strings for now."),
+                }
             },
             Expression::ChainCall(obj_expr, chain_calls) => {
                 self.handle_chain_call(obj_expr, chain_calls)
@@ -134,7 +147,31 @@ impl<'a> ExpressionEvaluator for Interpreter<'a> {
                 let exception_value = self.evaluate_expression(exception_expr);
                 // 注意：这里我们返回异常值，但实际的抛出逻辑在语句执行器中处理
                 exception_value
-            }
+            },
+            Expression::IndexAccess(array, index) => {
+                // 数组索引访问
+                let array_val = self.evaluate_expression(array);
+                let index_val = self.evaluate_expression(index);
+                
+                match array_val {
+                    Value::Array(arr) => {
+                        if let Value::Int(i) = index_val {
+                            if i >= 0 && i < arr.len() as i32 {
+                                arr[i as usize].clone()
+                            } else {
+                                Value::None
+                            }
+                        } else {
+                            panic!("数组索引必须是整数类型");
+                        }
+                    },
+                    _ => panic!("数组索引操作符左侧必须是数组类型"),
+                }
+            },
+            Expression::MemberAccess(object, member) => {
+                // This will be used for property access later
+                panic!("Member access for properties (e.g., obj.field) is not yet implemented.");
+            },
         }
     }
     
@@ -353,38 +390,6 @@ impl<'a> Interpreter<'a> {
         value
     }
     
-    fn handle_method_call(&mut self, obj_expr: &Expression, method_name: &str, args: &[Expression]) -> Value {
-        // 计算对象表达式
-        let obj_value = self.evaluate_expression(obj_expr);
-        
-        // 计算参数
-        let mut evaluated_args = Vec::new();
-        for arg in args {
-            let arg_value = self.evaluate_expression(arg);
-            evaluated_args.push(arg_value.to_string());
-        }
-        
-        // 根据对象类型调用相应的方法
-        match obj_value {
-            Value::String(s) => {
-                // 字符串方法调用
-                self.handle_string_method(&s, method_name, &evaluated_args)
-            },
-            Value::Array(arr) => {
-                // 数组方法调用
-                self.handle_array_method(&arr, method_name, &evaluated_args)
-            },
-            Value::Map(map) => {
-                // 映射方法调用
-                self.handle_map_method(&map, method_name, &evaluated_args)
-            },
-            _ => {
-                // 不支持的对象类型
-                panic!("不支持对类型 {:?} 调用方法 {}", obj_value, method_name)
-            }
-        }
-    }
-    
     fn handle_chain_call(&mut self, obj_expr: &Expression, chain_calls: &[(String, Vec<Expression>)]) -> Value {
         // 计算初始对象
         let mut current_value = self.evaluate_expression(obj_expr);
@@ -580,6 +585,8 @@ impl<'a> Interpreter<'a> {
             Expression::Throw(expr) => {
                 self.contains_method_call(expr)
             },
+            Expression::IndexAccess(_, _) => true, // IndexAccess also contains method calls
+            Expression::MemberAccess(_, _) => true, // MemberAccess also contains method calls
             _ => false,
         }
     }
