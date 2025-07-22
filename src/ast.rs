@@ -43,6 +43,8 @@ pub enum Expression {
     ObjectCreation(String, Vec<Expression>), // 对象创建 (new ClassName(args))
     FieldAccess(Box<Expression>, String), // 字段访问 (obj.field)
     This, // this 关键字
+    Super, // super 关键字
+    StaticAccess(String, String), // 静态访问 (ClassName::member)
     // 未来可以扩展更多表达式类型
 }
 
@@ -144,6 +146,7 @@ pub struct Field {
     pub field_type: Type,
     pub visibility: Visibility,
     pub initial_value: Option<Expression>,
+    pub is_static: bool, // 是否为静态字段
 }
 
 #[derive(Debug, Clone)]
@@ -153,6 +156,10 @@ pub struct Method {
     pub return_type: Type,
     pub body: Vec<Statement>,
     pub visibility: Visibility,
+    pub is_static: bool, // 是否为静态方法
+    pub is_virtual: bool, // 是否为虚方法
+    pub is_override: bool, // 是否重写父类方法
+    pub is_abstract: bool, // 是否为抽象方法
 }
 
 #[derive(Debug, Clone)]
@@ -164,9 +171,11 @@ pub struct Constructor {
 #[derive(Debug, Clone)]
 pub struct Class {
     pub name: String,
+    pub super_class: Option<String>, // 父类名
     pub fields: Vec<Field>,
     pub methods: Vec<Method>,
     pub constructors: Vec<Constructor>,
+    pub is_abstract: bool, // 是否为抽象类
 }
 
 #[derive(Debug, Clone)]
