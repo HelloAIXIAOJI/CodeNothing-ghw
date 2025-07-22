@@ -800,11 +800,13 @@ impl<'a> Interpreter<'a> {
             Expression::This => Value::Object(this_obj.clone()),
             Expression::FieldAccess(obj_expr, field_name) => {
                 if let Expression::This = **obj_expr {
-                    // this.field 访问
+                    // this.field 访问 - 直接从this_obj获取
                     match this_obj.fields.get(field_name) {
                         Some(value) => value.clone(),
                         None => {
                             eprintln!("错误: 对象 '{}' 没有字段 '{}'", this_obj.class_name, field_name);
+                            // 列出所有可用字段用于调试
+                            eprintln!("可用字段: {:?}", this_obj.fields.keys().collect::<Vec<_>>());
                             Value::None
                         }
                     }
@@ -835,17 +837,29 @@ impl<'a> Interpreter<'a> {
                 // 使用现有的二元操作评估方法
                 match op {
                     crate::ast::BinaryOperator::Add => {
-                        match (left_val, right_val) {
-                            (Value::String(s1), Value::String(s2)) => Value::String(s1 + &s2),
-                            (Value::String(s), Value::Int(i)) => Value::String(s + &i.to_string()),
-                            (Value::String(s), Value::Float(f)) => Value::String(s + &f.to_string()),
-                            (Value::Int(i), Value::String(s)) => Value::String(i.to_string() + &s),
-                            (Value::Float(f), Value::String(s)) => Value::String(f.to_string() + &s),
+                        match (&left_val, &right_val) {
+                            (Value::String(s1), Value::String(s2)) => Value::String(s1.clone() + s2),
+                            (Value::String(s), Value::Int(i)) => Value::String(s.clone() + &i.to_string()),
+                            (Value::String(s), Value::Float(f)) => Value::String(s.clone() + &f.to_string()),
+                            (Value::Int(i), Value::String(s)) => Value::String(i.to_string() + s),
+                            (Value::Float(f), Value::String(s)) => Value::String(f.to_string() + s),
                             (Value::Int(i1), Value::Int(i2)) => Value::Int(i1 + i2),
                             (Value::Float(f1), Value::Float(f2)) => Value::Float(f1 + f2),
-                            (Value::Int(i), Value::Float(f)) => Value::Float(i as f64 + f),
-                            (Value::Float(f), Value::Int(i)) => Value::Float(f + i as f64),
-                            _ => Value::None,
+                            (Value::Int(i), Value::Float(f)) => Value::Float(*i as f64 + f),
+                            (Value::Float(f), Value::Int(i)) => Value::Float(f + *i as f64),
+                            // 处理None值的字符串拼接
+                            (Value::String(s), Value::None) => {
+                                eprintln!("警告: 字符串拼接中遇到None值");
+                                Value::String(s.clone() + "null")
+                            },
+                            (Value::None, Value::String(s)) => {
+                                eprintln!("警告: 字符串拼接中遇到None值");
+                                Value::String("null".to_string() + s)
+                            },
+                            _ => {
+                                eprintln!("不支持的二元操作: {:?} Add {:?}", left_val, right_val);
+                                Value::None
+                            },
                         }
                     },
                     _ => Value::None, // 其他操作暂时返回None
