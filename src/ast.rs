@@ -21,8 +21,6 @@ pub enum Expression {
     LongLiteral(i64),
     ArrayLiteral(Vec<Expression>),
     MapLiteral(Vec<(Expression, Expression)>),
-    IndexAccess(Box<Expression>, Box<Expression>),
-    MemberAccess(Box<Expression>, String), // object.member
     FunctionCall(String, Vec<Expression>),
     NamespacedFunctionCall(Vec<String>, Vec<Expression>), // 命名空间函数调用
     GlobalFunctionCall(String, Vec<Expression>), // 全局函数明确调用 (::func)
