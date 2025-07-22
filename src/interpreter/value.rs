@@ -21,6 +21,12 @@ pub struct ObjectInstance {
     pub fields: HashMap<String, Value>,
 }
 
+// 静态成员存储
+#[derive(Debug, Clone)]
+pub struct StaticMembers {
+    pub static_fields: HashMap<String, Value>,
+}
+
 impl Value {
     // 将Value转换为String，用于传递给库函数
     pub fn to_string(&self) -> String {
