@@ -1,6 +1,6 @@
-use crate::ast::{Program, Expression, Statement, BinaryOperator, Type, Namespace, CompareOperator, LogicalOperator, Function, NamespaceType};
+use crate::ast::{Program, Expression, Statement, BinaryOperator, Type, Namespace, CompareOperator, LogicalOperator, Function, NamespaceType, Class};
 use std::collections::HashMap;
-use super::value::Value;
+use super::value::{Value, ObjectInstance};
 use super::evaluator::{Evaluator, perform_binary_operation, evaluate_compare_operation};
 use super::executor::{Executor, ExecutionResult, update_variable_value, handle_increment, handle_decrement, execute_if_else};
 use super::library_loader::{load_library, call_library_function, convert_values_to_string_args, convert_value_to_string_arg};
@@ -118,6 +118,8 @@ pub struct Interpreter<'a> {
     pub constants: HashMap<String, Value>,
     // 作用域级别命名空间导入栈（每层是一个map: 函数名->完整路径）
     pub namespace_import_stack: Vec<HashMap<String, Vec<String>>>,
+    // 类定义存储
+    pub classes: HashMap<String, &'a Class>,
 }
 
 impl<'a> Interpreter<'a> {
@@ -151,6 +153,7 @@ impl<'a> Interpreter<'a> {
             library_namespaces,
             constants, // 添加常量环境
             namespace_import_stack: vec![HashMap::new()], // 初始化栈，最外层一层
+            classes: HashMap::new(),
         };
         
         // 初始化常量
@@ -159,6 +162,11 @@ impl<'a> Interpreter<'a> {
             let value = interpreter.evaluate_expression_direct(expr);
             // 存储常量值
             interpreter.constants.insert(name.clone(), value);
+        }
+        
+        // 注册类定义
+        for class in &program.classes {
+            interpreter.classes.insert(class.name.clone(), class);
         }
         
         interpreter
