@@ -122,6 +122,8 @@ pub struct Interpreter<'a> {
     pub classes: HashMap<String, &'a Class>,
     // 静态成员存储
     pub static_members: HashMap<String, crate::interpreter::value::StaticMembers>,
+    // 变量类型存储，键是变量名，值是声明的类型
+    pub variable_types: HashMap<String, Type>,
 }
 
 impl<'a> Interpreter<'a> {
@@ -157,6 +159,7 @@ impl<'a> Interpreter<'a> {
             namespace_import_stack: vec![HashMap::new()], // 初始化栈，最外层一层
             classes: HashMap::new(),
             static_members: HashMap::new(),
+            variable_types: HashMap::new(), // 初始化变量类型映射
         };
         
         // 初始化常量
