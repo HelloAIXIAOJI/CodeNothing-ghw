@@ -222,74 +222,100 @@ impl<'a> StatementParser for ParserBase<'a> {
                         self.expect(";")?;
                         Ok(Statement::Decrement(var_name))
                     } else if next_token == "::" {
-                        // 命名空间函数调用
+                        // 静态访问或命名空间函数调用
                         self.consume(); // 消费 "::"
                         
-                        // 获取函数名
-                        let func_name = self.consume().ok_or_else(|| "期望函数名".to_string())?;
+                        // 获取成员名或函数名
+                        let member_name = self.consume().ok_or_else(|| "期望成员名或函数名".to_string())?;
                         
-                        // 检查是否是库函数调用
-                        if var_name.starts_with("lib_") {
-                            // 库函数调用，格式为 lib_xxx::func_name
-                            let lib_name = var_name.trim_start_matches("lib_").to_string();
-                            
-                            self.expect("(")?;
-                            
-                            let mut args = Vec::new();
-                            
-                            if self.peek() != Some(&")".to_string()) {
-                                // 解析参数列表
-                                loop {
-                                    let arg = self.parse_expression()?;
-                                    args.push(arg);
-                                    
-                                    if self.peek() != Some(&",".to_string()) {
-                                        break;
-                                    }
-                                    
-                                    self.consume(); // 消费 ","
-                                }
-                            }
-                            
-                            self.expect(")")?;
+                        // 检查下一个token来决定是静态赋值还是函数调用
+                        if self.peek() == Some(&"=".to_string()) {
+                            // 静态字段赋值: ClassName::field = value
+                            self.consume(); // 消费 "="
+                            let value_expr = self.parse_expression()?;
                             self.expect(";")?;
                             
-                            Ok(Statement::LibraryFunctionCallStatement(lib_name, func_name, args))
-                        } else {
-                            // 命名空间函数调用
-                            let mut path = Vec::new();
-                            path.push(var_name); // 第一个命名空间名
-                            path.push(func_name); // 函数名或下一级命名空间
-                            
-                            // 解析命名空间路径
-                            while self.peek() == Some(&"::".to_string()) {
-                                self.consume(); // 消费 "::"
-                                if let Some(name) = self.consume() {
-                                    path.push(name);
-                                } else {
-                                    return Err("期望标识符".to_string());
-                                }
-                            }
-                            
-                            self.expect("(")?;
-                            
-                            // 解析函数调用参数
-                            let mut args = Vec::new();
-                            if self.peek() != Some(&")".to_string()) {
-                                // 至少有一个参数
-                                args.push(self.parse_expression()?);
+                            // 创建静态字段赋值语句
+                            let static_access = Expression::StaticAccess(var_name, member_name);
+                            Ok(Statement::FieldAssignment(
+                                Box::new(static_access),
+                                "".to_string(), // 静态访问不需要字段名
+                                value_expr
+                            ))
+                        } else if self.peek() == Some(&"(".to_string()) {
+                            // 这是函数调用
+                            // 检查是否是库函数调用
+                            if var_name.starts_with("lib_") {
+                                // 库函数调用，格式为 lib_xxx::func_name
+                                let lib_name = var_name.trim_start_matches("lib_").to_string();
                                 
-                                // 解析剩余参数
-                                while self.peek() == Some(&",".to_string()) {
-                                    self.consume(); // 消费逗号
+                                self.expect("(")?;
+                                
+                                let mut args = Vec::new();
+                                
+                                if self.peek() != Some(&")".to_string()) {
+                                    // 解析参数列表
+                                    loop {
+                                        let arg = self.parse_expression()?;
+                                        args.push(arg);
+                                        
+                                        if self.peek() != Some(&",".to_string()) {
+                                            break;
+                                        }
+                                        
+                                        self.consume(); // 消费 ","
+                                    }
+                                }
+                                
+                                self.expect(")")?;
+                                self.expect(";")?;
+                                
+                                Ok(Statement::LibraryFunctionCallStatement(lib_name, member_name, args))
+                            } else {
+                                // 静态方法调用或命名空间函数调用
+                                let mut path = Vec::new();
+                                path.push(var_name.clone()); // 第一个命名空间名
+                                path.push(member_name.clone()); // 函数名或下一级命名空间
+                                
+                                // 解析命名空间路径
+                                while self.peek() == Some(&"::".to_string()) {
+                                    self.consume(); // 消费 "::"
+                                    if let Some(name) = self.consume() {
+                                        path.push(name);
+                                    } else {
+                                        return Err("期望标识符".to_string());
+                                    }
+                                }
+                                
+                                self.expect("(")?;
+                                
+                                // 解析函数调用参数
+                                let mut args = Vec::new();
+                                if self.peek() != Some(&")".to_string()) {
+                                    // 至少有一个参数
                                     args.push(self.parse_expression()?);
+                                    
+                                    // 解析剩余参数
+                                    while self.peek() == Some(&",".to_string()) {
+                                        self.consume(); // 消费逗号
+                                        args.push(self.parse_expression()?);
+                                    }
+                                }
+                                
+                                self.expect(")")?;
+                                self.expect(";")?;
+                                
+                                // 检查是否是静态方法调用（只有两个部分：ClassName::methodName）
+                                if path.len() == 2 {
+                                    // 创建静态方法调用表达式
+                                    let static_call = Expression::StaticMethodCall(path[0].clone(), path[1].clone(), args);
+                                    Ok(Statement::FunctionCallStatement(static_call))
+                                } else {
+                                    Ok(Statement::NamespacedFunctionCallStatement(path, args))
                                 }
                             }
-                            
-                            self.expect(")")?;
-                            self.expect(";")?;
-                            
-                            Ok(Statement::NamespacedFunctionCallStatement(path, args))
+                        } else {
+                            return Err(format!("期望 '=' 或 '(' 在 '{}::{}' 之后", var_name, member_name));
                         }
                     } else if next_token == "(" {
                         // 函数调用语句
