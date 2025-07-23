@@ -1,4 +1,4 @@
-use crate::ast::{Statement, Expression, Type, NamespaceType, Function};
+use crate::ast::{Statement, Expression, Type, NamespaceType, Function, SwitchCase};
 use super::value::Value;
 use super::executor::{Executor, ExecutionResult, update_variable_value, handle_increment, handle_decrement};
 use super::library_loader::{load_library, call_library_function, convert_values_to_string_args};
@@ -170,6 +170,10 @@ impl<'a> StatementExecutor for Interpreter<'a> {
                 let exception_value = self.evaluate_expression(&exception_expr);
                 ExecutionResult::Throw(exception_value)
             },
+            Statement::Switch(expr, cases, default_block) => {
+                // Switch 语句执行
+                self.execute_switch_statement(expr, cases, default_block)
+            },
             // OOP相关语句的临时实现
             Statement::ClassDeclaration(_) => {
                 ExecutionResult::Continue // 临时跳过，后续实现
@@ -253,4 +257,107 @@ impl<'a> StatementExecutor for Interpreter<'a> {
 }
 
 impl<'a> Interpreter<'a> {
+    fn execute_switch_statement(&mut self, expr: Expression, cases: Vec<SwitchCase>, default_block: Option<Vec<Statement>>) -> ExecutionResult {
+        // 计算 switch 表达式的值
+        let switch_value = self.evaluate_expression(&expr);
+        // debug_println(&format!("Switch value: {:?}", switch_value));
+        
+        let mut matched = false;
+        let mut fall_through = false;
+        
+        // 遍历所有 case
+        for case in &cases {
+            // 如果已经匹配过且没有 break，则继续执行（fall-through）
+            if matched || fall_through {
+                // 执行当前 case 的语句
+                for stmt in &case.statements {
+                    match self.execute_statement_direct(stmt.clone()) {
+                        ExecutionResult::None => {},
+                        ExecutionResult::Return(value) => return ExecutionResult::Return(value),
+                        ExecutionResult::Break => {
+                            // break 跳出整个 switch
+                            return ExecutionResult::None;
+                        },
+                        ExecutionResult::Continue => return ExecutionResult::Continue,
+                        ExecutionResult::Throw(value) => return ExecutionResult::Throw(value),
+                    }
+                }
+                
+                // 如果当前 case 有 break，则停止执行
+                if case.has_break {
+                    return ExecutionResult::None;
+                }
+                
+                // 否则继续 fall-through
+                fall_through = true;
+                continue;
+            }
+            
+            // 计算 case 值并与 switch 值比较
+            let case_value = self.evaluate_expression(&case.value);
+            // debug_println(&format!("Case value: {:?}", case_value));
+            
+            // 比较值是否相等
+            let is_equal = self.values_equal(&switch_value, &case_value);
+            // debug_println(&format!("Values equal: {}", is_equal));
+            
+            if is_equal {
+                matched = true;
+                
+                // 执行匹配的 case 语句
+                for stmt in &case.statements {
+                    match self.execute_statement_direct(stmt.clone()) {
+                        ExecutionResult::None => {},
+                        ExecutionResult::Return(value) => return ExecutionResult::Return(value),
+                        ExecutionResult::Break => {
+                            // break 跳出整个 switch
+                            return ExecutionResult::None;
+                        },
+                        ExecutionResult::Continue => return ExecutionResult::Continue,
+                        ExecutionResult::Throw(value) => return ExecutionResult::Throw(value),
+                    }
+                }
+                
+                // 如果当前 case 有 break，则停止执行
+                if case.has_break {
+                    return ExecutionResult::None;
+                }
+                
+                // 否则继续 fall-through 到下一个 case
+                fall_through = true;
+            }
+        }
+        
+        // 如果没有匹配的 case，执行 default 块
+        if !matched {
+            if let Some(default_statements) = default_block {
+                for stmt in default_statements {
+                    match self.execute_statement_direct(stmt) {
+                        ExecutionResult::None => {},
+                        ExecutionResult::Return(value) => return ExecutionResult::Return(value),
+                        ExecutionResult::Break => {
+                            // break 跳出整个 switch
+                            return ExecutionResult::None;
+                        },
+                        ExecutionResult::Continue => return ExecutionResult::Continue,
+                        ExecutionResult::Throw(value) => return ExecutionResult::Throw(value),
+                    }
+                }
+            }
+        }
+        
+        ExecutionResult::None
+    }
+    
+    fn values_equal(&self, val1: &Value, val2: &Value) -> bool {
+        match (val1, val2) {
+            (Value::Int(a), Value::Int(b)) => a == b,
+            (Value::Float(a), Value::Float(b)) => (a - b).abs() < f64::EPSILON,
+            (Value::Bool(a), Value::Bool(b)) => a == b,
+            (Value::String(a), Value::String(b)) => a == b,
+            (Value::Long(a), Value::Long(b)) => a == b,
+            // 类型不同则不相等
+            _ => false,
+        }
+    }
 } 
