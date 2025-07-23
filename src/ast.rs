@@ -108,6 +108,7 @@ pub enum Statement {
     Throw(Expression), // 新增：抛出异常语句
     // OOP相关语句
     ClassDeclaration(Class), // 类声明
+    InterfaceDeclaration(Interface), // 接口声明
     FieldAssignment(Box<Expression>, String, Expression), // 字段赋值 (obj.field = value)
     // 未来可以扩展更多语句类型
 }
@@ -170,9 +171,25 @@ pub struct Constructor {
 }
 
 #[derive(Debug, Clone)]
+pub struct Interface {
+    pub name: String,
+    pub methods: Vec<InterfaceMethod>, // 接口方法声明
+    pub extends: Vec<String>, // 接口可以继承多个接口
+}
+
+#[derive(Debug, Clone)]
+pub struct InterfaceMethod {
+    pub name: String,
+    pub parameters: Vec<Parameter>,
+    pub return_type: Type,
+    pub visibility: Visibility, // 接口方法默认为public
+}
+
+#[derive(Debug, Clone)]
 pub struct Class {
     pub name: String,
     pub super_class: Option<String>, // 父类名
+    pub implements: Vec<String>, // 实现的接口列表
     pub fields: Vec<Field>,
     pub methods: Vec<Method>,
     pub constructors: Vec<Constructor>,
@@ -187,4 +204,5 @@ pub struct Program {
     pub file_imports: Vec<String>,   // 顶层文件导入
     pub constants: Vec<(String, Type, Expression)>, // 新增：顶层常量定义
     pub classes: Vec<Class>, // 新增：类定义
+    pub interfaces: Vec<Interface>, // 新增：接口定义
 } 
