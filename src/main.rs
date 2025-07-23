@@ -100,6 +100,7 @@ fn init_program() -> Program {
         file_imports: Vec::new(),
         constants: Vec::new(), // 初始化常量列表
         classes: Vec::new(), // 初始化类列表
+        interfaces: Vec::new(), // 初始化接口列表
     }
 }
 
