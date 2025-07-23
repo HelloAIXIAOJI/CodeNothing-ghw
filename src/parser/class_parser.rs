@@ -267,17 +267,25 @@ impl<'a> ClassParser for ParserBase<'a> {
         // 返回类型
         let return_type = self.parse_type()?;
         
-        // 方法体
-        self.expect("{")?;
-        let mut body = Vec::new();
-        
-        while self.peek() != Some(&"}".to_string()) {
-            let stmt = self.parse_statement()?;
-            body.push(stmt);
-        }
-        
-        self.expect("}")?;
-        self.expect(";")?;
+        // 方法体（抽象方法可能没有方法体）
+        let body = if self.peek() == Some(&";".to_string()) {
+            // 抽象方法，没有方法体
+            self.consume(); // 消费 ";"
+            Vec::new()
+        } else {
+            // 普通方法，有方法体
+            self.expect("{")?;
+            let mut body = Vec::new();
+            
+            while self.peek() != Some(&"}".to_string()) {
+                let stmt = self.parse_statement()?;
+                body.push(stmt);
+            }
+            
+            self.expect("}")?;
+            self.expect(";")?;
+            body
+        };
         
         Ok(Method {
             name: method_name,
