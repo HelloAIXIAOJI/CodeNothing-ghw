@@ -3,5 +3,6 @@
 /.*
 !/.github
 /*-don't-see
+/*-dont-see
 **/target
 /test
