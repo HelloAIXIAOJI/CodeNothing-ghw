@@ -1,5 +1,29 @@
 # CodeNothing 更新日志
 
+## [v0.4.0] - 2025-07-24
+
+### 新增功能
+- ✨ **Switch 语句支持** - 完整实现 switch/case/default/break 语法
+  - 支持多种数据类型匹配 (int, string, bool, float, long)
+  - 支持 fall-through 行为和 break 语句
+  - 支持嵌套 switch 和 default 块
+  - 与现有语言特性完美集成
+
+### Bug 修复
+- 🐛 修复 JIT 编译导致的变量赋值/读取问题
+- 🐛 修复变量值匹配错误的问题
+
+### 技术改进
+- 🔧 扩展 AST 支持 Switch 语句结构
+- 🔧 增强解析器支持 switch 语法解析
+- 🔧 优化执行器的控制流处理
+
+### 示例文件
+- 📁 新增 `switch_simple_demo.cn` - Switch 功能演示
+- 📁 新增 `switch_complex_example.cn` - 复杂使用场景
+
+---
+
 ## [v0.3.12] - 2025-07-23
 
 ### 🔧 重大修复 - 命名空间与类静态访问语法冲突
