@@ -177,6 +177,10 @@ impl<'a> StatementExecutor for Interpreter<'a> {
             Statement::FieldAssignment(_, _, _) => {
                 ExecutionResult::Continue // 临时跳过，后续实现
             },
+            Statement::InterfaceDeclaration(_interface) => {
+                // 接口声明在解释器初始化时已经处理，这里不需要额外操作
+                ExecutionResult::Continue
+            },
         }
     }
     
