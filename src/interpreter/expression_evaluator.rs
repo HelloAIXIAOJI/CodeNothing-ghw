@@ -165,6 +165,67 @@ impl<'a> ExpressionEvaluator for Interpreter<'a> {
                     Value::None
                 }
             },
+            Expression::StaticMethodCall(class_name, method_name, args) => {
+                // 简化的静态方法调用实现
+                if let Some(class) = self.classes.get(class_name) {
+                    if let Some(method) = class.methods.iter().find(|m| m.is_static && m.name == *method_name) {
+                        // 计算参数
+                        let mut arg_values = Vec::new();
+                        for arg in args {
+                            arg_values.push(self.evaluate_expression(arg));
+                        }
+                        
+                        // 创建简单的参数环境
+                        let mut method_env = HashMap::new();
+                        for (i, param) in method.parameters.iter().enumerate() {
+                            if i < arg_values.len() {
+                                method_env.insert(param.name.clone(), arg_values[i].clone());
+                            }
+                        }
+                        
+                        // 简单执行静态方法体
+                        for statement in &method.body {
+                            if let crate::ast::Statement::Return(expr) = statement {
+                                // 简单的变量替换
+                                if let crate::ast::Expression::Variable(var_name) = expr {
+                                    if let Some(value) = method_env.get(var_name) {
+                                        return value.clone();
+                                    }
+                                } else if let crate::ast::Expression::BinaryOp(left, op, right) = expr {
+                                    // 简单的二元操作
+                                    let left_val = if let crate::ast::Expression::Variable(var) = &**left {
+                                        method_env.get(var).cloned().unwrap_or(Value::None)
+                                    } else {
+                                        self.evaluate_expression(left)
+                                    };
+                                    let right_val = if let crate::ast::Expression::Variable(var) = &**right {
+                                        method_env.get(var).cloned().unwrap_or(Value::None)
+                                    } else {
+                                        self.evaluate_expression(right)
+                                    };
+                                    
+                                    if let crate::ast::BinaryOperator::Add = op {
+                                        match (&left_val, &right_val) {
+                                            (Value::Int(a), Value::Int(b)) => return Value::Int(a + b),
+                                            (Value::Float(a), Value::Float(b)) => return Value::Float(a + b),
+                                            (Value::String(a), Value::String(b)) => return Value::String(a.clone() + b),
+                                            _ => return Value::None,
+                                        }
+                                    }
+                                }
+                                return self.evaluate_expression(expr);
+                            }
+                        }
+                        Value::None
+                    } else {
+                        eprintln!("错误: 类 '{}' 没有静态方法 '{}'", class_name, method_name);
+                        Value::None
+                    }
+                } else {
+                    eprintln!("错误: 未找到类 '{}'", class_name);
+                    Value::None
+                }
+            },
         }
     }
     
@@ -182,6 +243,7 @@ impl<'a> ExpressionEvaluator for Interpreter<'a> {
             None
         }
     }
+    
     
     
     fn is_pure_int_expression(&self, expr: &Expression) -> bool {
