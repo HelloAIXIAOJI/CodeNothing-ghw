@@ -14,30 +14,30 @@ pub trait ExpressionEvaluator {
 
 impl<'a> ExpressionEvaluator for Interpreter<'a> {
     fn evaluate_expression(&mut self, expr: &Expression) -> Value {
-        // 检查是否包含方法调用，如果包含则跳过JIT编译
-        if !self.contains_method_call(expr) && self.is_pure_int_expression(expr) {
-        if let Some(val) = jit::jit_eval_const_expr(expr) {
-            return val;
-        }
-        // 尝试整体JIT int型带变量表达式
-        if let Some(jit_expr) = jit::jit_compile_int_expr(expr) {
-            // 收集变量名和当前作用域变量值
-            let mut vars = std::collections::HashMap::new();
-            for name in &jit_expr.var_names {
-                // 只支持Int类型变量
-                let val = if let Some(Value::Int(i)) = self.local_env.get(name) {
-                    *i as i64
-                } else if let Some(Value::Int(i)) = self.global_env.get(name) {
-                    *i as i64
-                } else {
-                    panic!("JIT表达式变量{}未赋Int值", name);
-                };
-                vars.insert(name.clone(), val);
-            }
-            let result = jit_expr.call(&vars);
-            return Value::Int(result as i32);
-            }
-        }
+        // 暂时禁用 JIT 编译来调试变量问题
+        // if !self.contains_method_call(expr) && self.is_pure_int_expression(expr) {
+        // if let Some(val) = jit::jit_eval_const_expr(expr) {
+        //     return val;
+        // }
+        // // 尝试整体JIT int型带变量表达式
+        // if let Some(jit_expr) = jit::jit_compile_int_expr(expr) {
+        //     // 收集变量名和当前作用域变量值
+        //     let mut vars = std::collections::HashMap::new();
+        //     for name in &jit_expr.var_names {
+        //         // 只支持Int类型变量
+        //         let val = if let Some(Value::Int(i)) = self.local_env.get(name) {
+        //             *i as i64
+        //         } else if let Some(Value::Int(i)) = self.global_env.get(name) {
+        //             *i as i64
+        //         } else {
+        //             panic!("JIT表达式变量{}未赋Int值", name);
+        //         };
+        //         vars.insert(name.clone(), val);
+        //     }
+        //     let result = jit_expr.call(&vars);
+        //     return Value::Int(result as i32);
+        //     }
+        // }
         match expr {
             Expression::IntLiteral(value) => Value::Int(*value),
             Expression::FloatLiteral(value) => Value::Float(*value),
