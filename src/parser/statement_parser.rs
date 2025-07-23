@@ -185,6 +185,7 @@ impl<'a> StatementParser for ParserBase<'a> {
                                 "string" => Type::String,
                                 "long" => Type::Long,
                                 "void" => Type::Void,
+                                "auto" => Type::Auto,
                                 "Exception" => Type::Exception,
                                 _ => Type::Class(base_type), // 假设是类类型
                             }
