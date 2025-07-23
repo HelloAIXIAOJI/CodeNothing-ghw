@@ -1,5 +1,5 @@
 // 导入必要的模块
-use crate::ast::{Statement, Expression, Type, Parameter, Function, BinaryOperator, NamespaceType};
+use crate::ast::{Statement, Expression, Type, Parameter, Function, BinaryOperator, NamespaceType, SwitchCase};
 use crate::parser::parser_base::ParserBase;
 use crate::parser::expression_parser::ExpressionParser;
 use crate::interpreter::debug_println;
@@ -14,6 +14,7 @@ pub trait StatementParser {
     fn parse_while_loop(&mut self) -> Result<Statement, String>;
     fn parse_try_catch(&mut self) -> Result<Statement, String>;
     fn parse_throw_statement(&mut self) -> Result<Statement, String>;
+    fn parse_switch_statement(&mut self) -> Result<Statement, String>;
     fn parse_type(&mut self) -> Result<Type, String>;
 }
 
@@ -83,6 +84,9 @@ impl<'a> StatementParser for ParserBase<'a> {
                 },
                 "throw" => {
                     self.parse_throw_statement()
+                },
+                "switch" => {
+                    self.parse_switch_statement()
                 },
                 "break" => {
                 self.consume(); // 消费 "break"
@@ -600,5 +604,78 @@ impl<'a> StatementParser for ParserBase<'a> {
         self.expect(";")?;
         
         Ok(Statement::Throw(exception_expr))
+    }
+
+    fn parse_switch_statement(&mut self) -> Result<Statement, String> {
+        self.consume(); // 消费 "switch"
+        
+        // 解析 switch 表达式
+        self.expect("(")?;
+        let switch_expr = self.parse_expression()?;
+        self.expect(")")?;
+        
+        // 解析 switch 块
+        self.expect("{")?;
+        
+        let mut cases = Vec::new();
+        let mut default_block = None;
+        
+        while self.peek() != Some(&"}".to_string()) {
+            if self.peek() == Some(&"case".to_string()) {
+                self.consume(); // 消费 "case"
+                
+                // 解析 case 值
+                let case_value = self.parse_expression()?;
+                
+                // 解析 case 块
+                self.expect("{")?;
+                let mut case_statements = Vec::new();
+                let mut has_break = false;
+                
+                while self.peek() != Some(&"}".to_string()) {
+                    let stmt = self.parse_statement()?;
+                    
+                    // 检查是否是 break 语句
+                    if matches!(stmt, Statement::Break) {
+                        has_break = true;
+                        case_statements.push(stmt);
+                        break; // break 后不再解析更多语句
+                    } else {
+                        case_statements.push(stmt);
+                    }
+                }
+                
+                self.expect("}")?;
+                self.expect(";")?;
+                
+                cases.push(SwitchCase {
+                    value: case_value,
+                    statements: case_statements,
+                    has_break,
+                });
+            } else if self.peek() == Some(&"default".to_string()) {
+                self.consume(); // 消费 "default"
+                
+                // 解析 default 块
+                self.expect("{")?;
+                let mut default_statements = Vec::new();
+                
+                while self.peek() != Some(&"}".to_string()) {
+                    default_statements.push(self.parse_statement()?);
+                }
+                
+                self.expect("}")?;
+                self.expect(";")?;
+                
+                default_block = Some(default_statements);
+            } else {
+                return Err(format!("期望 'case' 或 'default'，但找到: {:?}", self.peek()));
+            }
+        }
+        
+        self.expect("}")?;
+        self.expect(";")?;
+        
+        Ok(Statement::Switch(switch_expr, cases, default_block))
     }
 }
