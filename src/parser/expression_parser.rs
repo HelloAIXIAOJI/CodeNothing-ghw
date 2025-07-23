@@ -404,18 +404,23 @@ impl<'a> ExpressionParser for ParserBase<'a> {
                                 
                                 self.expect(")")?;
                                 
-                                // 检查是否是静态方法调用（只有两个部分：ClassName::methodName）
+                                // 需要更智能地区分静态方法调用和命名空间函数调用
+                                // 检查第一个标识符是否是已知的类名或命名空间
                                 if path.len() == 2 {
-                                    debug_println(&format!("识别为静态方法调用: {}::{}", path[0], path[1]));
-                                    Ok(Expression::StaticMethodCall(path[0].clone(), path[1].clone(), args))
+                                    // 对于两个部分的情况，我们需要在运行时决定
+                                    // 暂时都当作命名空间函数调用处理，让解释器来区分
+                                    debug_println(&format!("两部分路径，当作命名空间函数调用处理: {:?}", path));
+                                    Ok(Expression::NamespacedFunctionCall(path, args))
                                 } else {
-                                    // 使用统一的接口处理所有命名空间函数调用
+                                    // 多于两个部分，肯定是命名空间函数调用
                                     debug_println(&format!("使用NamespacedFunctionCall处理: {:?}", path));
                                     Ok(Expression::NamespacedFunctionCall(path, args))
                                 }
                             }
                         } else {
                             // 这是静态访问（不是函数调用）
+                            // 但也可能是命名空间中的常量或变量访问
+                            // 暂时当作静态访问处理，让解释器来决定
                             debug_println(&format!("识别为静态访问: {}::{}", name, member_name));
                             Ok(Expression::StaticAccess(name, member_name))
                         }
