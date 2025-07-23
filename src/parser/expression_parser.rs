@@ -331,84 +331,93 @@ impl<'a> ExpressionParser for ParserBase<'a> {
                         
                         Ok(Expression::FunctionCall(name, args))
                     } else if self.peek() == Some(&"::".to_string()) {
-                        // 命名空间函数调用或库函数调用
+                        // 静态访问、命名空间函数调用或库函数调用
                         self.consume(); // 消费 "::"
                         
-                        // 获取函数名
-                        let func_name = self.consume().ok_or_else(|| "期望函数名".to_string())?;
-                        debug_println(&format!("解析库函数调用: {}::{}", name, func_name));
+                        // 获取成员名或函数名
+                        let member_name = self.consume().ok_or_else(|| "期望成员名或函数名".to_string())?;
+                        debug_println(&format!("解析静态访问或库函数调用: {}::{}", name, member_name));
                         
-                        // 检查是否是库函数调用
-                        if name.starts_with("lib_") {
-                            // 库函数调用，格式为 lib_xxx::func_name
-                            let lib_name = name.trim_start_matches("lib_").to_string();
-                            debug_println(&format!("识别为库函数调用: {} -> {}", lib_name, func_name));
-                            
-                            self.expect("(")?;
-                            
-                            let mut args = Vec::new();
-                            
-                            if self.peek() != Some(&")".to_string()) {
-                                // 解析参数列表
-                                loop {
-                                    let arg = self.parse_expression()?;
-                                    args.push(arg);
-                                    
-                                    if self.peek() != Some(&",".to_string()) {
-                                        break;
+                        // 检查下一个token来决定是静态访问还是函数调用
+                        if self.peek() == Some(&"(".to_string()) {
+                            // 这是一个函数调用
+                            // 检查是否是库函数调用
+                            if name.starts_with("lib_") {
+                                // 库函数调用，格式为 lib_xxx::func_name
+                                let lib_name = name.trim_start_matches("lib_").to_string();
+                                debug_println(&format!("识别为库函数调用: {} -> {}", lib_name, member_name));
+                                
+                                self.expect("(")?;
+                                
+                                let mut args = Vec::new();
+                                
+                                if self.peek() != Some(&")".to_string()) {
+                                    // 解析参数列表
+                                    loop {
+                                        let arg = self.parse_expression()?;
+                                        args.push(arg);
+                                        
+                                        if self.peek() != Some(&",".to_string()) {
+                                            break;
+                                        }
+                                        
+                                        self.consume(); // 消费 ","
                                     }
-                                    
-                                    self.consume(); // 消费 ","
+                                }
+                                
+                                self.expect(")")?;
+                                
+                                Ok(Expression::LibraryFunctionCall(lib_name, member_name, args))
+                            } else {
+                                // 静态方法调用或命名空间函数调用
+                                debug_println(&format!("识别为静态方法调用或命名空间函数调用: {}::{}", name, member_name));
+                                
+                                // 检查是否有更多的命名空间层级
+                                let mut path = Vec::new();
+                                path.push(name.clone());
+                                path.push(member_name.clone());
+                                
+                                while self.peek() == Some(&"::".to_string()) {
+                                    self.consume(); // 消费 "::"
+                                    let next_name = self.consume().ok_or_else(|| "期望命名空间或函数名".to_string())?;
+                                    path.push(next_name.clone());
+                                }
+                                
+                                // 期望 "("
+                                self.expect("(")?;
+                                
+                                let mut args = Vec::new();
+                                
+                                if self.peek() != Some(&")".to_string()) {
+                                    // 解析参数列表
+                                    loop {
+                                        let arg = self.parse_expression()?;
+                                        args.push(arg);
+                                        
+                                        if self.peek() != Some(&",".to_string()) {
+                                            break;
+                                        }
+                                        
+                                        self.consume(); // 消费 ","
+                                    }
+                                }
+                                
+                                self.expect(")")?;
+                                
+                                // 检查是否是静态方法调用（只有两个部分：ClassName::methodName）
+                                if path.len() == 2 {
+                                    debug_println(&format!("识别为静态方法调用: {}::{}", path[0], path[1]));
+                                    Ok(Expression::StaticMethodCall(path[0].clone(), path[1].clone(), args))
+                                } else {
+                                    // 使用统一的接口处理所有命名空间函数调用
+                                    debug_println(&format!("使用NamespacedFunctionCall处理: {:?}", path));
+                                    Ok(Expression::NamespacedFunctionCall(path, args))
                                 }
                             }
-                            
-                            self.expect(")")?;
-                            
-                            Ok(Expression::LibraryFunctionCall(lib_name, func_name, args))
                         } else {
-                            // 命名空间函数调用
-                            debug_println(&format!("识别为命名空间函数调用: {}::{}", name, func_name));
-                            
-                            // 构建完整的函数名称（包含命名空间）
-                            let mut full_name = format!("{}::{}", name, func_name);
-                            
-                            // 检查是否有更多的命名空间层级
-                            let mut path = Vec::new();
-                            path.push(name);
-                            path.push(func_name);
-                            
-                            while self.peek() == Some(&"::".to_string()) {
-                                self.consume(); // 消费 "::"
-                                let next_name = self.consume().ok_or_else(|| "期望命名空间或函数名".to_string())?;
-                                path.push(next_name.clone());
-                                full_name.push_str("::");
-                                full_name.push_str(&next_name);
-                            }
-                            
-                            // 期望 "("
-                            self.expect("(")?;
-                            
-                            let mut args = Vec::new();
-                            
-                            if self.peek() != Some(&")".to_string()) {
-                                // 解析参数列表
-                                loop {
-                                    let arg = self.parse_expression()?;
-                                    args.push(arg);
-                                    
-                                    if self.peek() != Some(&",".to_string()) {
-                                        break;
-                                    }
-                                    
-                                    self.consume(); // 消费 ","
-                                }
-                            }
-                            
-                            self.expect(")")?;
-                            
-                            // 使用统一的接口处理所有命名空间函数调用，不再硬编码特定命名空间
-                            debug_println(&format!("使用NamespacedFunctionCall处理: {:?}", path));
-                            Ok(Expression::NamespacedFunctionCall(path, args))
+                            // 这是静态访问（不是函数调用）
+                            debug_println(&format!("识别为静态访问: {}::{}", name, member_name));
+                            Ok(Expression::StaticAccess(name, member_name))
                         }
                     } else if self.peek() == Some(&"++".to_string()) {
                         // 后置自增
