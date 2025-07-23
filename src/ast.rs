@@ -6,6 +6,7 @@ pub enum Type {
     String,
     Long,
     Void,    // 添加void类型
+    Auto,    // 新增：自动类型推断（弱类型）
     Array(Box<Type>),
     Map(Box<Type>, Box<Type>),
     Exception, // 新增：异常类型
