@@ -398,14 +398,17 @@ impl<'a> FunctionCallHandler for Interpreter<'a> {
                 }
             }
             
-            // 检查是否为静态方法调用
+            // 检查是否为静态方法调用（只有在确认不是库命名空间的情况下）
             if !found {
                 let parts: Vec<&str> = full_path.split("::").collect();
                 if parts.len() == 2 {
                     let class_name = parts[0];
                     let method_name = parts[1];
                     
-                    if let Some(class) = self.classes.get(class_name) {
+                    // 首先检查是否是已知的库命名空间，如果是则跳过静态方法查找
+                    if self.library_namespaces.contains_key(class_name) {
+                        debug_println(&format!("跳过静态方法查找，因为 '{}' 是库命名空间", class_name));
+                    } else if let Some(class) = self.classes.get(class_name) {
                         if let Some(method) = class.methods.iter().find(|m| m.is_static && m.name == method_name) {
                             // 创建方法参数环境
                             let mut method_env = HashMap::new();
@@ -462,10 +465,17 @@ impl<'a> FunctionCallHandler for Interpreter<'a> {
                             }
                             return Value::None;
                         }
+                    } else {
+                        debug_println(&format!("未找到类 '{}' 用于静态方法调用", class_name));
                     }
                 }
                 
-                panic!("未定义的命名空间函数或静态方法: {}", full_path);
+                // 如果是库命名空间但函数调用失败，给出更友好的错误信息
+                if path.len() >= 2 && self.library_namespaces.contains_key(&path[0]) {
+                    panic!("库命名空间函数调用失败: {} (库命名空间: {})", full_path, path[0]);
+                } else {
+                    panic!("未定义的命名空间函数或静态方法: {}", full_path);
+                }
             }
             
             // 这里不会执行到，只是为了编译通过
