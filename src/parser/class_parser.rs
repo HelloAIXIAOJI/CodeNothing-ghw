@@ -38,6 +38,23 @@ impl<'a> ClassParser for ParserBase<'a> {
             None
         };
         
+        // 检查是否实现接口 (implements Interface1, Interface2)
+        let mut implements = Vec::new();
+        if self.peek() == Some(&"implements".to_string()) {
+            self.consume(); // 消费 "implements"
+            
+            // 解析实现的接口列表
+            loop {
+                let interface_name = self.consume().ok_or_else(|| "期望接口名".to_string())?;
+                implements.push(interface_name);
+                
+                if self.peek() != Some(&",".to_string()) {
+                    break;
+                }
+                self.consume(); // 消费 ","
+            }
+        }
+        
         // 解析类体
         self.expect("{")?;
         
@@ -93,6 +110,7 @@ impl<'a> ClassParser for ParserBase<'a> {
         Ok(Class {
             name: class_name,
             super_class,
+            implements,
             fields,
             methods,
             constructors,
