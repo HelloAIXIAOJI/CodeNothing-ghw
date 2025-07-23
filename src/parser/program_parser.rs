@@ -171,7 +171,7 @@ pub fn parse_program_collect_all_errors(parser: &mut ParserBase, errors: &mut Ve
                     try_next_item = parser.position < parser.tokens.len();
                 }
             }
-        } else if parser.peek() == Some(&"class".to_string()) {
+        } else if parser.peek() == Some(&"class".to_string()) || parser.peek() == Some(&"abstract".to_string()) {
             match parser.parse_class() {
                 Ok(_) => try_next_item = true,
                 Err(error) => {
