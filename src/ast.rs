@@ -106,6 +106,8 @@ pub enum Statement {
     ForEachLoop(String, Expression, Vec<Statement>), // foreach循环，包含变量名、集合表达式和循环体
     TryCatch(Vec<Statement>, Vec<(String, Type, Vec<Statement>)>, Option<Vec<Statement>>), // 新增：try-catch-finally 语句
     Throw(Expression), // 新增：抛出异常语句
+    // Switch 语句
+    Switch(Expression, Vec<SwitchCase>, Option<Vec<Statement>>), // switch语句：表达式、case列表、default块
     // OOP相关语句
     ClassDeclaration(Class), // 类声明
     InterfaceDeclaration(Interface), // 接口声明
@@ -205,4 +207,12 @@ pub struct Program {
     pub constants: Vec<(String, Type, Expression)>, // 新增：顶层常量定义
     pub classes: Vec<Class>, // 新增：类定义
     pub interfaces: Vec<Interface>, // 新增：接口定义
+}
+
+// Switch case 结构
+#[derive(Debug, Clone)]
+pub struct SwitchCase {
+    pub value: Expression,      // case 的值
+    pub statements: Vec<Statement>, // case 块中的语句
+    pub has_break: bool,        // 是否有 break 语句
 } 
