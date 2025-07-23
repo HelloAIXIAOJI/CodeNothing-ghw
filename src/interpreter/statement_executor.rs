@@ -21,9 +21,31 @@ impl<'a> StatementExecutor for Interpreter<'a> {
                 let value = self.evaluate_expression(&expr);
                 ExecutionResult::Return(value)
             },
-            Statement::VariableDeclaration(name, _type, expr) => {
+            Statement::VariableDeclaration(name, declared_type, expr) => {
                 let value = self.evaluate_expression(&expr);
-                self.local_env.insert(name, value);
+                
+                // 如果声明的类型是 Auto，则不进行类型检查（弱类型）
+                if !matches!(declared_type, Type::Auto) {
+                    // 进行强类型检查
+                    let type_matches = match (&declared_type, &value) {
+                        (Type::Int, Value::Int(_)) => true,
+                        (Type::Float, Value::Float(_)) => true,
+                        (Type::Bool, Value::Bool(_)) => true,
+                        (Type::String, Value::String(_)) => true,
+                        (Type::Long, Value::Long(_)) => true,
+                        (Type::Void, Value::None) => true,
+                        _ => false
+                    };
+                    
+                    if !type_matches {
+                        panic!("变量 '{}' 的类型不匹配：期望 {:?}，但得到 {:?}", name, declared_type, value);
+                    }
+                }
+                
+                // 存储变量值和类型信息
+                self.local_env.insert(name.clone(), value);
+                // 存储变量的声明类型用于后续赋值检查
+                self.variable_types.insert(name, declared_type);
                 ExecutionResult::None
             },
             Statement::ConstantDeclaration(name, typ, expr) => {
@@ -61,13 +83,38 @@ impl<'a> StatementExecutor for Interpreter<'a> {
                 }
                 
                 let value = self.evaluate_expression(&expr);
-                // 先检查局部变量，再检查全局变量
+                
+                // 检查变量是否存在
+                let variable_exists = self.local_env.contains_key(&name) || self.global_env.contains_key(&name);
+                if !variable_exists {
+                    panic!("未定义的变量: {}", name);
+                }
+                
+                // 检查类型约束（如果变量有声明类型且不是 Auto）
+                if let Some(declared_type) = self.variable_types.get(&name) {
+                    if !matches!(declared_type, Type::Auto) {
+                        // 进行强类型检查
+                        let type_matches = match (declared_type, &value) {
+                            (Type::Int, Value::Int(_)) => true,
+                            (Type::Float, Value::Float(_)) => true,
+                            (Type::Bool, Value::Bool(_)) => true,
+                            (Type::String, Value::String(_)) => true,
+                            (Type::Long, Value::Long(_)) => true,
+                            (Type::Void, Value::None) => true,
+                            _ => false
+                        };
+                        
+                        if !type_matches {
+                            panic!("变量 '{}' 类型不匹配：期望 {:?}，但尝试赋值 {:?}", name, declared_type, value);
+                        }
+                    }
+                }
+                
+                // 更新变量值
                 if self.local_env.contains_key(&name) {
                     self.local_env.insert(name, value);
-                } else if self.global_env.contains_key(&name) {
-                    self.global_env.insert(name, value);
                 } else {
-                    panic!("未定义的变量: {}", name);
+                    self.global_env.insert(name, value);
                 }
                 ExecutionResult::None
             },
