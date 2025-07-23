@@ -166,6 +166,14 @@ impl<'a> ExpressionEvaluator for Interpreter<'a> {
                 }
             },
             Expression::StaticMethodCall(class_name, method_name, args) => {
+                // 首先检查是否是库命名空间函数调用
+                if self.library_namespaces.contains_key(class_name) {
+                    debug_println(&format!("StaticMethodCall被识别为库命名空间函数调用: {}::{}", class_name, method_name));
+                    // 转换为命名空间函数调用
+                    let path = vec![class_name.clone(), method_name.clone()];
+                    return self.handle_namespaced_function_call(&path, args);
+                }
+                
                 // 简化的静态方法调用实现
                 if let Some(class) = self.classes.get(class_name) {
                     if let Some(method) = class.methods.iter().find(|m| m.is_static && m.name == *method_name) {
