@@ -119,7 +119,7 @@ pub fn tokenize(source: &str, debug: bool) -> Vec<String> {
         let next_char = chars.clone().nth(1);
         if let Some(nc) = next_char {
             let two_char_op = format!("{}{}", c, nc);
-            if ["==", "!=", ">=", "<=", "&&", "||", "::", "..", "++", "--", "+=", "-=", "*=", "/=", "%="].contains(&two_char_op.as_str()) {
+            if ["==", "!=", ">=", "<=", "&&", "||", "::", "..", "++", "--", "+=", "-=", "*=", "/=", "%=", "=>"].contains(&two_char_op.as_str()) {
                 tokens.push(two_char_op);
                 chars.next();
                 chars.next();
