@@ -186,11 +186,8 @@ fn main() {
     // 创建文件预处理器
     let mut preprocessor = FilePreprocessor::new();
     
-    // 获取文件所在目录
-    let file_dir = Path::new(file_path).parent();
-    
-    // 预处理文件，处理所有导入
-    match preprocessor.process_file(file_path, file_dir) {
+    // 预处理文件，处理所有导入（不传递父目录，让process_file自己处理相对路径）
+    match preprocessor.process_file(file_path, None) {
         Ok(processed_content) => {
             debug_println(&format!("预处理后的文件内容:\n{}", processed_content));
             
