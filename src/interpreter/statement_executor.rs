@@ -1,4 +1,4 @@
-use crate::ast::{Statement, Expression, Type, NamespaceType, Function, SwitchCase};
+use crate::ast::{Statement, Expression, Type, NamespaceType, Function, SwitchCase, CasePattern, SwitchType};
 use super::value::Value;
 use super::executor::{Executor, ExecutionResult, update_variable_value, handle_increment, handle_decrement};
 use super::library_loader::{load_library, call_library_function, convert_values_to_string_args};
@@ -169,13 +169,8 @@ impl<'a> StatementExecutor for Interpreter<'a> {
                     _ => handlers::namespace_handler::handle_import_namespace(self, ns_type, path)
                 }
             },
-            Statement::FileImport(file_path) => {
-                // 导入文件
-                debug_println(&format!("导入文件: {}", file_path));
-                
-                // 文件导入已在main.rs中预处理，这里不需要额外处理
-                // 只需记录日志并返回None
-                debug_println("文件导入已在预处理阶段处理");
+            Statement::FileImport(_file_path) => {
+                // 文件导入已在预处理阶段处理，这里不需要额外处理
                 ExecutionResult::None
             },
             Statement::FunctionCallStatement(expr) => {
@@ -217,9 +212,9 @@ impl<'a> StatementExecutor for Interpreter<'a> {
                 let exception_value = self.evaluate_expression(&exception_expr);
                 ExecutionResult::Throw(exception_value)
             },
-            Statement::Switch(expr, cases, default_block) => {
+            Statement::Switch(expr, cases, default_block, switch_type) => {
                 // Switch 语句执行
-                self.execute_switch_statement(expr, cases, default_block)
+                self.execute_switch_statement(expr, cases, default_block, switch_type)
             },
             // OOP相关语句的临时实现
             Statement::ClassDeclaration(_) => {
@@ -304,7 +299,7 @@ impl<'a> StatementExecutor for Interpreter<'a> {
 }
 
 impl<'a> Interpreter<'a> {
-    fn execute_switch_statement(&mut self, expr: Expression, cases: Vec<SwitchCase>, default_block: Option<Vec<Statement>>) -> ExecutionResult {
+    fn execute_switch_statement(&mut self, expr: Expression, cases: Vec<SwitchCase>, default_block: Option<Vec<Statement>>, switch_type: SwitchType) -> ExecutionResult {
         // 计算 switch 表达式的值
         let switch_value = self.evaluate_expression(&expr);
         // debug_println(&format!("Switch value: {:?}", switch_value));
@@ -316,17 +311,24 @@ impl<'a> Interpreter<'a> {
         for case in &cases {
             // 如果已经匹配过且没有 break，则继续执行（fall-through）
             if matched || fall_through {
-                // 执行当前 case 的语句
-                for stmt in &case.statements {
-                    match self.execute_statement_direct(stmt.clone()) {
-                        ExecutionResult::None => {},
-                        ExecutionResult::Return(value) => return ExecutionResult::Return(value),
-                        ExecutionResult::Break => {
-                            // break 跳出整个 switch
-                            return ExecutionResult::None;
-                        },
-                        ExecutionResult::Continue => return ExecutionResult::Continue,
-                        ExecutionResult::Throw(value) => return ExecutionResult::Throw(value),
+                // 执行当前 case 的语句或表达式
+                if let Some(expr) = &case.expression {
+                    // 表达式形式，计算并返回值
+                    let result_value = self.evaluate_expression(expr);
+                    return ExecutionResult::Return(result_value);
+                } else {
+                    // 语句形式
+                    for stmt in &case.statements {
+                        match self.execute_statement_direct(stmt.clone()) {
+                            ExecutionResult::None => {},
+                            ExecutionResult::Return(value) => return ExecutionResult::Return(value),
+                            ExecutionResult::Break => {
+                                // break 跳出整个 switch
+                                return ExecutionResult::None;
+                            },
+                            ExecutionResult::Continue => return ExecutionResult::Continue,
+                            ExecutionResult::Throw(value) => return ExecutionResult::Throw(value),
+                        }
                     }
                 }
                 
@@ -340,28 +342,30 @@ impl<'a> Interpreter<'a> {
                 continue;
             }
             
-            // 计算 case 值并与 switch 值比较
-            let case_value = self.evaluate_expression(&case.value);
-            // debug_println(&format!("Case value: {:?}", case_value));
+            // 检查模式是否匹配
+            let pattern_matches = self.pattern_matches(&case.pattern, &switch_value);
             
-            // 比较值是否相等
-            let is_equal = self.values_equal(&switch_value, &case_value);
-            // debug_println(&format!("Values equal: {}", is_equal));
-            
-            if is_equal {
+            if pattern_matches {
                 matched = true;
                 
-                // 执行匹配的 case 语句
-                for stmt in &case.statements {
-                    match self.execute_statement_direct(stmt.clone()) {
-                        ExecutionResult::None => {},
-                        ExecutionResult::Return(value) => return ExecutionResult::Return(value),
-                        ExecutionResult::Break => {
-                            // break 跳出整个 switch
-                            return ExecutionResult::None;
-                        },
-                        ExecutionResult::Continue => return ExecutionResult::Continue,
-                        ExecutionResult::Throw(value) => return ExecutionResult::Throw(value),
+                // 执行匹配的 case 语句或表达式
+                if let Some(expr) = &case.expression {
+                    // 表达式形式，计算并返回值
+                    let result_value = self.evaluate_expression(expr);
+                    return ExecutionResult::Return(result_value);
+                } else {
+                    // 语句形式
+                    for stmt in &case.statements {
+                        match self.execute_statement_direct(stmt.clone()) {
+                            ExecutionResult::None => {},
+                            ExecutionResult::Return(value) => return ExecutionResult::Return(value),
+                            ExecutionResult::Break => {
+                                // break 跳出整个 switch
+                                return ExecutionResult::None;
+                            },
+                            ExecutionResult::Continue => return ExecutionResult::Continue,
+                            ExecutionResult::Throw(value) => return ExecutionResult::Throw(value),
+                        }
                     }
                 }
                 
@@ -404,6 +408,53 @@ impl<'a> Interpreter<'a> {
             (Value::String(a), Value::String(b)) => a == b,
             (Value::Long(a), Value::Long(b)) => a == b,
             // 类型不同则不相等
+            _ => false,
+        }
+    }
+
+    fn pattern_matches(&mut self, pattern: &CasePattern, switch_value: &Value) -> bool {
+        match pattern {
+            CasePattern::Value(expr) => {
+                let case_value = self.evaluate_expression(expr);
+                self.values_equal(switch_value, &case_value)
+            },
+            CasePattern::Range(start_expr, end_expr) => {
+                let start_value = self.evaluate_expression(start_expr);
+                let end_value = self.evaluate_expression(end_expr);
+                self.value_in_range(switch_value, &start_value, &end_value)
+            },
+            CasePattern::Guard(var_name, condition_expr) => {
+                // 将switch值绑定到变量，然后检查guard条件
+                let old_value = self.local_env.get(var_name).cloned();
+                self.local_env.insert(var_name.clone(), switch_value.clone());
+                
+                let condition_result = self.evaluate_expression(condition_expr);
+                
+                // 恢复原来的变量值
+                if let Some(old_val) = old_value {
+                    self.local_env.insert(var_name.clone(), old_val);
+                } else {
+                    self.local_env.remove(var_name);
+                }
+                
+                // 检查条件是否为真
+                matches!(condition_result, Value::Bool(true))
+            },
+            CasePattern::Destructure(_) => {
+                // 解构匹配暂时不实现，返回false
+                false
+            }
+        }
+    }
+
+    fn value_in_range(&self, value: &Value, start: &Value, end: &Value) -> bool {
+        match (value, start, end) {
+            (Value::Int(v), Value::Int(s), Value::Int(e)) => v >= s && v <= e,
+            (Value::Float(v), Value::Float(s), Value::Float(e)) => v >= s && v <= e,
+            (Value::Long(v), Value::Long(s), Value::Long(e)) => v >= s && v <= e,
+            // 混合类型比较
+            (Value::Int(v), Value::Float(s), Value::Float(e)) => (*v as f64) >= *s && (*v as f64) <= *e,
+            (Value::Float(v), Value::Int(s), Value::Int(e)) => *v >= (*s as f64) && *v <= (*e as f64),
             _ => false,
         }
     }
