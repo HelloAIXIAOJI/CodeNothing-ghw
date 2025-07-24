@@ -1,5 +1,5 @@
 // 导入必要的模块
-use crate::ast::{Statement, Expression, Type, Parameter, Function, BinaryOperator, NamespaceType, SwitchCase};
+use crate::ast::{Statement, Expression, Type, Parameter, Function, BinaryOperator, NamespaceType, SwitchCase, CasePattern, SwitchType};
 use crate::parser::parser_base::ParserBase;
 use crate::parser::expression_parser::ExpressionParser;
 use crate::interpreter::debug_println;
@@ -15,6 +15,7 @@ pub trait StatementParser {
     fn parse_try_catch(&mut self) -> Result<Statement, String>;
     fn parse_throw_statement(&mut self) -> Result<Statement, String>;
     fn parse_switch_statement(&mut self) -> Result<Statement, String>;
+    fn parse_case_pattern(&mut self) -> Result<CasePattern, String>;
     fn parse_type(&mut self) -> Result<Type, String>;
 }
 
@@ -625,50 +626,75 @@ impl<'a> StatementParser for ParserBase<'a> {
             if self.peek() == Some(&"case".to_string()) {
                 self.consume(); // 消费 "case"
                 
-                // 解析 case 值
-                let case_value = self.parse_expression()?;
+                // 解析 case 模式
+                let case_pattern = self.parse_case_pattern()?;
                 
-                // 解析 case 块
-                self.expect("{")?;
-                let mut case_statements = Vec::new();
-                let mut has_break = false;
-                
-                while self.peek() != Some(&"}".to_string()) {
-                    let stmt = self.parse_statement()?;
+                // 检查是否是表达式形式 (使用 => )
+                if self.peek() == Some(&"=>".to_string()) {
+                    self.consume(); // 消费 "=>"
                     
-                    // 检查是否是 break 语句
-                    if matches!(stmt, Statement::Break) {
-                        has_break = true;
-                        case_statements.push(stmt);
-                        break; // break 后不再解析更多语句
-                    } else {
-                        case_statements.push(stmt);
+                    // 解析表达式
+                    let case_expr = self.parse_expression()?;
+                    self.expect(",")?; // 表达式形式用逗号分隔
+                    
+                    cases.push(SwitchCase {
+                        pattern: case_pattern,
+                        statements: Vec::new(),
+                        expression: Some(case_expr),
+                        has_break: true, // 表达式形式自动break
+                    });
+                } else {
+                    // 语句形式
+                    self.expect("{")?;
+                    let mut case_statements = Vec::new();
+                    let mut has_break = false;
+                    
+                    while self.peek() != Some(&"}".to_string()) {
+                        let stmt = self.parse_statement()?;
+                        
+                        // 检查是否是 break 语句
+                        if matches!(stmt, Statement::Break) {
+                            has_break = true;
+                            case_statements.push(stmt);
+                            break; // break 后不再解析更多语句
+                        } else {
+                            case_statements.push(stmt);
+                        }
                     }
+                    
+                    self.expect("}")?;
+                    self.expect(";")?;
+                    
+                    cases.push(SwitchCase {
+                        pattern: case_pattern,
+                        statements: case_statements,
+                        expression: None,
+                        has_break,
+                    });
                 }
-                
-                self.expect("}")?;
-                self.expect(";")?;
-                
-                cases.push(SwitchCase {
-                    value: case_value,
-                    statements: case_statements,
-                    has_break,
-                });
             } else if self.peek() == Some(&"default".to_string()) {
                 self.consume(); // 消费 "default"
                 
-                // 解析 default 块
-                self.expect("{")?;
-                let mut default_statements = Vec::new();
-                
-                while self.peek() != Some(&"}".to_string()) {
-                    default_statements.push(self.parse_statement()?);
+                // 检查是否是表达式形式
+                if self.peek() == Some(&"=>".to_string()) {
+                    self.consume(); // 消费 "=>"
+                    let default_expr = self.parse_expression()?;
+                    // 对于表达式形式的default，我们将其转换为语句块
+                    default_block = Some(vec![Statement::Return(default_expr)]);
+                } else {
+                    // 语句形式
+                    self.expect("{")?;
+                    let mut default_statements = Vec::new();
+                    
+                    while self.peek() != Some(&"}".to_string()) {
+                        default_statements.push(self.parse_statement()?);
+                    }
+                    
+                    self.expect("}")?;
+                    self.expect(";")?;
+                    
+                    default_block = Some(default_statements);
                 }
-                
-                self.expect("}")?;
-                self.expect(";")?;
-                
-                default_block = Some(default_statements);
             } else {
                 return Err(format!("期望 'case' 或 'default'，但找到: {:?}", self.peek()));
             }
@@ -677,6 +703,33 @@ impl<'a> StatementParser for ParserBase<'a> {
         self.expect("}")?;
         self.expect(";")?;
         
-        Ok(Statement::Switch(switch_expr, cases, default_block))
+        Ok(Statement::Switch(switch_expr, cases, default_block, SwitchType::Statement))
+    }
+
+    fn parse_case_pattern(&mut self) -> Result<CasePattern, String> {
+        // 先尝试解析第一个表达式
+        let first_expr = self.parse_expression()?;
+        
+        // 检查是否是范围匹配
+        if self.peek() == Some(&"..".to_string()) {
+            self.consume(); // 消费 ".."
+            let end_expr = self.parse_expression()?;
+            return Ok(CasePattern::Range(first_expr, end_expr));
+        }
+        
+        // 检查是否是Guard条件
+        if self.peek() == Some(&"if".to_string()) {
+            // 第一个表达式应该是变量
+            if let Expression::Variable(var_name) = first_expr {
+                self.consume(); // 消费 "if"
+                let guard_condition = self.parse_expression()?;
+                return Ok(CasePattern::Guard(var_name, guard_condition));
+            } else {
+                return Err("Guard模式中期望变量名".to_string());
+            }
+        }
+        
+        // 默认是值匹配
+        Ok(CasePattern::Value(first_expr))
     }
 }
