@@ -1,4 +1,4 @@
-use crate::ast::{Expression, BinaryOperator, CompareOperator, LogicalOperator};
+use crate::ast::{Expression, BinaryOperator, CompareOperator, LogicalOperator, SwitchCase, CasePattern};
 use super::value::{Value, ObjectInstance};
 use super::interpreter_core::{Interpreter, debug_println};
 use std::collections::HashMap;
@@ -279,6 +279,32 @@ impl<'a> ExpressionEvaluator for Interpreter<'a> {
                 self.array_for_each(array_value, lambda_value);
                 Value::None
             },
+            Expression::SwitchExpression(switch_expr, cases, default_expr) => {
+                let switch_value = self.evaluate_expression(switch_expr);
+                for case in cases {
+                    if let CasePattern::Value(case_expr) = &case.pattern {
+                        let case_value = self.evaluate_expression(case_expr);
+                        if match (&switch_value, &case_value) {
+                            (Value::Int(a), Value::Int(b)) => a == b,
+                            (Value::Float(a), Value::Float(b)) => (a - b).abs() < f64::EPSILON,
+                            (Value::Bool(a), Value::Bool(b)) => a == b,
+                            (Value::String(a), Value::String(b)) => a == b,
+                            (Value::Long(a), Value::Long(b)) => a == b,
+                            _ => false,
+                        } {
+                            if let Some(expr) = &case.expression {
+                                return self.evaluate_expression(expr);
+                            }
+                            return Value::None;
+                        }
+                    }
+                }
+                if let Some(default_expr_box) = default_expr {
+                    self.evaluate_expression(default_expr_box)
+                } else {
+                    Value::None
+                }
+            },
         }
     }
     
@@ -327,6 +353,7 @@ impl<'a> ExpressionEvaluator for Interpreter<'a> {
             _ => false,
         }
     }
+
     
 }
 
@@ -360,7 +387,7 @@ impl<'a> Interpreter<'a> {
                     Value::Bool(b) => Value::Bool(jit::jit_not_bool(b)),
                     _ => panic!("逻辑操作符的操作数必须是布尔类型"),
                 }
-            }
+            },
         }
     }
     
