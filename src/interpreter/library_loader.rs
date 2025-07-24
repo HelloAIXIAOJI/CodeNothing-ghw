@@ -275,6 +275,17 @@ pub fn convert_value_to_string_arg(value: &Value) -> String {
         Value::Object(obj) => {
             format!("{}@{:p}", obj.class_name, obj)
         },
+        Value::Lambda(params, _) => {
+            let param_names: Vec<String> = params.iter().map(|p| p.name.clone()).collect();
+            format!("lambda({})", param_names.join(", "))
+        },
+        Value::LambdaBlock(params, _) => {
+            let param_names: Vec<String> = params.iter().map(|p| p.name.clone()).collect();
+            format!("lambda_block({})", param_names.join(", "))
+        },
+        Value::FunctionReference(name) => {
+            format!("function_ref({})", name)
+        },
         Value::None => "null".to_string(),
     }
 }
