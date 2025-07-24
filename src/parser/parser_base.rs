@@ -50,4 +50,9 @@ impl<'a> ParserBase<'a> {
             Err(format!("期望 '{}', 但到达了文件末尾 (位置: {})", expected, self.position))
         }
     }
+    
+    // 向前查看指定偏移量的词法单元
+    pub fn peek_ahead(&self, offset: usize) -> Option<&String> {
+        self.tokens.get(self.position + offset)
+    }
 } 
