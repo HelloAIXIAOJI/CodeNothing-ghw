@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::fmt;
+use crate::ast::{Parameter, Expression, Statement};
 
 // 定义值类型，用于存储不同类型的值
 #[derive(Debug, Clone)]
@@ -12,6 +13,9 @@ pub enum Value {
     Array(Vec<Value>),
     Map(HashMap<String, Value>),
     Object(ObjectInstance), // 新增：对象实例
+    Lambda(Vec<Parameter>, Expression), // Lambda表达式
+    LambdaBlock(Vec<Parameter>, Vec<Statement>), // Lambda块
+    FunctionReference(String), // 函数引用
     None, // 表示空值或未定义的值
 }
 
@@ -61,6 +65,17 @@ impl Value {
             Value::Object(obj) => {
                 format!("{}@{:p}", obj.class_name, obj)
             },
+            Value::Lambda(params, _) => {
+                let param_names: Vec<String> = params.iter().map(|p| p.name.clone()).collect();
+                format!("lambda({})", param_names.join(", "))
+            },
+            Value::LambdaBlock(params, _) => {
+                let param_names: Vec<String> = params.iter().map(|p| p.name.clone()).collect();
+                format!("lambda_block({})", param_names.join(", "))
+            },
+            Value::FunctionReference(name) => {
+                format!("function_ref({})", name)
+            },
             Value::None => "null".to_string(),
         }
     }
@@ -95,6 +110,15 @@ impl fmt::Display for Value {
                 write!(f, "}}")
             },
             Value::Object(obj) => write!(f, "{}@{:p}", obj.class_name, obj),
+            Value::Lambda(params, _) => {
+                let param_names: Vec<String> = params.iter().map(|p| p.name.clone()).collect();
+                write!(f, "lambda({})", param_names.join(", "))
+            },
+            Value::LambdaBlock(params, _) => {
+                let param_names: Vec<String> = params.iter().map(|p| p.name.clone()).collect();
+                write!(f, "lambda_block({})", param_names.join(", "))
+            },
+            Value::FunctionReference(name) => write!(f, "function_ref({})", name),
             Value::None => write!(f, "null"),
         }
     }
