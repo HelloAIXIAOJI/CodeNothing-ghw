@@ -1,4 +1,4 @@
-use crate::ast::{Expression, BinaryOperator, CompareOperator, LogicalOperator};
+use crate::ast::{Expression, BinaryOperator, CompareOperator, LogicalOperator, Parameter, Type, Statement};
 use crate::parser::parser_base::ParserBase;
 use crate::interpreter::debug_println;
 
@@ -10,6 +10,9 @@ pub trait ExpressionParser {
     fn parse_multiplicative_expression(&mut self) -> Result<Expression, String>;
     fn parse_unary_expression(&mut self) -> Result<Expression, String>;
     fn parse_primary_expression(&mut self) -> Result<Expression, String>;
+    fn parse_expression_type(&mut self) -> Result<Type, String>;
+    fn is_lambda_parameter_list(&self) -> bool;
+    fn peek_ahead(&self, offset: usize) -> Option<&String>;
 }
 
 impl<'a> ExpressionParser for ParserBase<'a> {
@@ -169,6 +172,58 @@ impl<'a> ExpressionParser for ParserBase<'a> {
         if let Some(token) = self.peek() {
             match token.as_str() {
                 "(" => {
+                    // 检查是否是多参数Lambda表达式: (x, y) => expr
+                    if self.is_lambda_parameter_list() {
+                        self.consume(); // 消费 "("
+                        let mut params = Vec::new();
+                        
+                        // 解析参数列表
+                        if self.peek() != Some(&")".to_string()) {
+                            loop {
+                                let param_name = self.consume().ok_or_else(|| "期望参数名".to_string())?;
+                                let param_type = if self.peek() == Some(&":".to_string()) {
+                                    self.consume(); // 消费 ":"
+                                    self.parse_expression_type()?
+                                } else {
+                                    Type::Auto // 默认auto类型
+                                };
+                                
+                                params.push(Parameter {
+                                    name: param_name,
+                                    param_type,
+                                });
+                                
+                                if self.peek() != Some(&",".to_string()) {
+                                    break;
+                                }
+                                self.consume(); // 消费 ","
+                            }
+                        }
+                        
+                        self.expect(")")?;
+                        self.expect("=>")?;
+                        
+                        // 检查是否是块表达式
+                        if self.peek() == Some(&"{".to_string()) {
+                            // Lambda块: (x, y) => { statements }
+                            self.consume(); // 消费 "{"
+                            let mut statements = Vec::new();
+                            
+                            while self.peek() != Some(&"}".to_string()) {
+                                use crate::parser::statement_parser::StatementParser;
+                                statements.push(StatementParser::parse_statement(self)?);
+                            }
+                            
+                            self.expect("}")?;
+                            return Ok(Expression::LambdaBlock(params, statements));
+                        } else {
+                            // Lambda表达式: (x, y) => expr
+                            let body = self.parse_expression()?;
+                            return Ok(Expression::Lambda(params, Box::new(body)));
+                        }
+                    }
+                    
+                    // 普通括号表达式
                     self.consume(); // 消费左括号
                     let expr = self.parse_expression()?;
                     self.expect(")")?;
@@ -298,6 +353,21 @@ impl<'a> ExpressionParser for ParserBase<'a> {
                             self.consume();
                             return Ok(Expression::LongLiteral(long_value));
                         }
+                    }
+                    
+                    // 检查是否是Lambda表达式 (x => expr 或 (x, y) => expr)
+                    if self.peek_ahead(1) == Some(&"=>".to_string()) {
+                        // 单参数Lambda: x => expr
+                        let param_name = self.consume().unwrap();
+                        self.consume(); // 消费 "=>"
+                        
+                        let param = Parameter {
+                            name: param_name,
+                            param_type: Type::Auto, // Lambda参数默认使用auto类型
+                        };
+                        
+                        let body = self.parse_expression()?;
+                        return Ok(Expression::Lambda(vec![param], Box::new(body)));
                     }
                     
                     // 变量或函数调用
@@ -519,5 +589,102 @@ impl<'a> ExpressionParser for ParserBase<'a> {
         } else {
             Err("期望表达式".to_string())
         }
+    }
+    
+    fn parse_expression_type(&mut self) -> Result<Type, String> {
+        if let Some(token) = self.peek() {
+            match token.as_str() {
+                "int" => {
+                    self.consume();
+                    Ok(Type::Int)
+                },
+                "float" => {
+                    self.consume();
+                    Ok(Type::Float)
+                },
+                "bool" => {
+                    self.consume();
+                    Ok(Type::Bool)
+                },
+                "string" => {
+                    self.consume();
+                    Ok(Type::String)
+                },
+                "long" => {
+                    self.consume();
+                    Ok(Type::Long)
+                },
+                "void" => {
+                    self.consume();
+                    Ok(Type::Void)
+                },
+                "auto" => {
+                    self.consume();
+                    Ok(Type::Auto)
+                },
+                "fn" => {
+                    // 函数类型: fn(int, string) -> bool
+                    self.consume(); // 消费 "fn"
+                    self.expect("(")?;
+                    
+                    let mut param_types = Vec::new();
+                    if self.peek() != Some(&")".to_string()) {
+                        loop {
+                            param_types.push(self.parse_expression_type()?);
+                            if self.peek() != Some(&",".to_string()) {
+                                break;
+                            }
+                            self.consume(); // 消费 ","
+                        }
+                    }
+                    
+                    self.expect(")")?;
+                    self.expect("->")?;
+                    let return_type = Box::new(self.parse_expression_type()?);
+                    
+                    Ok(Type::Function(param_types, return_type))
+                },
+                _ => {
+                    // 可能是类类型
+                    let type_name = self.consume().unwrap();
+                    Ok(Type::Class(type_name))
+                }
+            }
+        } else {
+            Err("期望类型".to_string())
+        }
+    }
+    
+    
+    fn is_lambda_parameter_list(&self) -> bool {
+        // 检查是否是Lambda参数列表: (param1, param2) => ...
+        // 我们需要向前查看，找到匹配的右括号，然后检查是否有 "=>"
+        let mut depth = 0;
+        let mut pos = 0;
+        
+        // 跳过当前的 "("
+        pos += 1;
+        depth += 1;
+        
+        while let Some(token) = self.peek_ahead(pos) {
+            match token.as_str() {
+                "(" => depth += 1,
+                ")" => {
+                    depth -= 1;
+                    if depth == 0 {
+                        // 找到匹配的右括号，检查下一个token是否是 "=>"
+                        return self.peek_ahead(pos + 1) == Some(&"=>".to_string());
+                    }
+                },
+                _ => {}
+            }
+            pos += 1;
+        }
+        
+        false
+    }
+    
+    fn peek_ahead(&self, offset: usize) -> Option<&String> {
+        self.tokens.get(self.position + offset)
     }
 } 
