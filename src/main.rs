@@ -34,12 +34,23 @@ impl FilePreprocessor {
         } else if let Some(dir) = current_dir {
             dir.join(file_path)
         } else {
-            PathBuf::from(file_path)
+            // 相对于当前工作目录
+            std::env::current_dir()
+                .map_err(|_| "无法获取当前工作目录".to_string())?
+                .join(file_path)
         };
+        
+        // 检查文件是否存在
+        if !full_path.exists() {
+            return Err(format!("无法找到文件: {} (完整路径: {})", file_path, full_path.display()));
+        }
         
         let canonical_path = match full_path.canonicalize() {
             Ok(path) => path,
-            Err(_) => return Err(format!("无法找到文件: {}", file_path)),
+            Err(_) => {
+                // 如果canonicalize失败，直接使用full_path
+                full_path
+            }
         };
         
         let canonical_path_str = canonical_path.to_string_lossy().to_string();
@@ -60,8 +71,8 @@ impl FilePreprocessor {
         // 将当前文件添加到处理栈中
         self.file_stack.push(canonical_path_str.clone());
         
-        // 处理文件内容
-        let processed_content = content;
+        // 递归处理导入的文件
+        let processed_content = self.process_imports_in_content(&content, canonical_path.parent())?;
         
         // 将处理结果存储到缓存中
         self.processed_files.insert(canonical_path_str.clone(), processed_content.clone());
@@ -70,6 +81,49 @@ impl FilePreprocessor {
         self.file_stack.pop();
         
         Ok(processed_content)
+    }
+    
+    // 处理内容中的导入语句
+    fn process_imports_in_content(&mut self, content: &str, current_dir: Option<&Path>) -> Result<String, String> {
+        let mut result = String::new();
+        let lines: Vec<&str> = content.lines().collect();
+        
+        for line in lines {
+            let trimmed = line.trim();
+            
+            // 检查是否是 using file 语句
+            if trimmed.starts_with("using file") && trimmed.ends_with(";") {
+                // 提取文件路径
+                let start = trimmed.find('"').or_else(|| trimmed.find('\''));
+                let end = trimmed.rfind('"').or_else(|| trimmed.rfind('\''));
+                
+                if let (Some(start), Some(end)) = (start, end) {
+                    if start < end {
+                        let import_path = &trimmed[start + 1..end];
+                        
+                        // 递归处理导入的文件
+                        match self.process_file(import_path, current_dir) {
+                            Ok(imported_content) => {
+                                // 将导入的内容添加到结果中
+                                result.push_str(&format!("// === 导入文件: {} ===\n", import_path));
+                                result.push_str(&imported_content);
+                                result.push_str(&format!("\n// === 结束导入: {} ===\n", import_path));
+                            },
+                            Err(err) => {
+                                return Err(format!("导入文件 '{}' 失败: {}", import_path, err));
+                            }
+                        }
+                    }
+                }
+                // 不将 using file 语句本身添加到结果中
+            } else {
+                // 保留其他所有行
+                result.push_str(line);
+                result.push('\n');
+            }
+        }
+        
+        Ok(result)
     }
 }
 
