@@ -93,26 +93,14 @@ pub fn parse_program(parser: &mut ParserBase) -> Result<Program, String> {
                 // 添加到命名空间导入列表，使用Library类型
                 imported_namespaces.push((crate::ast::NamespaceType::Library, vec![lib_name]));
             } else if parser.peek() == Some(&"file".to_string()) {
-                // 解析文件导入
+                // 文件导入已在预处理阶段处理，这里跳过
                 parser.consume(); // 消费 "file"
                 
-                // 获取文件路径（可能被引号包裹）
-                let file_path = parser.consume().ok_or_else(|| "期望文件路径".to_string())?;
-                
-                // 移除可能存在的引号
-                let file_path = if file_path.starts_with("\"") && file_path.ends_with("\"") {
-                    file_path[1..file_path.len()-1].to_string()
-                } else if file_path.starts_with("'") && file_path.ends_with("'") {
-                    file_path[1..file_path.len()-1].to_string()
-                } else {
-                    file_path
-                };
+                // 跳过文件路径
+                parser.consume();
                 
                 // 期望 ";" 符号
                 parser.expect(";")?;
-                
-                // 添加到文件导入列表
-                file_imports.push(file_path);
             } else if parser.peek() == Some(&"ns".to_string()) || parser.peek() == Some(&"namespace".to_string()) {
                 // 解析命名空间导入
                 parser.consume(); // 消费 "ns" 或 "namespace"
