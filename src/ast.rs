@@ -58,6 +58,8 @@ pub enum Expression {
     ArrayFilter(Box<Expression>, Box<Expression>), // array.filter(lambda)
     ArrayReduce(Box<Expression>, Box<Expression>, Box<Expression>), // array.reduce(lambda, initial)
     ArrayForEach(Box<Expression>, Box<Expression>), // array.forEach(lambda)
+    // Switch 表达式
+    SwitchExpression(Box<Expression>, Vec<SwitchCase>, Option<Box<Expression>>), // switch表达式：表达式、case列表、default表达式
     // 未来可以扩展更多表达式类型
 }
 
@@ -119,7 +121,7 @@ pub enum Statement {
     TryCatch(Vec<Statement>, Vec<(String, Type, Vec<Statement>)>, Option<Vec<Statement>>), // 新增：try-catch-finally 语句
     Throw(Expression), // 新增：抛出异常语句
     // Switch 语句
-    Switch(Expression, Vec<SwitchCase>, Option<Vec<Statement>>), // switch语句：表达式、case列表、default块
+    Switch(Expression, Vec<SwitchCase>, Option<Vec<Statement>>, SwitchType), // switch语句：表达式、case列表、default块、类型
     // OOP相关语句
     ClassDeclaration(Class), // 类声明
     InterfaceDeclaration(Interface), // 接口声明
@@ -223,8 +225,36 @@ pub struct Program {
 
 // Switch case 结构
 #[derive(Debug, Clone)]
+pub enum CasePattern {
+    Value(Expression),           // 原有的值匹配
+    Range(Expression, Expression), // 范围匹配: start..end
+    Guard(String, Expression),   // Guard条件: x if condition
+    Destructure(DestructurePattern), // 解构匹配
+}
+
+#[derive(Debug, Clone)]
+pub enum DestructurePattern {
+    Array(Vec<ArrayElement>),    // 数组解构
+    // 未来可扩展对象解构等
+}
+
+#[derive(Debug, Clone)]
+pub enum ArrayElement {
+    Variable(String),            // 变量绑定
+    Rest(String),               // 剩余元素 ...name
+    Literal(Expression),        // 字面量匹配
+}
+
+#[derive(Debug, Clone)]
+pub enum SwitchType {
+    Statement,                  // 语句形式的 switch
+    Expression,                 // 表达式形式的 switch
+}
+
+#[derive(Debug, Clone)]
 pub struct SwitchCase {
-    pub value: Expression,      // case 的值
-    pub statements: Vec<Statement>, // case 块中的语句
-    pub has_break: bool,        // 是否有 break 语句
+    pub pattern: CasePattern,        // 替换原有的 value
+    pub statements: Vec<Statement>,  // case 块中的语句
+    pub expression: Option<Expression>, // 表达式形式的返回值
+    pub has_break: bool,            // 是否有 break 语句
 } 
