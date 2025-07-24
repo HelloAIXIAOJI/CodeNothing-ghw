@@ -142,8 +142,17 @@ pub fn tokenize(source: &str, debug: bool) -> Vec<String> {
         // 检查数字 (整数或浮点数)
         else if c.is_digit(10) || (c == '.' && chars.clone().nth(1).map_or(false, |c| c.is_digit(10))) {
             let mut s = String::new();
+            let mut has_dot = false;
+            
             while let Some(&p) = chars.peek() {
-                if p.is_digit(10) || p == '.' {
+                if p.is_digit(10) {
+                    s.push(chars.next().unwrap());
+                } else if p == '.' && !has_dot {
+                    // 检查下一个字符，如果是另一个点，则停止（这是范围操作符）
+                    if chars.clone().nth(1) == Some('.') {
+                        break;
+                    }
+                    has_dot = true;
                     s.push(chars.next().unwrap());
                 } else {
                     break;
