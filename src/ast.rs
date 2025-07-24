@@ -11,6 +11,7 @@ pub enum Type {
     Map(Box<Type>, Box<Type>),
     Exception, // 新增：异常类型
     Class(String), // 新增：类类型
+    Function(Vec<Type>, Box<Type>), // 新增：函数类型 (参数类型列表, 返回类型)
     // 未来可以扩展更多类型
 }
 
@@ -47,6 +48,16 @@ pub enum Expression {
     Super, // super 关键字
     StaticAccess(String, String), // 静态访问 (ClassName::member)
     StaticMethodCall(String, String, Vec<Expression>), // 静态方法调用 (ClassName::method(args))
+    // Lambda表达式和函数式编程
+    Lambda(Vec<Parameter>, Box<Expression>), // Lambda表达式 (参数列表, 表达式体)
+    LambdaBlock(Vec<Parameter>, Vec<Statement>), // Lambda块 (参数列表, 语句块)
+    FunctionValue(String), // 函数值引用 (函数名)
+    Apply(Box<Expression>, Vec<Expression>), // 函数应用 (函数表达式, 参数列表)
+    // 高阶函数调用
+    ArrayMap(Box<Expression>, Box<Expression>), // array.map(lambda)
+    ArrayFilter(Box<Expression>, Box<Expression>), // array.filter(lambda)
+    ArrayReduce(Box<Expression>, Box<Expression>, Box<Expression>), // array.reduce(lambda, initial)
+    ArrayForEach(Box<Expression>, Box<Expression>), // array.forEach(lambda)
     // 未来可以扩展更多表达式类型
 }
 
