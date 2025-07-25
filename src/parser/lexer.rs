@@ -1,4 +1,5 @@
 use crate::interpreter::debug_println;
+use crate::ast::{StringInterpolationSegment, Expression};
 
 // 词法分析器：负责将源代码转换为词法单元（tokens）
 
@@ -8,13 +9,14 @@ pub fn remove_comments(source: &str) -> String {
     let mut in_single_line_comment = false;
     let mut multi_line_comment_depth = 0; // 使用计数器跟踪多行注释的嵌套深度
     let mut in_string = false; // 标记是否在字符串内
+    let mut in_backtick_string = false; // 标记是否在反引号字符串内
     let mut escape = false; // 标记是否是转义字符
     let mut i = 0;
     
     let chars: Vec<char> = source.chars().collect();
     
     while i < chars.len() {
-        // 处理字符串
+        // 处理双引号字符串
         if in_string {
             result.push(chars[i]);
             if escape {
@@ -29,9 +31,26 @@ pub fn remove_comments(source: &str) -> String {
             }
             i += 1;
             continue;
-        } else if chars[i] == '"' {
+        } else if chars[i] == '"' && !in_backtick_string {
             // 字符串开始
             in_string = true;
+            result.push(chars[i]);
+            i += 1;
+            continue;
+        }
+        
+        // 处理反引号字符串
+        if in_backtick_string {
+            result.push(chars[i]);
+            if chars[i] == '`' {
+                // 反引号字符串结束
+                in_backtick_string = false;
+            }
+            i += 1;
+            continue;
+        } else if chars[i] == '`' {
+            // 反引号字符串开始
+            in_backtick_string = true;
             result.push(chars[i]);
             i += 1;
             continue;
@@ -70,117 +89,187 @@ pub fn remove_comments(source: &str) -> String {
     result
 }
 
+// 用于表示不同类型的词法单元
+#[derive(Debug, Clone)]
+pub enum Token {
+    StringLiteral(String),
+    StringInterpolation(Vec<StringInterpolationSegment>),
+    Symbol(String),
+}
+
 // 词法分析：将源代码转换为词法单元
 pub fn tokenize(source: &str, debug: bool) -> Vec<String> {
     // 1. 移除注释
     let source_without_comments = remove_comments(source);
-
-    // 2. 将字符串字面量替换为占位符
-    let mut processed_source = String::new();
-    let mut string_placeholders = Vec::new();
-    let mut in_string = false;
-    let mut escape = false;
-    let mut current_string = String::new();
-
-    for c in source_without_comments.chars() {
-        if in_string {
-            if escape {
-                current_string.push(c);
-                escape = false;
-            } else if c == '\\' {
-                current_string.push(c);
-                escape = true;
-            } else if c == '"' {
-                in_string = false;
-                string_placeholders.push(current_string.clone());
-                processed_source.push_str(&format!(" __STRING_{}__ ", string_placeholders.len() - 1));
-                current_string.clear();
-            } else {
-                current_string.push(c);
-            }
-        } else if c == '"' {
-            in_string = true;
-        } else {
-            processed_source.push(c);
-        }
-    }
     
-    // 3. 逐字符进行词法分析
+    // 2. 处理字符串字面量和字符串插值
     let mut tokens = Vec::new();
-    let mut chars = processed_source.chars().peekable();
-
-    while let Some(&c) = chars.peek() {
+    let mut i = 0;
+    let chars: Vec<char> = source_without_comments.chars().collect();
+    
+    while i < chars.len() {
+        let c = chars[i];
+        
         if c.is_whitespace() {
-            chars.next(); // Skip whitespace
+            i += 1;
             continue;
         }
-
+        
+        // 处理双引号字符串
+        if c == '"' {
+            i += 1;
+            let mut string_content = String::new();
+            let mut escape = false;
+            
+            while i < chars.len() {
+                if escape {
+                    match chars[i] {
+                        'n' => string_content.push('\n'),
+                        't' => string_content.push('\t'),
+                        'r' => string_content.push('\r'),
+                        '\\' => string_content.push('\\'),
+                        '"' => string_content.push('"'),
+                        _ => string_content.push(chars[i]),
+                    }
+                    escape = false;
+                } else if chars[i] == '\\' {
+                    escape = true;
+                } else if chars[i] == '"' {
+                    break;
+                } else {
+                    string_content.push(chars[i]);
+                }
+                i += 1;
+            }
+            
+            if i < chars.len() && chars[i] == '"' {
+                i += 1;
+            }
+            
+            tokens.push(format!("\"{}\"", string_content));
+            continue;
+        }
+        
+        // 处理反引号字符串（字符串插值）
+        if c == '`' {
+            i += 1;
+            let mut string_parts = Vec::new();
+            let mut current_text = String::new();
+            
+            while i < chars.len() && chars[i] != '`' {
+                if i + 1 < chars.len() && chars[i] == '$' && chars[i + 1] == '{' {
+                    // 如果当前有文本，添加为文本片段
+                    if !current_text.is_empty() {
+                        string_parts.push(format!("INTERP_TEXT:{}", current_text));
+                        current_text = String::new();
+                    }
+                    
+                    i += 2; // 跳过 ${ 
+                    
+                    // 记录插值表达式的开始位置
+                    let expr_start = i;
+                    let mut brace_count = 1;
+                    
+                    // 寻找匹配的右花括号
+                    while i < chars.len() && brace_count > 0 {
+                        if chars[i] == '{' {
+                            brace_count += 1;
+                        } else if chars[i] == '}' {
+                            brace_count -= 1;
+                        }
+                        i += 1;
+                    }
+                    
+                    // 提取表达式部分
+                    if brace_count == 0 {
+                        i -= 1; // 回退一步，刚好在 } 上
+                        let expr_text = chars[expr_start..i].iter().collect::<String>();
+                        string_parts.push(format!("INTERP_EXPR:{}", expr_text));
+                        i += 1; // 跳过 }
+                    } else {
+                        // 错误：未闭合的花括号
+                        tokens.push("ERROR_UNCLOSED_BRACE".to_string());
+                        return tokens;
+                    }
+                } else {
+                    current_text.push(chars[i]);
+                    i += 1;
+                }
+            }
+            
+            // 添加最后的文本片段（如果有）
+            if !current_text.is_empty() {
+                string_parts.push(format!("INTERP_TEXT:{}", current_text));
+            }
+            
+            // 跳过结束的反引号
+            if i < chars.len() && chars[i] == '`' {
+                i += 1;
+            }
+            
+            // 添加特殊的字符串插值标记
+            tokens.push("INTERP_START".to_string());
+            for part in string_parts {
+                tokens.push(part);
+            }
+            tokens.push("INTERP_END".to_string());
+            continue;
+        }
+        
         // 检查多字符运算符
-        let next_char = chars.clone().nth(1);
-        if let Some(nc) = next_char {
-            let two_char_op = format!("{}{}", c, nc);
+        if i + 1 < chars.len() {
+            let two_char_op = format!("{}{}", chars[i], chars[i + 1]);
             if ["==", "!=", ">=", "<=", "&&", "||", "::", "..", "++", "--", "+=", "-=", "*=", "/=", "%=", "=>"].contains(&two_char_op.as_str()) {
                 tokens.push(two_char_op);
-                chars.next();
-                chars.next();
+                i += 2;
                 continue;
             }
         }
-
-        // 检查标识符、关键字、或字符串占位符
+        
+        // 检查标识符或关键字
         if c.is_alphabetic() || c == '_' {
-            let mut s = String::new();
-            while let Some(&p) = chars.peek() {
-                if p.is_alphanumeric() || p == '_' {
-                    s.push(chars.next().unwrap());
-                } else {
-                    break;
-                }
+            let mut identifier = String::new();
+            while i < chars.len() && (chars[i].is_alphanumeric() || chars[i] == '_') {
+                identifier.push(chars[i]);
+                i += 1;
             }
-            tokens.push(s);
+            tokens.push(identifier);
+            continue;
         }
-        // 检查数字 (整数或浮点数)
-        else if c.is_digit(10) || (c == '.' && chars.clone().nth(1).map_or(false, |c| c.is_digit(10))) {
-            let mut s = String::new();
-            let mut has_dot = false;
+        
+        // 检查数字
+        if c.is_digit(10) || (c == '.' && i + 1 < chars.len() && chars[i + 1].is_digit(10)) {
+            let mut number = String::new();
+            let mut has_dot = c == '.';
             
-            while let Some(&p) = chars.peek() {
-                if p.is_digit(10) {
-                    s.push(chars.next().unwrap());
-                } else if p == '.' && !has_dot {
-                    // 检查下一个字符，如果是另一个点，则停止（这是范围操作符）
-                    if chars.clone().nth(1) == Some('.') {
+            if has_dot {
+                number.push('.');
+                i += 1;
+            }
+            
+            while i < chars.len() && (chars[i].is_digit(10) || (chars[i] == '.' && !has_dot)) {
+                if chars[i] == '.' {
+                    // 检查是否是范围操作符
+                    if i + 1 < chars.len() && chars[i + 1] == '.' {
                         break;
                     }
                     has_dot = true;
-                    s.push(chars.next().unwrap());
-                } else {
-                    break;
                 }
+                number.push(chars[i]);
+                i += 1;
             }
-            tokens.push(s);
+            tokens.push(number);
+            continue;
         }
-        // 单字符符号
-        else {
-            tokens.push(chars.next().unwrap().to_string());
-        }
+        
+        // 单个字符
+        tokens.push(chars[i].to_string());
+        i += 1;
     }
-
-    // 4. 恢复字符串占位符
-    let final_tokens = tokens.into_iter().map(|s| {
-        if s.starts_with("__STRING_") && s.ends_with("__") {
-            if let Ok(idx) = s.trim_start_matches("__STRING_").trim_end_matches("__").parse::<usize>() {
-                if idx < string_placeholders.len() {
-                    return format!("\"{}\"", string_placeholders[idx]);
-                }
-            }
-        }
-        s
-    }).collect::<Vec<String>>();
-
+    
     if debug {
-        debug_println(&format!("词法分析结果: {:?}", final_tokens));
+        debug_println(&format!("词法分析结果: {:?}", tokens));
     }
-
-    final_tokens
+    
+    tokens
 } 
