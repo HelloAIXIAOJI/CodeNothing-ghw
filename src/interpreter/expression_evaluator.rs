@@ -43,6 +43,7 @@ impl<'a> ExpressionEvaluator for Interpreter<'a> {
             Expression::FloatLiteral(value) => Value::Float(*value),
             Expression::BoolLiteral(value) => Value::Bool(*value),
             Expression::StringLiteral(value) => Value::String(value.clone()),
+            Expression::RawStringLiteral(value) => Value::String(value.clone()), // 原始字符串字面量
             Expression::LongLiteral(value) => Value::Long(*value),
             Expression::StringInterpolation(segments) => {
                 // 计算字符串插值
