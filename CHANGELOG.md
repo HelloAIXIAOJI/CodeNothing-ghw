@@ -1,6 +1,39 @@
 # CodeNothing 更新日志
 
-## [v0.4.5] - 2025-07-26
+## [v0.4.6] - 2025-07-26
+### 🚀 重大新功能：默认参数值与原始字符串字面量
+- **默认参数值 (Default Parameter Values)**
+  - 函数参数可指定默认值：`fn greet(name : string = "世界") : string { ... }`
+  - 提高API灵活性，简化函数调用
+  - 支持常量、变量和表达式作为默认值
+  - 可选参数与必需参数混合使用
+- **原始字符串字面量 (Raw String Literals)**
+  - 使用`r"..."`语法定义无需转义的字符串
+  - 保留字符的字面值，包括`\n`、`\t`、`\`等
+  - 特别适用于正则表达式、文件路径等场景
+  - 提高代码可读性和简洁性
+
+### 🔧 技术实现
+- **AST扩展**：新增`RawStringLiteral`表达式类型和`Parameter.default_value`字段
+- **解析器增强**：支持解析函数参数默认值和原始字符串格式
+- **求值逻辑改进**：在函数调用时自动处理默认参数值
+
+### 📝 语法示例
+```cn
+// 默认参数值示例
+fn createRect(width : float = 100.0, height : float = 50.0) : object {
+    return {width: width, height: height};
+};
+
+// 原始字符串示例
+regex_pattern : string = r"\d+\.\d+";  // 正则表达式不需要双重转义
+path : string = r"C:\Program Files\App";  // 文件路径无需转义
+```
+
+### 📚 详细文档
+- 完整的功能文档：[DEFAULT_PARAMS_RAW_STRINGS_CHANGELOG_v0.4.6.md](file-doc/DEFAULT_PARAMS_RAW_STRINGS_CHANGELOG_v0.4.6.md)
+
+## [v0.4.5] - 2025-10-15
 ### 🚀 重大新功能：字符串插值
 - **模板字符串语法**: 添加使用反引号定义的模板字符串
   - 表达式嵌入：使用`${...}`语法在字符串中嵌入表达式
