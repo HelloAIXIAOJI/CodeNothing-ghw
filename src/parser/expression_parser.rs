@@ -408,11 +408,23 @@ impl<'a> ExpressionParser for ParserBase<'a> {
                         let member_name = self.consume().ok_or_else(|| "期望成员名或函数名".to_string())?;
                         debug_println(&format!("解析静态访问或库函数调用: {}::{}", name, member_name));
                         
+                        // 构建完整的命名空间路径
+                        let mut path = Vec::new();
+                        path.push(name.clone());
+                        path.push(member_name.clone());
+                        
+                        // 继续解析更多的 :: 和标识符
+                        while self.peek() == Some(&"::".to_string()) {
+                            self.consume(); // 消费 "::"
+                            let next_name = self.consume().ok_or_else(|| "期望命名空间或函数名".to_string())?;
+                            path.push(next_name.clone());
+                        }
+                        
                         // 检查下一个token来决定是静态访问还是函数调用
                         if self.peek() == Some(&"(".to_string()) {
                             // 这是一个函数调用
                             // 检查是否是库函数调用
-                            if name.starts_with("lib_") {
+                            if name.starts_with("lib_") && path.len() == 2 {
                                 // 库函数调用，格式为 lib_xxx::func_name
                                 let lib_name = name.trim_start_matches("lib_").to_string();
                                 debug_println(&format!("识别为库函数调用: {} -> {}", lib_name, member_name));
@@ -440,18 +452,7 @@ impl<'a> ExpressionParser for ParserBase<'a> {
                                 Ok(Expression::LibraryFunctionCall(lib_name, member_name, args))
                             } else {
                                 // 静态方法调用或命名空间函数调用
-                                debug_println(&format!("识别为静态方法调用或命名空间函数调用: {}::{}", name, member_name));
-                                
-                                // 检查是否有更多的命名空间层级
-                                let mut path = Vec::new();
-                                path.push(name.clone());
-                                path.push(member_name.clone());
-                                
-                                while self.peek() == Some(&"::".to_string()) {
-                                    self.consume(); // 消费 "::"
-                                    let next_name = self.consume().ok_or_else(|| "期望命名空间或函数名".to_string())?;
-                                    path.push(next_name.clone());
-                                }
+                                debug_println(&format!("识别为静态方法调用或命名空间函数调用，路径: {:?}", path));
                                 
                                 // 期望 "("
                                 self.expect("(")?;
@@ -490,9 +491,14 @@ impl<'a> ExpressionParser for ParserBase<'a> {
                         } else {
                             // 这是静态访问（不是函数调用）
                             // 但也可能是命名空间中的常量或变量访问
-                            // 暂时当作静态访问处理，让解释器来决定
-                            debug_println(&format!("识别为静态访问: {}::{}", name, member_name));
-                            Ok(Expression::StaticAccess(name, member_name))
+                            // 对于多层命名空间，我们需要特殊处理
+                            if path.len() == 2 {
+                                debug_println(&format!("识别为静态访问: {}::{}", name, member_name));
+                                Ok(Expression::StaticAccess(name, member_name))
+                            } else {
+                                // 多层命名空间访问，暂时不支持
+                                return Err(format!("不支持多层命名空间访问: {:?}", path));
+                            }
                         }
                     } else if self.peek() == Some(&"++".to_string()) {
                         // 后置自增
