@@ -171,6 +171,40 @@ impl<'a> ExpressionParser for ParserBase<'a> {
     fn parse_primary_expression(&mut self) -> Result<Expression, String> {
         if let Some(token) = self.peek() {
             match token.as_str() {
+                "INTERP_START" => {
+                    // 解析字符串插值
+                    self.consume(); // 消费 "INTERP_START"
+                    
+                    let mut segments = Vec::new();
+                    while self.peek() != Some(&"INTERP_END".to_string()) {
+                        let token = self.consume().ok_or_else(|| "期望字符串插值片段".to_string())?;
+                        
+                        if token.starts_with("INTERP_TEXT:") {
+                            // 文本片段
+                            let text = token.strip_prefix("INTERP_TEXT:").unwrap_or("").to_string();
+                            segments.push(crate::ast::StringInterpolationSegment::Text(text));
+                        } else if token.starts_with("INTERP_EXPR:") {
+                            // 表达式片段
+                            let expr_str = token.strip_prefix("INTERP_EXPR:").unwrap_or("").to_string();
+                            
+                            // 创建临时解析器处理表达式
+                            let mut temp_tokens = crate::parser::lexer::tokenize(&expr_str, false);
+                            let mut temp_parser = ParserBase::new(&expr_str, temp_tokens, false);
+                            
+                            let expr = match temp_parser.parse_expression() {
+                                Ok(e) => e,
+                                Err(e) => return Err(format!("解析插值表达式错误: {}", e)),
+                            };
+                            
+                            segments.push(crate::ast::StringInterpolationSegment::Expression(Box::new(expr)));
+                        } else {
+                            return Err(format!("未知的字符串插值片段: {}", token));
+                        }
+                    }
+                    
+                    self.consume(); // 消费 "INTERP_END"
+                    return Ok(Expression::StringInterpolation(segments));
+                },
                 "(" => {
                     // 检查是否是多参数Lambda表达式: (x, y) => expr
                     if self.is_lambda_parameter_list() {
