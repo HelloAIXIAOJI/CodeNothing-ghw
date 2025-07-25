@@ -60,7 +60,16 @@ pub enum Expression {
     ArrayForEach(Box<Expression>, Box<Expression>), // array.forEach(lambda)
     // Switch 表达式
     SwitchExpression(Box<Expression>, Vec<SwitchCase>, Option<Box<Expression>>), // switch表达式：表达式、case列表、default表达式
+    // 字符串插值
+    StringInterpolation(Vec<StringInterpolationSegment>), // 字符串插值表达式
     // 未来可以扩展更多表达式类型
+}
+
+// 字符串插值片段
+#[derive(Debug, Clone)]
+pub enum StringInterpolationSegment {
+    Text(String),                 // 普通文本
+    Expression(Box<Expression>),  // 插入的表达式
 }
 
 // 命名空间类型
