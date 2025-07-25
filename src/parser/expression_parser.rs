@@ -222,9 +222,18 @@ impl<'a> ExpressionParser for ParserBase<'a> {
                                     Type::Auto // 默认auto类型
                                 };
                                 
+                                // 检查是否有默认值
+                                let default_value = if self.peek() == Some(&"=".to_string()) {
+                                    self.consume(); // 消费 "="
+                                    Some(self.parse_expression()?)
+                                } else {
+                                    None
+                                };
+                                
                                 params.push(Parameter {
                                     name: param_name,
                                     param_type,
+                                    default_value,
                                 });
                                 
                                 if self.peek() != Some(&",".to_string()) {
@@ -374,6 +383,13 @@ impl<'a> ExpressionParser for ParserBase<'a> {
                         return Ok(Expression::StringLiteral(string_value));
                     }
                     
+                    // 检查是否是原始字符串字面量
+                    if token.starts_with("r\"") && token.ends_with('"') {
+                        let string_value = token[2..token.len()-1].to_string();
+                        self.consume();
+                        return Ok(Expression::RawStringLiteral(string_value));
+                    }
+                    
                     // 检查是否是数字字面量
                     if let Ok(int_value) = token.parse::<i32>() {
                         self.consume();
@@ -398,6 +414,7 @@ impl<'a> ExpressionParser for ParserBase<'a> {
                         let param = Parameter {
                             name: param_name,
                             param_type: Type::Auto, // Lambda参数默认使用auto类型
+                            default_value: None,
                         };
                         
                         let body = self.parse_expression()?;
