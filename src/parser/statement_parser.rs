@@ -29,23 +29,32 @@ impl<'a> StatementParser for ParserBase<'a> {
                     self.consume(); // 消费 ns
                     // 解析命名空间路径
                     let mut path = Vec::new();
-                    let mut expect_id = true;
-                    while let Some(tok) = self.peek() {
-                        if expect_id {
-                            // 期望标识符
-                            if tok.chars().all(|c| c.is_alphanumeric() || c == '_') {
-                                path.push(self.consume().unwrap());
-                                expect_id = false;
-                            } else {
-                                break;
-                            }
-                        } else if tok == "::" {
-                            self.consume();
-                            expect_id = true;
+                    
+                    // 解析第一个标识符
+                    if let Some(first_id) = self.peek() {
+                        if first_id.chars().all(|c| c.is_alphanumeric() || c == '_') {
+                            path.push(self.consume().unwrap());
                         } else {
-                            break;
+                            return Err("期望命名空间标识符".to_string());
+                        }
+                    } else {
+                        return Err("期望命名空间标识符".to_string());
+                    }
+                    
+                    // 解析后续的 :: 和标识符
+                    while self.peek() == Some(&"::".to_string()) {
+                        self.consume(); // 消费 "::"
+                        if let Some(next_id) = self.peek() {
+                            if next_id.chars().all(|c| c.is_alphanumeric() || c == '_') {
+                                path.push(self.consume().unwrap());
+                            } else {
+                                return Err("期望命名空间标识符".to_string());
+                            }
+                        } else {
+                            return Err("期望命名空间标识符".to_string());
                         }
                     }
+                    
                     self.expect(";")?;
                     return Ok(Statement::ImportNamespace(crate::ast::NamespaceType::Code, path));
                 } else {
