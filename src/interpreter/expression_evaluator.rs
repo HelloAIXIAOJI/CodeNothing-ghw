@@ -44,6 +44,25 @@ impl<'a> ExpressionEvaluator for Interpreter<'a> {
             Expression::BoolLiteral(value) => Value::Bool(*value),
             Expression::StringLiteral(value) => Value::String(value.clone()),
             Expression::LongLiteral(value) => Value::Long(*value),
+            Expression::StringInterpolation(segments) => {
+                // 计算字符串插值
+                let mut result = String::new();
+                
+                for segment in segments {
+                    match segment {
+                        crate::ast::StringInterpolationSegment::Text(text) => {
+                            result.push_str(text);
+                        },
+                        crate::ast::StringInterpolationSegment::Expression(expr) => {
+                            // 计算表达式并转换为字符串
+                            let value = self.evaluate_expression(expr);
+                            result.push_str(&value.to_string());
+                        }
+                    }
+                }
+                
+                Value::String(result)
+            },
             Expression::ArrayLiteral(elements) => {
                 let mut values = Vec::new();
                 for elem in elements {
