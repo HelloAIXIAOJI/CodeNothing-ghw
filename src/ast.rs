@@ -21,6 +21,7 @@ pub enum Expression {
     FloatLiteral(f64),
     BoolLiteral(bool),
     StringLiteral(String),
+    RawStringLiteral(String), // 新增：原始字符串字面量
     LongLiteral(i64),
     ArrayLiteral(Vec<Expression>),
     MapLiteral(Vec<(Expression, Expression)>),
@@ -142,6 +143,7 @@ pub enum Statement {
 pub struct Parameter {
     pub name: String,
     pub param_type: Type,
+    pub default_value: Option<Expression>, // 新增：参数的默认值（可选）
 }
 
 #[derive(Debug, Clone)]
