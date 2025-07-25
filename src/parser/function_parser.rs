@@ -25,9 +25,19 @@ pub fn parse_function(parser: &mut ParserBase) -> Result<Function, String> {
         let param_name = parser.consume().ok_or_else(|| "期望参数名".to_string())?;
         parser.expect(":")?;
         let param_type = parser.parse_type()?;
+        
+        // 检查是否有默认值
+        let default_value = if parser.peek() == Some(&"=".to_string()) {
+            parser.consume(); // 消费等号
+            Some(parser.parse_expression()?)
+        } else {
+            None
+        };
+        
         parameters.push(Parameter {
             name: param_name,
             param_type,
+            default_value,
         });
         
         // 解析剩余参数
@@ -36,9 +46,19 @@ pub fn parse_function(parser: &mut ParserBase) -> Result<Function, String> {
             let param_name = parser.consume().ok_or_else(|| "期望参数名".to_string())?;
             parser.expect(":")?;
             let param_type = parser.parse_type()?;
+            
+            // 检查是否有默认值
+            let default_value = if parser.peek() == Some(&"=".to_string()) {
+                parser.consume(); // 消费等号
+                Some(parser.parse_expression()?)
+            } else {
+                None
+            };
+            
             parameters.push(Parameter {
                 name: param_name,
                 param_type,
+                default_value,
             });
         }
     }
@@ -121,9 +141,24 @@ pub fn parse_function_collect_errors(parser: &mut ParserBase, errors: &mut Vec<S
             }
         };
         
+        // 检查是否有默认值
+        let default_value = if parser.peek() == Some(&"=".to_string()) {
+            parser.consume(); // 消费等号
+            match parser.parse_expression() {
+                Ok(expr) => Some(expr),
+                Err(e) => {
+                    errors.push(e);
+                    return Err(());
+                }
+            }
+        } else {
+            None
+        };
+        
         parameters.push(Parameter {
             name: param_name,
             param_type,
+            default_value,
         });
         
         // 解析剩余参数
@@ -151,9 +186,24 @@ pub fn parse_function_collect_errors(parser: &mut ParserBase, errors: &mut Vec<S
                 }
             };
             
+            // 检查是否有默认值
+            let default_value = if parser.peek() == Some(&"=".to_string()) {
+                parser.consume(); // 消费等号
+                match parser.parse_expression() {
+                    Ok(expr) => Some(expr),
+                    Err(e) => {
+                        errors.push(e);
+                        return Err(());
+                    }
+                }
+            } else {
+                None
+            };
+            
             parameters.push(Parameter {
                 name: param_name,
                 param_type,
+                default_value,
             });
         }
     }
