@@ -229,6 +229,25 @@ pub fn tokenize(source: &str, debug: bool) -> Vec<String> {
         // 检查标识符或关键字
         if c.is_alphabetic() || c == '_' {
             let mut identifier = String::new();
+            
+            // 检查是否是原始字符串(r"...")
+            if c == 'r' && i + 1 < chars.len() && chars[i + 1] == '"' {
+                i += 2; // 跳过 r"
+                let mut string_content = String::new();
+                
+                while i < chars.len() && chars[i] != '"' {
+                    string_content.push(chars[i]);
+                    i += 1;
+                }
+                
+                if i < chars.len() && chars[i] == '"' {
+                    i += 1;
+                }
+                
+                tokens.push(format!("r\"{}\"", string_content));
+                continue;
+            }
+            
             while i < chars.len() && (chars[i].is_alphanumeric() || chars[i] == '_') {
                 identifier.push(chars[i]);
                 i += 1;
