@@ -102,8 +102,9 @@ impl<'a> InterfaceParser for ParserBase<'a> {
                 let param_type = self.parse_type()?;
                 
                 parameters.push(Parameter {
-                    name: param_name,
+                    name: param_name.clone(),
                     param_type,
+                    default_value: None,
                 });
                 
                 if self.peek() != Some(&",".to_string()) {
