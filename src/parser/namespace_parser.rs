@@ -179,6 +179,7 @@ fn parse_function(parser: &mut ParserBase) -> Result<Function, String> {
         parameters.push(crate::ast::Parameter {
             name: param_name,
             param_type,
+            default_value: None,
         });
         
         // 解析剩余参数
@@ -190,6 +191,7 @@ fn parse_function(parser: &mut ParserBase) -> Result<Function, String> {
             parameters.push(crate::ast::Parameter {
                 name: param_name,
                 param_type,
+                default_value: None,
             });
         }
     }
@@ -273,8 +275,9 @@ fn parse_function_collect_errors(parser: &mut ParserBase, errors: &mut Vec<Strin
         };
         
         parameters.push(crate::ast::Parameter {
-            name: param_name,
+            name: param_name.clone(),
             param_type,
+            default_value: None,
         });
         
         // 解析剩余参数
@@ -303,8 +306,9 @@ fn parse_function_collect_errors(parser: &mut ParserBase, errors: &mut Vec<Strin
             };
             
             parameters.push(crate::ast::Parameter {
-                name: param_name,
+                name: param_name.clone(),
                 param_type,
+                default_value: None,
             });
         }
     }
