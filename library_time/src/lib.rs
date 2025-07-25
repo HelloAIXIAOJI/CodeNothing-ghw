@@ -15,6 +15,16 @@ mod std {
         Local::now().timestamp().to_string()
     }
     
+    // 获取当前年份（作为单独的函数，供字符串插值测试使用）
+    pub fn cn_current_year(_args: Vec<String>) -> String {
+        Local::now().year().to_string()
+    }
+    
+    // 获取null值（供字符串插值测试使用）
+    pub fn cn_get_null_value(_args: Vec<String>) -> String {
+        "null".to_string()
+    }
+    
     // 获取当前UTC时间的时间戳（秒）
     pub fn cn_utc_now(_args: Vec<String>) -> String {
         Utc::now().timestamp().to_string()
@@ -266,7 +276,9 @@ pub extern "C" fn cn_init() -> *mut HashMap<String, LibraryFunction> {
           .add_function("weekday", std::cn_weekday)
           .add_function("sleep", std::cn_sleep)
           .add_function("sleep_seconds", std::cn_sleep_seconds)
-          .add_function("sleep_microseconds", std::cn_sleep_microseconds);
+          .add_function("sleep_microseconds", std::cn_sleep_microseconds)
+          .add_function("current_year", std::cn_current_year)
+          .add_function("get_null_value", std::cn_get_null_value);
     
     // 同时注册为直接函数，不需要命名空间前缀
     registry.add_direct_function("now", std::cn_now)
