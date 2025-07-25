@@ -264,12 +264,6 @@ impl<'a> Interpreter<'a> {
     
     // 辅助函数：调用函数并处理参数
     pub fn call_function_impl(&mut self, function: &'a crate::ast::Function, arg_values: Vec<Value>) -> Value {
-        // 检查参数数量是否匹配
-        if arg_values.len() != function.parameters.len() {
-            panic!("函数 '{}' 需要 {} 个参数，但提供了 {} 个", 
-                function.name, function.parameters.len(), arg_values.len());
-        }
-        
         // 保存当前的局部环境
         let old_local_env = self.local_env.clone();
         
@@ -277,9 +271,18 @@ impl<'a> Interpreter<'a> {
         self.local_env.clear();
         
         // 绑定参数值到参数名
-        for (i, arg_value) in arg_values.into_iter().enumerate() {
-            let param_name = &function.parameters[i].name;
-            self.local_env.insert(param_name.clone(), arg_value);
+        for (i, param) in function.parameters.iter().enumerate() {
+            if i < arg_values.len() {
+                // 如果提供了参数值，使用提供的值
+                self.local_env.insert(param.name.clone(), arg_values[i].clone());
+            } else if let Some(default_expr) = &param.default_value {
+                // 如果参数有默认值，且未提供实参，计算默认值
+                let default_value = ExpressionEvaluator::evaluate_expression(self, default_expr);
+                self.local_env.insert(param.name.clone(), default_value);
+            } else {
+                // 如果参数既没有提供值，又没有默认值，报错
+                panic!("函数 '{}' 需要参数 '{}'，但未提供值", function.name, param.name);
+            }
         }
         
         // 执行函数体
