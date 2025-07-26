@@ -183,4 +183,56 @@ CodeNothing 支持通过动态库扩展功能。动态库必须遵循以下规�
 1. 必须导出一个名为 `cn_init` 的函数，该函数返回一个包含库函数的 HashMap 指针。
 2. 库函数必须接受 `Vec<String>` 类型的参数，并返回 `String` 类型的结果。
 
-详细信息请参阅 `library_example` 目录中的示例库和说明文档。 
+详细信息请参阅 `library_example` 目录中的示例库和说明文档。
+
+### 枚举类型 (Enum)
+
+CodeNothing 支持类似 Rust 的枚举类型，可以定义带有或不带有参数的枚举变体。
+
+#### 基础枚举
+
+```
+enum Color {
+    Red,
+    Green,
+    Blue
+};
+
+// 使用枚举
+red : Color = Color::Red;
+green : Color = Color::Green;
+```
+
+#### 带参数的枚举
+
+```
+enum Shape {
+    Circle(float),
+    Rectangle(float, float),
+    Triangle(float, float, float)
+};
+
+// 创建带参数的枚举变体
+circle : Shape = Shape::Circle(5.0);
+rectangle : Shape = Shape::Rectangle(10.0, 20.0);
+triangle : Shape = Shape::Triangle(3.0, 4.0, 5.0);
+```
+
+#### 复杂枚举示例
+
+```
+enum Message {
+    Quit,
+    Move(int, int),
+    Write(string),
+    ChangeColor(int, int, int)
+};
+
+// 创建不同类型的消息
+quit_msg : Message = Message::Quit;
+move_msg : Message = Message::Move(10, 20);
+write_msg : Message = Message::Write("Hello, World!");
+color_msg : Message = Message::ChangeColor(255, 128, 64);
+```
+
+枚举类型可以作为函数参数和返回值使用，支持字符串连接操作，并且可以在控制台中正确显示。
