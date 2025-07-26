@@ -84,6 +84,26 @@ pub fn perform_binary_operation(left: &Value, op: &BinaryOperator, right: &Value
         (Value::Float(l), BinaryOperator::Add, Value::String(r)) => Value::String(l.to_string() + r),
         (Value::Bool(l), BinaryOperator::Add, Value::String(r)) => Value::String(l.to_string() + r),
         (Value::Long(l), BinaryOperator::Add, Value::String(r)) => Value::String(l.to_string() + r),
+        (Value::EnumValue(l), BinaryOperator::Add, Value::String(r)) => {
+            let enum_str = if l.fields.is_empty() {
+                format!("{}::{}", l.enum_name, l.variant_name)
+            } else {
+                let field_strs: Vec<String> = l.fields.iter().map(|f| f.to_string()).collect();
+                format!("{}::{}({})", l.enum_name, l.variant_name, field_strs.join(", "))
+            };
+            Value::String(enum_str + r)
+        },
+
+        // 字符串和其他类型的连接（包括EnumValue）
+        (Value::String(l), BinaryOperator::Add, Value::EnumValue(r)) => {
+            let enum_str = if r.fields.is_empty() {
+                format!("{}::{}", r.enum_name, r.variant_name)
+            } else {
+                let field_strs: Vec<String> = r.fields.iter().map(|f| f.to_string()).collect();
+                format!("{}::{}({})", r.enum_name, r.variant_name, field_strs.join(", "))
+            };
+            Value::String(l.clone() + &enum_str)
+        },
         
         // 不支持的操作
         _ => panic!("不支持的二元操作: {:?} {:?} {:?}", left, op, right),
