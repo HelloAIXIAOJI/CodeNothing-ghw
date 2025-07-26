@@ -296,13 +296,52 @@ impl<'a> FunctionCallHandler for Interpreter<'a> {
     fn handle_namespaced_function_call(&mut self, path: &[String], args: &[Expression]) -> Value {
         // 构建完整的函数路径
         let full_path = path.join("::");
-        
+
+        // 检查是否是枚举变体创建 (EnumName::VariantName)
+        if path.len() == 2 {
+            let enum_name = &path[0];
+            let variant_name = &path[1];
+
+            if let Some(enum_def) = self.enums.get(enum_name) {
+                debug_println(&format!("检测到枚举变体创建: {}::{}", enum_name, variant_name));
+
+                // 查找对应的变体
+                for variant in &enum_def.variants {
+                    if variant.name == *variant_name {
+                        // 计算参数值
+                        let mut field_values = Vec::new();
+                        for arg in args {
+                            let value = self.evaluate_expression(arg);
+                            field_values.push(value);
+                        }
+
+                        // 检查参数数量是否匹配
+                        if field_values.len() != variant.fields.len() {
+                            panic!("枚举变体 {}::{} 期望 {} 个参数，但得到了 {} 个",
+                                    enum_name, variant_name, variant.fields.len(), field_values.len());
+                        }
+
+                        debug_println(&format!("成功创建枚举变体: {}::{}({} 个字段)",
+                                    enum_name, variant_name, field_values.len()));
+
+                        return Value::EnumValue(super::value::EnumInstance {
+                            enum_name: enum_name.to_string(),
+                            variant_name: variant_name.to_string(),
+                            fields: field_values,
+                        });
+                    }
+                }
+
+                panic!("枚举 {} 中不存在变体 {}", enum_name, variant_name);
+            }
+        }
+
         // 先计算所有参数值
         let mut arg_values = Vec::new();
         for arg_expr in args {
             arg_values.push(self.evaluate_expression(arg_expr));
         }
-        
+
         debug_println(&format!("调用命名空间函数: {}", full_path));
         
         // 检查是否是库命名空间函数
