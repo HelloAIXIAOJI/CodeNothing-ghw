@@ -286,6 +286,14 @@ pub fn convert_value_to_string_arg(value: &Value) -> String {
         Value::FunctionReference(name) => {
             format!("function_ref({})", name)
         },
+        Value::EnumValue(enum_val) => {
+            if enum_val.fields.is_empty() {
+                format!("{}::{}", enum_val.enum_name, enum_val.variant_name)
+            } else {
+                let field_strs: Vec<String> = enum_val.fields.iter().map(|f| convert_value_to_string_arg(f)).collect();
+                format!("{}::{}({})", enum_val.enum_name, enum_val.variant_name, field_strs.join(", "))
+            }
+        },
         Value::None => "null".to_string(),
     }
 }
