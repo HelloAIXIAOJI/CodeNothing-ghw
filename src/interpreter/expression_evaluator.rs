@@ -1,5 +1,5 @@
 use crate::ast::{Expression, BinaryOperator, CompareOperator, LogicalOperator, SwitchCase, CasePattern};
-use super::value::{Value, ObjectInstance};
+use super::value::{Value, ObjectInstance, EnumInstance};
 use super::interpreter_core::{Interpreter, debug_println};
 use std::collections::HashMap;
 use super::function_calls::FunctionCallHandler;
@@ -298,6 +298,13 @@ impl<'a> ExpressionEvaluator for Interpreter<'a> {
                 let lambda_value = self.evaluate_expression(lambda_expr);
                 self.array_for_each(array_value, lambda_value);
                 Value::None
+            },
+            // Enum 相关表达式
+            Expression::EnumVariantCreation(enum_name, variant_name, args) => {
+                self.create_enum_variant(enum_name, variant_name, args)
+            },
+            Expression::EnumVariantAccess(enum_name, variant_name) => {
+                self.access_enum_variant(enum_name, variant_name)
             },
             Expression::SwitchExpression(switch_expr, cases, default_expr) => {
                 let switch_value = self.evaluate_expression(switch_expr);
@@ -611,6 +618,10 @@ impl<'a> Interpreter<'a> {
                 // 对象方法调用
                 self.call_method(obj_expr, method_name, args)
             },
+            Value::EnumValue(enum_val) => {
+                // 枚举值方法调用
+                self.handle_enum_method(&enum_val, method_name, &evaluated_args)
+            },
             _ => {
                 // 不支持的对象类型
                 panic!("不支持对类型 {:?} 调用方法 {}", obj_value, method_name)
@@ -695,6 +706,27 @@ impl<'a> Interpreter<'a> {
                     Value::String(s.trim().to_string())
                 } else {
                     panic!("trim方法不接受参数")
+                }
+            },
+            "startsWith" => {
+                if args.len() == 1 {
+                    Value::Bool(s.starts_with(&args[0]))
+                } else {
+                    panic!("startsWith方法需要一个参数")
+                }
+            },
+            "endsWith" => {
+                if args.len() == 1 {
+                    Value::Bool(s.ends_with(&args[0]))
+                } else {
+                    panic!("endsWith方法需要一个参数")
+                }
+            },
+            "contains" => {
+                if args.len() == 1 {
+                    Value::Bool(s.contains(&args[0]))
+                } else {
+                    panic!("contains方法需要一个参数")
                 }
             },
             _ => {
@@ -1264,4 +1296,108 @@ impl<'a> Interpreter<'a> {
             }
         }
     }
-} 
+
+    // Enum 相关方法
+    fn create_enum_variant(&mut self, enum_name: &str, variant_name: &str, args: &[Expression]) -> Value {
+        debug_println(&format!("创建枚举变体: {}::{}", enum_name, variant_name));
+
+        // 检查枚举是否存在
+        if let Some(enum_def) = self.enums.get(enum_name) {
+            // 查找对应的变体
+            for variant in &enum_def.variants {
+                if variant.name == variant_name {
+                    // 计算参数值
+                    let mut field_values = Vec::new();
+                    for arg in args {
+                        let value = self.evaluate_expression(arg);
+                        field_values.push(value);
+                    }
+
+                    // 检查参数数量是否匹配
+                    if field_values.len() != variant.fields.len() {
+                        eprintln!("错误: 枚举变体 {}::{} 期望 {} 个参数，但得到了 {} 个",
+                                enum_name, variant_name, variant.fields.len(), field_values.len());
+                        return Value::None;
+                    }
+
+                    debug_println(&format!("成功创建枚举变体: {}::{}({} 个字段)",
+                                enum_name, variant_name, field_values.len()));
+
+                    return Value::EnumValue(EnumInstance {
+                        enum_name: enum_name.to_string(),
+                        variant_name: variant_name.to_string(),
+                        fields: field_values,
+                    });
+                }
+            }
+
+            eprintln!("错误: 枚举 {} 中不存在变体 {}", enum_name, variant_name);
+            Value::None
+        } else {
+            eprintln!("错误: 未找到枚举定义: {}", enum_name);
+            Value::None
+        }
+    }
+
+    fn access_enum_variant(&self, enum_name: &str, variant_name: &str) -> Value {
+        debug_println(&format!("访问枚举变体: {}::{}", enum_name, variant_name));
+
+        // 检查枚举是否存在
+        if let Some(enum_def) = self.enums.get(enum_name) {
+            // 查找对应的变体
+            for variant in &enum_def.variants {
+                if variant.name == variant_name {
+                    // 如果变体没有字段，直接返回枚举实例
+                    if variant.fields.is_empty() {
+                        debug_println(&format!("访问无参数枚举变体: {}::{}", enum_name, variant_name));
+                        return Value::EnumValue(EnumInstance {
+                            enum_name: enum_name.to_string(),
+                            variant_name: variant_name.to_string(),
+                            fields: Vec::new(),
+                        });
+                    } else {
+                        // 有字段的变体需要通过函数调用创建
+                        eprintln!("错误: 枚举变体 {}::{} 需要参数，请使用 {}::{}(...) 语法",
+                                enum_name, variant_name, enum_name, variant_name);
+                        return Value::None;
+                    }
+                }
+            }
+
+            eprintln!("错误: 枚举 {} 中不存在变体 {}", enum_name, variant_name);
+            Value::None
+        } else {
+            eprintln!("错误: 未找到枚举定义: {}", enum_name);
+            Value::None
+        }
+    }
+
+    fn handle_enum_method(&self, enum_val: &super::value::EnumInstance, method_name: &str, args: &[String]) -> Value {
+        match method_name {
+            "toString" => {
+                // 返回枚举值的字符串表示
+                if enum_val.fields.is_empty() {
+                    Value::String(format!("{}::{}", enum_val.enum_name, enum_val.variant_name))
+                } else {
+                    let field_strs: Vec<String> = enum_val.fields.iter().map(|f| f.to_string()).collect();
+                    Value::String(format!("{}::{}({})", enum_val.enum_name, enum_val.variant_name, field_strs.join(", ")))
+                }
+            },
+            "length" => {
+                // 返回枚举字段的数量
+                Value::Int(enum_val.fields.len() as i32)
+            },
+            "getVariantName" => {
+                // 返回枚举变体名称
+                Value::String(enum_val.variant_name.clone())
+            },
+            "getEnumName" => {
+                // 返回枚举类型名称
+                Value::String(enum_val.enum_name.clone())
+            },
+            _ => {
+                panic!("枚举类型不支持方法: {}", method_name);
+            }
+        }
+    }
+}
