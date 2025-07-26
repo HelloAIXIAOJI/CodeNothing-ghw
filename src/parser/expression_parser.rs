@@ -541,11 +541,40 @@ impl<'a> ExpressionParser for ParserBase<'a> {
                             }
                         } else {
                             // 这是静态访问（不是函数调用）
-                            // 但也可能是命名空间中的常量或变量访问
-                            // 对于多层命名空间，我们需要特殊处理
+                            // 可能是：1. 静态成员访问 2. 枚举变体访问 3. 命名空间中的常量或变量访问
                             if path.len() == 2 {
-                                debug_println(&format!("识别为静态访问: {}::{}", name, member_name));
-                                Ok(Expression::StaticAccess(name, member_name))
+                                debug_println(&format!("识别为静态访问或枚举变体访问: {}::{}", name, member_name));
+
+                                // 检查是否有参数（枚举变体创建）
+                                if self.peek() == Some(&"(".to_string()) {
+                                    // 枚举变体创建：EnumName::Variant(args)
+                                    self.consume(); // 消费 "("
+
+                                    let mut args = Vec::new();
+
+                                    if self.peek() != Some(&")".to_string()) {
+                                        // 解析参数列表
+                                        loop {
+                                            let arg = self.parse_expression()?;
+                                            args.push(arg);
+
+                                            if self.peek() != Some(&",".to_string()) {
+                                                break;
+                                            }
+
+                                            self.consume(); // 消费 ","
+                                        }
+                                    }
+
+                                    self.expect(")")?;
+
+                                    debug_println(&format!("识别为枚举变体创建: {}::{}({} args)", name, member_name, args.len()));
+                                    Ok(Expression::EnumVariantCreation(name, member_name, args))
+                                } else {
+                                    // 静态访问或枚举变体访问（无参数）
+                                    debug_println(&format!("识别为静态访问或枚举变体访问: {}::{}", name, member_name));
+                                    Ok(Expression::EnumVariantAccess(name, member_name))
+                                }
                             } else {
                                 // 多层命名空间访问，暂时不支持
                                 return Err(format!("不支持多层命名空间访问: {:?}", path));
