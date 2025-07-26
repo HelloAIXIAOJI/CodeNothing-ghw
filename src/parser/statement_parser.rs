@@ -2,6 +2,7 @@
 use crate::ast::{Statement, Expression, Type, Parameter, Function, BinaryOperator, NamespaceType, SwitchCase, CasePattern, SwitchType};
 use crate::parser::parser_base::ParserBase;
 use crate::parser::expression_parser::ExpressionParser;
+use crate::parser::enum_parser::EnumParser;
 use crate::interpreter::debug_println;
 
 pub trait StatementParser {
@@ -97,6 +98,11 @@ impl<'a> StatementParser for ParserBase<'a> {
                 },
                 "switch" => {
                     self.parse_switch_statement()
+                },
+                "enum" => {
+                    // 枚举声明
+                    let enum_def = self.parse_enum()?;
+                    Ok(Statement::EnumDeclaration(enum_def))
                 },
                 "break" => {
                 self.consume(); // 消费 "break"
