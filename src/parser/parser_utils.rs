@@ -9,7 +9,7 @@ pub fn skip_to_next_top_level_item(parser: &mut ParserBase) {
     
     while parser.position < parser.tokens.len() {
         if let Some(token) = parser.peek() {
-            if brace_count == 0 && (token == "fn" || token == "ns" || token == "using") {
+            if brace_count == 0 && (token == "fn" || token == "ns" || token == "using" || token == "class" || token == "abstract" || token == "interface" || token == "enum") {
                 // 找到下一个顶层项
                 return;
             } else if token == "{" {
