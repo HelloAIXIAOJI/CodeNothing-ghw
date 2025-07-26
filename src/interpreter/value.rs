@@ -16,6 +16,7 @@ pub enum Value {
     Lambda(Vec<Parameter>, Expression), // Lambda表达式
     LambdaBlock(Vec<Parameter>, Vec<Statement>), // Lambda块
     FunctionReference(String), // 函数引用
+    EnumValue(EnumInstance), // 新增：枚举实例
     None, // 表示空值或未定义的值
 }
 
@@ -29,6 +30,14 @@ pub struct ObjectInstance {
 #[derive(Debug, Clone)]
 pub struct StaticMembers {
     pub static_fields: HashMap<String, Value>,
+}
+
+// 枚举实例
+#[derive(Debug, Clone)]
+pub struct EnumInstance {
+    pub enum_name: String,
+    pub variant_name: String,
+    pub fields: Vec<Value>, // 枚举变体的字段值
 }
 
 impl Value {
@@ -65,6 +74,14 @@ impl Value {
             Value::Object(obj) => {
                 format!("{}@{:p}", obj.class_name, obj)
             },
+            Value::EnumValue(enum_val) => {
+                if enum_val.fields.is_empty() {
+                    format!("{}::{}", enum_val.enum_name, enum_val.variant_name)
+                } else {
+                    let field_strs: Vec<String> = enum_val.fields.iter().map(|f| f.to_string()).collect();
+                    format!("{}::{}({})", enum_val.enum_name, enum_val.variant_name, field_strs.join(", "))
+                }
+            },
             Value::Lambda(params, _) => {
                 let param_names: Vec<String> = params.iter().map(|p| p.name.clone()).collect();
                 format!("lambda({})", param_names.join(", "))
@@ -75,6 +92,14 @@ impl Value {
             },
             Value::FunctionReference(name) => {
                 format!("function_ref({})", name)
+            },
+            Value::EnumValue(enum_val) => {
+                if enum_val.fields.is_empty() {
+                    format!("{}::{}", enum_val.enum_name, enum_val.variant_name)
+                } else {
+                    let field_strs: Vec<String> = enum_val.fields.iter().map(|f| f.to_string()).collect();
+                    format!("{}::{}({})", enum_val.enum_name, enum_val.variant_name, field_strs.join(", "))
+                }
             },
             Value::None => "null".to_string(),
         }
@@ -119,6 +144,20 @@ impl fmt::Display for Value {
                 write!(f, "lambda_block({})", param_names.join(", "))
             },
             Value::FunctionReference(name) => write!(f, "function_ref({})", name),
+            Value::EnumValue(enum_val) => {
+                if enum_val.fields.is_empty() {
+                    write!(f, "{}::{}", enum_val.enum_name, enum_val.variant_name)
+                } else {
+                    write!(f, "{}::{}(", enum_val.enum_name, enum_val.variant_name)?;
+                    for (i, field) in enum_val.fields.iter().enumerate() {
+                        if i > 0 {
+                            write!(f, ", ")?;
+                        }
+                        write!(f, "{}", field)?;
+                    }
+                    write!(f, ")")
+                }
+            },
             Value::None => write!(f, "null"),
         }
     }
