@@ -34,6 +34,17 @@ impl<'a> StatementExecutor for Interpreter<'a> {
                         (Type::String, Value::String(_)) => true,
                         (Type::Long, Value::Long(_)) => true,
                         (Type::Void, Value::None) => true,
+                        (Type::Class(class_name), Value::Object(obj)) => class_name == &obj.class_name,
+                        (Type::Enum(enum_name), Value::EnumValue(enum_val)) => enum_name == &enum_val.enum_name,
+                        // 智能类型匹配：如果声明为Class类型，但值是EnumValue，检查名称是否匹配
+                        (Type::Class(type_name), Value::EnumValue(enum_val)) => {
+                            // 检查是否是已知的枚举类型
+                            if self.enums.contains_key(type_name) {
+                                type_name == &enum_val.enum_name
+                            } else {
+                                false
+                            }
+                        },
                         _ => false
                     };
                     
@@ -101,6 +112,17 @@ impl<'a> StatementExecutor for Interpreter<'a> {
                             (Type::String, Value::String(_)) => true,
                             (Type::Long, Value::Long(_)) => true,
                             (Type::Void, Value::None) => true,
+                            (Type::Class(class_name), Value::Object(obj)) => class_name == &obj.class_name,
+                            (Type::Enum(enum_name), Value::EnumValue(enum_val)) => enum_name == &enum_val.enum_name,
+                            // 智能类型匹配：如果声明为Class类型，但值是EnumValue，检查名称是否匹配
+                            (Type::Class(type_name), Value::EnumValue(enum_val)) => {
+                                // 检查是否是已知的枚举类型
+                                if self.enums.contains_key(type_name) {
+                                    type_name == &enum_val.enum_name
+                                } else {
+                                    false
+                                }
+                            },
                             _ => false
                         };
                         
@@ -225,6 +247,10 @@ impl<'a> StatementExecutor for Interpreter<'a> {
             },
             Statement::InterfaceDeclaration(_interface) => {
                 // 接口声明在解释器初始化时已经处理，这里不需要额外操作
+                ExecutionResult::Continue
+            },
+            Statement::EnumDeclaration(_enum_def) => {
+                // 枚举声明在解释器初始化时已经处理，这里不需要额外操作
                 ExecutionResult::Continue
             },
         }
