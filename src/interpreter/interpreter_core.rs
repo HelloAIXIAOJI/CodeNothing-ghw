@@ -1,4 +1,4 @@
-use crate::ast::{Program, Expression, Statement, BinaryOperator, Type, Namespace, CompareOperator, LogicalOperator, Function, NamespaceType, Class};
+use crate::ast::{Program, Expression, Statement, BinaryOperator, Type, Namespace, CompareOperator, LogicalOperator, Function, NamespaceType, Class, Enum};
 use std::collections::HashMap;
 use super::value::{Value, ObjectInstance};
 use super::evaluator::{Evaluator, perform_binary_operation, evaluate_compare_operation};
@@ -120,6 +120,8 @@ pub struct Interpreter<'a> {
     pub namespace_import_stack: Vec<HashMap<String, Vec<String>>>,
     // 类定义存储
     pub classes: HashMap<String, &'a Class>,
+    // 枚举定义存储
+    pub enums: HashMap<String, &'a Enum>,
     // 静态成员存储
     pub static_members: HashMap<String, crate::interpreter::value::StaticMembers>,
     // 变量类型存储，键是变量名，值是声明的类型
@@ -158,6 +160,7 @@ impl<'a> Interpreter<'a> {
             constants, // 添加常量环境
             namespace_import_stack: vec![HashMap::new()], // 初始化栈，最外层一层
             classes: HashMap::new(),
+            enums: HashMap::new(),
             static_members: HashMap::new(),
             variable_types: HashMap::new(), // 初始化变量类型映射
         };
@@ -197,7 +200,12 @@ impl<'a> Interpreter<'a> {
                 static_fields,
             });
         }
-        
+
+        // 注册枚举定义
+        for enum_def in &program.enums {
+            interpreter.enums.insert(enum_def.name.clone(), enum_def);
+        }
+
         interpreter
     }
     
