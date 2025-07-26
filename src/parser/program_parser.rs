@@ -10,6 +10,7 @@ use crate::parser::statement_parser::StatementParser;
 use crate::parser::expression_parser::ExpressionParser;
 use crate::parser::class_parser::ClassParser;
 use crate::parser::interface_parser::InterfaceParser;
+use crate::parser::enum_parser::EnumParser;
 
 /// 解析程序
 pub fn parse_program(parser: &mut ParserBase) -> Result<Program, String> {
@@ -20,6 +21,7 @@ pub fn parse_program(parser: &mut ParserBase) -> Result<Program, String> {
     let mut constants = Vec::new(); // 新增：用于存储常量定义
     let mut classes = Vec::new(); // 新增：用于存储类定义
     let mut interfaces = Vec::new(); // 新增：用于存储接口定义
+    let mut enums = Vec::new(); // 新增：用于存储枚举定义
     
     while parser.position < parser.tokens.len() {
         if parser.peek() == Some(&"ns".to_string()) {
@@ -38,6 +40,10 @@ pub fn parse_program(parser: &mut ParserBase) -> Result<Program, String> {
             // 解析接口
             let interface = parser.parse_interface()?;
             interfaces.push(interface);
+        } else if parser.peek() == Some(&"enum".to_string()) {
+            // 解析枚举
+            let enum_def = parser.parse_enum()?;
+            enums.push(enum_def);
         } else if parser.peek() == Some(&"const".to_string()) {
             // 解析常量定义
             parser.consume(); // 消费 "const"
@@ -126,7 +132,7 @@ pub fn parse_program(parser: &mut ParserBase) -> Result<Program, String> {
                 return Err("期望 'lib_once'、'lib'、'file'、'ns' 或 'namespace' 关键字".to_string());
             }
         } else {
-            return Err(format!("期望 'fn', 'ns', 'class', 'abstract', 'interface' 或 'using', 但得到了 '{:?}'", parser.peek()));
+            return Err(format!("期望 'fn', 'ns', 'class', 'abstract', 'interface', 'enum' 或 'using', 但得到了 '{:?}'", parser.peek()));
         }
     }
     
@@ -138,6 +144,7 @@ pub fn parse_program(parser: &mut ParserBase) -> Result<Program, String> {
         constants, // 添加常量列表
         classes, // 添加类列表
         interfaces, // 添加接口列表
+        enums, // 添加枚举列表
     })
 }
 
@@ -182,6 +189,16 @@ pub fn parse_program_collect_all_errors(parser: &mut ParserBase, errors: &mut Ve
                 Err(error) => {
                     errors.push(error);
                     // 跳过当前接口，尝试在下一个关键字处继续解析
+                    skip_to_next_top_level_item(parser);
+                    try_next_item = parser.position < parser.tokens.len();
+                }
+            }
+        } else if parser.peek() == Some(&"enum".to_string()) {
+            match parser.parse_enum() {
+                Ok(_) => try_next_item = true,
+                Err(error) => {
+                    errors.push(error);
+                    // 跳过当前枚举，尝试在下一个关键字处继续解析
                     skip_to_next_top_level_item(parser);
                     try_next_item = parser.position < parser.tokens.len();
                 }
