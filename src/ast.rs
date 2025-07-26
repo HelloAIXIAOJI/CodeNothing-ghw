@@ -12,6 +12,7 @@ pub enum Type {
     Exception, // 新增：异常类型
     Class(String), // 新增：类类型
     Function(Vec<Type>, Box<Type>), // 新增：函数类型 (参数类型列表, 返回类型)
+    Enum(String), // 新增：枚举类型
     // 未来可以扩展更多类型
 }
 
@@ -63,6 +64,9 @@ pub enum Expression {
     SwitchExpression(Box<Expression>, Vec<SwitchCase>, Option<Box<Expression>>), // switch表达式：表达式、case列表、default表达式
     // 字符串插值
     StringInterpolation(Vec<StringInterpolationSegment>), // 字符串插值表达式
+    // Enum 相关表达式
+    EnumVariantCreation(String, String, Vec<Expression>), // 枚举变体创建 (枚举名, 变体名, 参数)
+    EnumVariantAccess(String, String), // 枚举变体访问 (枚举名::变体名)
     // 未来可以扩展更多表达式类型
 }
 
@@ -136,6 +140,8 @@ pub enum Statement {
     ClassDeclaration(Class), // 类声明
     InterfaceDeclaration(Interface), // 接口声明
     FieldAssignment(Box<Expression>, String, Expression), // 字段赋值 (obj.field = value)
+    // Enum相关语句
+    EnumDeclaration(Enum), // 枚举声明
     // 未来可以扩展更多语句类型
 }
 
@@ -232,6 +238,7 @@ pub struct Program {
     pub constants: Vec<(String, Type, Expression)>, // 新增：顶层常量定义
     pub classes: Vec<Class>, // 新增：类定义
     pub interfaces: Vec<Interface>, // 新增：接口定义
+    pub enums: Vec<Enum>, // 新增：枚举定义
 }
 
 // Switch case 结构
@@ -268,4 +275,23 @@ pub struct SwitchCase {
     pub statements: Vec<Statement>,  // case 块中的语句
     pub expression: Option<Expression>, // 表达式形式的返回值
     pub has_break: bool,            // 是否有 break 语句
-} 
+}
+
+// Enum 相关结构体
+#[derive(Debug, Clone)]
+pub struct Enum {
+    pub name: String,
+    pub variants: Vec<EnumVariant>,
+}
+
+#[derive(Debug, Clone)]
+pub struct EnumVariant {
+    pub name: String,
+    pub fields: Vec<EnumField>, // 枚举变体的字段（支持类似Rust的enum）
+}
+
+#[derive(Debug, Clone)]
+pub struct EnumField {
+    pub name: Option<String>, // 字段名（可选，支持元组式和结构体式）
+    pub field_type: Type,
+}
