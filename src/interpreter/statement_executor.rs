@@ -45,6 +45,15 @@ impl<'a> StatementExecutor for Interpreter<'a> {
                                 false
                             }
                         },
+                        // 指针类型匹配
+                        (Type::Pointer(expected_target), Value::Pointer(ptr)) => {
+                            // 检查指针目标类型是否匹配
+                            self.pointer_target_type_matches(expected_target, &ptr.target_type)
+                        },
+                        (Type::OptionalPointer(expected_target), Value::Pointer(ptr)) => {
+                            self.pointer_target_type_matches(expected_target, &ptr.target_type)
+                        },
+                        (Type::OptionalPointer(_), Value::None) => true, // 可选指针可以为null
                         _ => false
                     };
                     
@@ -123,6 +132,14 @@ impl<'a> StatementExecutor for Interpreter<'a> {
                                     false
                                 }
                             },
+                            // 指针类型匹配（第二个检查点）
+                            (Type::Pointer(expected_target), Value::Pointer(ptr)) => {
+                                self.pointer_target_type_matches(expected_target, &ptr.target_type)
+                            },
+                            (Type::OptionalPointer(expected_target), Value::Pointer(ptr)) => {
+                                self.pointer_target_type_matches(expected_target, &ptr.target_type)
+                            },
+                            (Type::OptionalPointer(_), Value::None) => true,
                             _ => false
                         };
                         
@@ -484,4 +501,23 @@ impl<'a> Interpreter<'a> {
             _ => false,
         }
     }
-} 
+
+    // 检查指针目标类型是否匹配
+    fn pointer_target_type_matches(&self, expected: &crate::ast::Type, actual: &crate::interpreter::value::PointerType) -> bool {
+        use crate::interpreter::value::PointerType;
+
+        match (expected, actual) {
+            (crate::ast::Type::Int, PointerType::Int) => true,
+            (crate::ast::Type::Float, PointerType::Float) => true,
+            (crate::ast::Type::Bool, PointerType::Bool) => true,
+            (crate::ast::Type::String, PointerType::String) => true,
+            (crate::ast::Type::Long, PointerType::Long) => true,
+            (crate::ast::Type::Class(expected_name), PointerType::Enum(actual_name)) => expected_name == actual_name,
+            (crate::ast::Type::Class(expected_name), PointerType::Class(actual_name)) => expected_name == actual_name,
+            (crate::ast::Type::Pointer(expected_inner), PointerType::Pointer(actual_inner)) => {
+                self.pointer_target_type_matches(expected_inner, actual_inner)
+            },
+            _ => false,
+        }
+    }
+}
