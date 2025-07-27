@@ -3,6 +3,7 @@ use crate::ast::{Statement, Expression, Type, Parameter, Function, BinaryOperato
 use crate::parser::parser_base::ParserBase;
 use crate::parser::expression_parser::ExpressionParser;
 use crate::parser::enum_parser::EnumParser;
+use crate::parser::pointer_parser::PointerParser;
 use crate::interpreter::debug_println;
 
 pub trait StatementParser {
@@ -171,42 +172,11 @@ impl<'a> StatementParser for ParserBase<'a> {
                 if let Some(next_token) = self.peek() {
                     if next_token == ":" {
                         self.consume(); // 消费 ":"
-                        
-                        // 检查是否是数组类型
-                        let base_type = self.consume().ok_or_else(|| "期望类型名".to_string())?;
-                        let var_type = if self.peek() == Some(&"[".to_string()) {
-                            self.consume(); // 消费 "["
-                            self.expect("]")?;
-                            
-                            match base_type.as_str() {
-                                "int" => Type::Array(Box::new(Type::Int)),
-                                "float" => Type::Array(Box::new(Type::Float)),
-                                "bool" => Type::Array(Box::new(Type::Bool)),
-                                "string" => Type::Array(Box::new(Type::String)),
-                                "long" => Type::Array(Box::new(Type::Long)),
-                                _ => return Err(format!("不支持的数组元素类型: {}", base_type)),
-                            }
-                        } else if base_type == "Map" {
-                            self.expect("<")?;
-                            let key_type = self.parse_type()?;
-                            self.expect(",")?;
-                            let value_type = self.parse_type()?;
-                            self.expect(">")?;
-                            Type::Map(Box::new(key_type), Box::new(value_type))
-                        } else {
-                            match base_type.as_str() {
-                                "int" => Type::Int,
-                                "float" => Type::Float,
-                                "bool" => Type::Bool,
-                                "string" => Type::String,
-                                "long" => Type::Long,
-                                "void" => Type::Void,
-                                "auto" => Type::Auto,
-                                "Exception" => Type::Exception,
-                                _ => Type::Class(base_type), // 假设是类类型
-                            }
-                        };
-                        
+
+                        // 使用parse_type方法解析类型（支持指针类型）
+                        let var_type = self.parse_type()?;
+
+                        // 类型已经通过parse_type解析完成，直接使用
                         self.expect("=")?;
                         let init_expr = self.parse_expression()?;
                         self.expect(";")?;
@@ -512,8 +482,19 @@ impl<'a> StatementParser for ParserBase<'a> {
     }
     
     fn parse_type(&mut self) -> Result<Type, String> {
+        // 首先检查是否是指针类型
+        if let Some(token) = self.peek() {
+            if token == "?" && self.peek_ahead(1) == Some(&"*".to_string()) {
+                // 可选指针类型 ?*Type
+                return self.parse_pointer_type();
+            } else if token == "*" {
+                // 普通指针类型 *Type
+                return self.parse_pointer_type();
+            }
+        }
+
         let type_name = self.consume().ok_or_else(|| "期望类型名".to_string())?;
-        
+
         match type_name.as_str() {
             "int" => Ok(Type::Int),
             "float" => Ok(Type::Float),
