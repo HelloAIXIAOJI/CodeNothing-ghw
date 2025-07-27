@@ -294,6 +294,13 @@ pub fn convert_value_to_string_arg(value: &Value) -> String {
                 format!("{}::{}({})", enum_val.enum_name, enum_val.variant_name, field_strs.join(", "))
             }
         },
+        Value::Pointer(ptr) => {
+            if ptr.is_null {
+                "null".to_string()
+            } else {
+                format!("*{:p}", ptr.address as *const usize)
+            }
+        },
         Value::None => "null".to_string(),
     }
 }
