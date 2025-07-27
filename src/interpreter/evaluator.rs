@@ -104,7 +104,84 @@ pub fn perform_binary_operation(left: &Value, op: &BinaryOperator, right: &Value
             };
             Value::String(l.clone() + &enum_str)
         },
-        
+
+        // 字符串和指针的连接
+        (Value::String(l), BinaryOperator::Add, Value::Pointer(r)) => {
+            let ptr_str = if r.is_null {
+                "null".to_string()
+            } else {
+                format!("*{:p}", r.address as *const usize)
+            };
+            Value::String(l.clone() + &ptr_str)
+        },
+
+        // 指针算术运算
+        (Value::Pointer(ptr), BinaryOperator::Add, Value::Int(offset)) => {
+            use crate::interpreter::expression_evaluator::ExpressionEvaluator;
+            // 这里需要调用指针算术逻辑
+            let element_size = match ptr.target_type {
+                crate::interpreter::value::PointerType::Int => 4,
+                crate::interpreter::value::PointerType::Float => 4,
+                crate::interpreter::value::PointerType::Bool => 1,
+                crate::interpreter::value::PointerType::String => 8,
+                crate::interpreter::value::PointerType::Long => 8,
+                _ => 8,
+            };
+            let new_address = ptr.address + (*offset as usize * element_size);
+
+            let new_ptr = crate::interpreter::value::PointerInstance {
+                address: new_address,
+                target_type: ptr.target_type.clone(),
+                is_null: false,
+                level: ptr.level,
+            };
+
+            Value::Pointer(new_ptr)
+        },
+        (Value::Pointer(ptr), BinaryOperator::Subtract, Value::Int(offset)) => {
+            let element_size = match ptr.target_type {
+                crate::interpreter::value::PointerType::Int => 4,
+                crate::interpreter::value::PointerType::Float => 4,
+                crate::interpreter::value::PointerType::Bool => 1,
+                crate::interpreter::value::PointerType::String => 8,
+                crate::interpreter::value::PointerType::Long => 8,
+                _ => 8,
+            };
+            let new_address = ptr.address - (*offset as usize * element_size);
+
+            let new_ptr = crate::interpreter::value::PointerInstance {
+                address: new_address,
+                target_type: ptr.target_type.clone(),
+                is_null: false,
+                level: ptr.level,
+            };
+
+            Value::Pointer(new_ptr)
+        },
+        (Value::Pointer(ptr1), BinaryOperator::Subtract, Value::Pointer(ptr2)) => {
+            let element_size = match ptr1.target_type {
+                crate::interpreter::value::PointerType::Int => 4,
+                crate::interpreter::value::PointerType::Float => 4,
+                crate::interpreter::value::PointerType::Bool => 1,
+                crate::interpreter::value::PointerType::String => 8,
+                crate::interpreter::value::PointerType::Long => 8,
+                _ => 8,
+            };
+            let diff = (ptr1.address as isize - ptr2.address as isize) / element_size as isize;
+            Value::Int(diff as i32)
+        },
+
+        // 指针和字符串的连接
+        (Value::Pointer(l), BinaryOperator::Add, Value::String(r)) => {
+            let ptr_str = if l.is_null {
+                "null".to_string()
+            } else {
+                let stars = "*".repeat(l.level);
+                format!("{}0x{:x}", stars, l.address)
+            };
+            Value::String(ptr_str + r)
+        },
+
         // 不支持的操作
         _ => panic!("不支持的二元操作: {:?} {:?} {:?}", left, op, right),
     }
