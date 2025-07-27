@@ -8,6 +8,7 @@ pub mod expression_evaluator;
 pub mod statement_executor;
 pub mod jit;
 pub mod handlers;
+pub mod memory_manager;
 
 // Re-export main types and functions
 pub use interpreter_core::{interpret, Interpreter, debug_println};
