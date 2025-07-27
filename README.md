@@ -164,7 +164,7 @@ std::println("Hello, world!");
 input : string = std::read_line();
 ```
 
-## 运行
+## 运行（源代码）
 
 ```
 cargo run -- <文件路径>
