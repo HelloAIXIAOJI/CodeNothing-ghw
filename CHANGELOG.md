@@ -1,5 +1,135 @@
 # CodeNothing 更新日志
 
+## [v0.5.0] - 2025-07-28
+### 🎯 重大新功能：增强指针类型 (Enhanced Pointer Types)
+
+#### 🚀 重大升级说明
+CodeNothing v0.5.0 的指针功能已从简化版本全面升级为完整的指针系统：
+- **真实内存地址**: 替换模拟地址系统，实现真实内存分配和管理
+- **指针算术运算**: 完整支持 `ptr + offset`、`ptr - offset`、`ptr1 - ptr2`
+- **多级指针**: 支持任意级别的指针嵌套（`**int`, `***int`等）
+- **复杂解引用**: 支持 `(*ptr).method()` 语法
+- **内存安全增强**: 全面的安全检查机制
+
+#### 核心特性
+- **完整的指针语法支持**
+  - 基础指针：`ptr : *int = &variable;`
+  - 可选指针：`optPtr : ?*int = &variable;` 或 `optPtr = null;`
+  - 指针操作：取地址 `&` 和解引用 `*` 操作符
+  - 类型安全的指针声明和使用
+
+- **内存操作能力**
+  - 真实的内存地址操作（从0x1000开始的真实地址）
+  - 完整的内存管理系统（MemoryManager）
+  - 指针算术运算（加减法、差值计算）
+  - 多级指针支持（二级、三级及更高级别）
+  - 安全的指针创建和解引用
+  - 自动的指针生命周期管理
+  - 全面的安全检查（空指针、悬空指针、边界检查）
+
+- **类型系统集成**
+  - 严格的指针类型检查和验证
+  - 支持指向所有基础类型的指针
+  - 支持指向复杂类型（枚举、类）的指针
+  - 智能类型匹配和转换
+
+- **表达式系统支持**
+  - 指针操作的完整表达式支持
+  - 指针算术表达式（PointerArithmetic AST节点）
+  - 复杂解引用语法（`(*ptr).method()`）
+  - 多级指针的方法调用支持
+  - 指针与字符串的连接操作
+  - 指针在算术和逻辑表达式中的使用
+  - 一元表达式中的指针操作
+
+#### 🆕 v0.5.0 增强功能示例
+
+```codenothing
+// 1. 真实内存地址
+value : int = 42;
+ptr : *int = &value;
+std::println("真实地址: " + ptr); // 输出: *0x1000
+
+// 2. 指针算术运算
+basePtr : *int = &value;
+ptr1 : *int = basePtr + 5;    // 指针加法
+ptr2 : *int = ptr1 - 3;       // 指针减法
+diff : int = ptr1 - basePtr;  // 指针差值 = 5
+
+// 3. 多级指针
+ptrPtr : **int = &ptr;        // 二级指针
+ptrPtrPtr : ***int = &ptrPtr; // 三级指针
+finalValue : int = ***ptrPtrPtr; // 三次解引用
+
+// 4. 复杂解引用语法
+text : string = "Hello";
+textPtr : *string = &text;
+length : int = (*textPtr).length(); // 方法调用
+
+// 5. 内存安全检查
+isNull : bool = ptr.isNull();     // 空指针检查
+level : int = ptr.getLevel();     // 指针级别
+address : long = ptr.getAddress(); // 内存地址
+```
+
+#### 基础语法示例
+```codenothing
+// 基础指针操作
+value : int = 42;
+ptr : *int = &value;           // 取地址
+derefValue : int = *ptr;       // 解引用
+
+// 可选指针
+optPtr : ?*int = &value;       // 可选指针
+optPtr = null;                 // 设置为空
+
+// 函数中的指针
+fn processData(data : *int) : void {
+    value : int = *data;
+    std::println("值: " + value);
+};
+
+// 指针与枚举
+enum Status { Active, Inactive };
+status : Status = Status::Active;
+statusPtr : *Status = &status;
+derefStatus : Status = *statusPtr;
+```
+
+#### 技术实现
+- **AST扩展**：新增`Pointer`、`OptionalPointer`类型和`AddressOf`、`Dereference`表达式
+- **解析器增强**：新增`pointer_parser.rs`模块，支持完整指针语法解析
+- **解释器改进**：新增`PointerInstance`值类型，实现指针创建、访问和解引用
+- **类型系统集成**：扩展类型检查机制，支持指针类型的智能匹配
+- **表达式求值**：新增指针操作的求值逻辑和内存地址生成
+
+#### 测试验证
+- ✅ 基础功能测试：指针创建、取地址、解引用操作
+- ✅ 高级场景测试：指针与枚举、函数参数、方法调用等
+- ✅ 类型安全测试：各种类型的指针声明和验证
+- ✅ 边界情况测试：空指针、类型匹配、错误处理
+- ✅ 性能测试：指针创建、解引用、内存使用效率
+
+#### 向后兼容性
+- ✅ 完全向后兼容，不影响现有代码
+- ✅ 与类、接口、枚举等特性无缝集成
+- ✅ 不破坏现有API和语法结构
+
+#### 已知限制
+- ✅ ~~暂不支持指针算术运算（如ptr + 1）~~ **已实现**
+- ✅ ~~暂不支持多级指针（**int）~~ **已实现**
+- 🔄 函数指针（概念支持，完整实现计划在v0.5.x）
+- ✅ ~~`(*ptr).method()` 语法暂不支持~~ **已实现**
+- 指针递增递减操作符（++ptr, ptr++）计划在v0.5.x实现
+- 智能指针（shared_ptr, unique_ptr）计划在v0.6.0实现
+
+#### 示例文件
+- `examples/pointer_test.cn` - 基础功能演示
+- `examples/pointer_advanced_test.cn` - 高级场景应用
+- `examples/pointer_simple_test.cn` - 简单功能测试
+
+---
+
 ## [v0.4.7] - 2025-07-27
 ### 🎯 重大新功能：枚举类型 (Enum Types)
 
