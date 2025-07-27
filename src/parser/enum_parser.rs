@@ -120,7 +120,7 @@ impl<'a> EnumParser for ParserBase<'a> {
 
 impl<'a> ParserBase<'a> {
     // 辅助方法：从字符串解析类型
-    fn parse_type_from_string(&self, type_str: &str) -> Result<Type, String> {
+    pub fn parse_type_from_string(&self, type_str: &str) -> Result<Type, String> {
         match type_str {
             "int" => Ok(Type::Int),
             "float" => Ok(Type::Float),
