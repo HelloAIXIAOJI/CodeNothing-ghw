@@ -13,6 +13,9 @@ pub enum Type {
     Class(String), // 新增：类类型
     Function(Vec<Type>, Box<Type>), // 新增：函数类型 (参数类型列表, 返回类型)
     Enum(String), // 新增：枚举类型
+    Pointer(Box<Type>), // 新增：指针类型 (*Type)
+    OptionalPointer(Box<Type>), // 新增：可选指针类型 (?*Type)
+    FunctionPointer(Vec<Type>, Box<Type>), // 新增：函数指针类型 (*fn(args) -> ret)
     // 未来可以扩展更多类型
 }
 
@@ -67,6 +70,11 @@ pub enum Expression {
     // Enum 相关表达式
     EnumVariantCreation(String, String, Vec<Expression>), // 枚举变体创建 (枚举名, 变体名, 参数)
     EnumVariantAccess(String, String), // 枚举变体访问 (枚举名::变体名)
+    // Pointer 相关表达式
+    AddressOf(Box<Expression>), // 取地址操作 (&expression)
+    Dereference(Box<Expression>), // 解引用操作 (*expression)
+    PointerArithmetic(Box<Expression>, PointerArithmeticOp, Box<Expression>), // 指针算术
+    FunctionPointerCall(Box<Expression>, Vec<Expression>), // 函数指针调用
     // 未来可以扩展更多表达式类型
 }
 
@@ -108,6 +116,13 @@ pub enum LogicalOperator {
     And,  // &&
     Or,   // ||
     Not,  // !
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum PointerArithmeticOp {
+    Add,    // ptr + offset
+    Sub,    // ptr - offset
+    Diff,   // ptr1 - ptr2
 }
 
 #[derive(Debug, Clone)]
