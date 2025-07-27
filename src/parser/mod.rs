@@ -10,6 +10,7 @@ pub mod program_parser;
 pub mod class_parser;
 pub mod interface_parser;
 pub mod enum_parser;
+pub mod pointer_parser;
 
 use crate::ast::Program;
 use lexer::{remove_comments, tokenize};
