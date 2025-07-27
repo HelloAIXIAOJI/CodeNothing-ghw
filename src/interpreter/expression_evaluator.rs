@@ -1,5 +1,6 @@
 use crate::ast::{Expression, BinaryOperator, CompareOperator, LogicalOperator, SwitchCase, CasePattern};
-use super::value::{Value, ObjectInstance, EnumInstance};
+use super::value::{Value, ObjectInstance, EnumInstance, PointerInstance, PointerType};
+use super::memory_manager::{allocate_memory, read_memory, write_memory, is_valid_address, is_null_pointer, validate_pointer, is_dangling_pointer};
 use super::interpreter_core::{Interpreter, debug_println};
 use std::collections::HashMap;
 use super::function_calls::FunctionCallHandler;
@@ -305,6 +306,19 @@ impl<'a> ExpressionEvaluator for Interpreter<'a> {
             },
             Expression::EnumVariantAccess(enum_name, variant_name) => {
                 self.access_enum_variant(enum_name, variant_name)
+            },
+            // Pointer 相关表达式
+            Expression::AddressOf(expr) => {
+                self.create_pointer(expr)
+            },
+            Expression::Dereference(expr) => {
+                self.dereference_pointer(expr)
+            },
+            Expression::PointerArithmetic(left, op, right) => {
+                self.evaluate_pointer_arithmetic(left, op, right)
+            },
+            Expression::FunctionPointerCall(func_expr, args) => {
+                self.call_function_pointer(func_expr, args)
             },
             Expression::SwitchExpression(switch_expr, cases, default_expr) => {
                 let switch_value = self.evaluate_expression(switch_expr);
@@ -621,6 +635,10 @@ impl<'a> Interpreter<'a> {
             Value::EnumValue(enum_val) => {
                 // 枚举值方法调用
                 self.handle_enum_method(&enum_val, method_name, &evaluated_args)
+            },
+            Value::Pointer(ptr) => {
+                // 指针值方法调用
+                self.handle_pointer_method(&ptr, method_name, &evaluated_args)
             },
             _ => {
                 // 不支持的对象类型
@@ -1398,6 +1416,212 @@ impl<'a> Interpreter<'a> {
             _ => {
                 panic!("枚举类型不支持方法: {}", method_name);
             }
+        }
+    }
+
+    fn handle_pointer_method(&self, ptr: &super::value::PointerInstance, method_name: &str, args: &[String]) -> Value {
+        match method_name {
+            "toString" => {
+                // 返回指针的字符串表示
+                if ptr.is_null {
+                    Value::String("null".to_string())
+                } else {
+                    let stars = "*".repeat(ptr.level);
+                    Value::String(format!("{}0x{:x}", stars, ptr.address))
+                }
+            },
+            "getAddress" => {
+                // 返回指针地址
+                Value::Long(ptr.address as i64)
+            },
+            "getLevel" => {
+                // 返回指针级别
+                Value::Int(ptr.level as i32)
+            },
+            "isNull" => {
+                // 返回是否为空指针
+                Value::Bool(ptr.is_null)
+            },
+            _ => {
+                panic!("指针类型不支持方法: {}", method_name);
+            }
+        }
+    }
+
+    // 指针操作方法
+    fn create_pointer(&mut self, expr: &Expression) -> Value {
+        debug_println("创建指针");
+
+        // 计算被取地址的表达式
+        let target_value = self.evaluate_expression(expr);
+
+        // 分配真实内存并存储值
+        match allocate_memory(target_value.clone()) {
+            Ok(address) => {
+                let target_type = self.value_to_pointer_type(&target_value);
+                let pointer = PointerInstance {
+                    address,
+                    target_type,
+                    is_null: false,
+                    level: 1,
+                };
+
+                debug_println(&format!("创建指针，地址: 0x{:x}", address));
+                Value::Pointer(pointer)
+            },
+            Err(e) => {
+                panic!("内存分配失败: {}", e);
+            }
+        }
+    }
+
+    fn dereference_pointer(&mut self, expr: &Expression) -> Value {
+        debug_println("解引用指针");
+
+        // 计算指针表达式
+        let pointer_value = self.evaluate_expression(expr);
+
+        match pointer_value {
+            Value::Pointer(ptr) => {
+                if ptr.is_null {
+                    panic!("尝试解引用空指针");
+                }
+
+                // 使用增强的安全检查
+                if let Err(e) = validate_pointer(ptr.address) {
+                    panic!("指针验证失败: {}", e);
+                }
+
+                if is_dangling_pointer(ptr.address) {
+                    panic!("尝试解引用悬空指针: 0x{:x}", ptr.address);
+                }
+
+                match read_memory(ptr.address) {
+                    Ok(value) => {
+                        debug_println(&format!("解引用指针，地址: 0x{:x}", ptr.address));
+
+                        // 如果是多级指针，需要减少级别
+                        if ptr.level > 1 {
+                            if let Value::Pointer(mut inner_ptr) = value {
+                                inner_ptr.level = ptr.level - 1;
+                                Value::Pointer(inner_ptr)
+                            } else {
+                                panic!("多级指针解引用错误：期望指针值");
+                            }
+                        } else {
+                            value
+                        }
+                    },
+                    Err(e) => {
+                        panic!("内存读取失败: {}", e);
+                    }
+                }
+            },
+            _ => {
+                panic!("尝试解引用非指针值: {:?}", pointer_value);
+            }
+        }
+    }
+
+    // 指针算术运算
+    fn evaluate_pointer_arithmetic(&mut self, left: &Expression, op: &crate::ast::PointerArithmeticOp, right: &Expression) -> Value {
+        debug_println("执行指针算术运算");
+
+        let left_val = self.evaluate_expression(left);
+        let right_val = self.evaluate_expression(right);
+
+        match (&left_val, op, &right_val) {
+            (Value::Pointer(ptr), crate::ast::PointerArithmeticOp::Add, Value::Int(offset)) => {
+                let element_size = self.get_pointer_element_size(&ptr.target_type);
+                let new_address = ptr.address + (*offset as usize * element_size);
+
+                let new_ptr = PointerInstance {
+                    address: new_address,
+                    target_type: ptr.target_type.clone(),
+                    is_null: false,
+                    level: ptr.level,
+                };
+
+                debug_println(&format!("指针算术: 0x{:x} + {} = 0x{:x}", ptr.address, offset, new_address));
+                Value::Pointer(new_ptr)
+            },
+            (Value::Pointer(ptr), crate::ast::PointerArithmeticOp::Sub, Value::Int(offset)) => {
+                let element_size = self.get_pointer_element_size(&ptr.target_type);
+                let new_address = ptr.address - (*offset as usize * element_size);
+
+                let new_ptr = PointerInstance {
+                    address: new_address,
+                    target_type: ptr.target_type.clone(),
+                    is_null: false,
+                    level: ptr.level,
+                };
+
+                debug_println(&format!("指针算术: 0x{:x} - {} = 0x{:x}", ptr.address, offset, new_address));
+                Value::Pointer(new_ptr)
+            },
+            (Value::Pointer(ptr1), crate::ast::PointerArithmeticOp::Diff, Value::Pointer(ptr2)) => {
+                let element_size = self.get_pointer_element_size(&ptr1.target_type);
+                let diff = (ptr1.address as isize - ptr2.address as isize) / element_size as isize;
+
+                debug_println(&format!("指针差值: 0x{:x} - 0x{:x} = {}", ptr1.address, ptr2.address, diff));
+                Value::Int(diff as i32)
+            },
+            _ => {
+                panic!("不支持的指针算术运算: {:?} {:?} {:?}", left_val, op, right_val);
+            }
+        }
+    }
+
+    // 函数指针调用
+    fn call_function_pointer(&mut self, func_expr: &Expression, args: &[Expression]) -> Value {
+        debug_println("调用函数指针");
+
+        let func_val = self.evaluate_expression(func_expr);
+
+        match func_val {
+            Value::Pointer(ptr) => {
+                if ptr.is_null {
+                    panic!("尝试调用空函数指针");
+                }
+
+                // 这里需要实现函数指针的实际调用逻辑
+                // 暂时返回一个占位值
+                debug_println(&format!("调用函数指针，地址: 0x{:x}", ptr.address));
+                Value::Int(0) // 占位实现
+            },
+            _ => {
+                panic!("尝试调用非函数指针: {:?}", func_val);
+            }
+        }
+    }
+
+    // 将值转换为指针类型信息
+    fn value_to_pointer_type(&self, value: &Value) -> PointerType {
+        match value {
+            Value::Int(_) => PointerType::Int,
+            Value::Float(_) => PointerType::Float,
+            Value::Bool(_) => PointerType::Bool,
+            Value::String(_) => PointerType::String,
+            Value::Long(_) => PointerType::Long,
+            Value::EnumValue(enum_val) => PointerType::Enum(enum_val.enum_name.clone()),
+            Value::Object(_) => PointerType::Class("Object".to_string()),
+            Value::Pointer(ptr) => PointerType::Pointer(Box::new(ptr.target_type.clone())),
+            _ => PointerType::Int, // 默认类型
+        }
+    }
+
+    // 获取指针元素大小
+    fn get_pointer_element_size(&self, ptr_type: &PointerType) -> usize {
+        match ptr_type {
+            PointerType::Int => 4,
+            PointerType::Float => 4,
+            PointerType::Bool => 1,
+            PointerType::String => 8,
+            PointerType::Long => 8,
+            PointerType::Enum(_) => 32,
+            PointerType::Class(_) => 64,
+            PointerType::Function(_, _) => 8,
+            PointerType::Pointer(_) => 8,
         }
     }
 }
