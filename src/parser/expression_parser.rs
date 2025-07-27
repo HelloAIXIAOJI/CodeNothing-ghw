@@ -1,5 +1,6 @@
 use crate::ast::{Expression, BinaryOperator, CompareOperator, LogicalOperator, Parameter, Type, Statement};
 use crate::parser::parser_base::ParserBase;
+use crate::parser::pointer_parser::PointerParser;
 use crate::interpreter::debug_println;
 
 pub trait ExpressionParser {
@@ -139,6 +140,12 @@ impl<'a> ExpressionParser for ParserBase<'a> {
                 self.consume(); // 消费操作符
                 let expr = self.parse_unary_expression()?;
                 return Ok(Expression::LogicalOp(Box::new(expr), LogicalOperator::Not, Box::new(Expression::BoolLiteral(false))));
+            } else if op == "&" {
+                // 取地址操作
+                return self.parse_address_of();
+            } else if op == "*" {
+                // 解引用操作
+                return self.parse_dereference();
             } else if op == "++" {
                 // 前置自增
                 self.consume(); // 消费 "++"
