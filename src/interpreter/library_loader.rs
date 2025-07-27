@@ -19,6 +19,34 @@ pub type LibraryFunction = fn(Vec<String>) -> String;
 // 库初始化函数类型
 type InitFn = unsafe fn() -> *mut HashMap<String, LibraryFunction>;
 
+// 获取平台特定的库文件扩展名（CodeNothing规范：无lib前缀）
+fn get_library_filename(lib_name: &str) -> String {
+    #[cfg(target_os = "windows")]
+    {
+        format!("{}.dll", lib_name)
+    }
+    #[cfg(target_os = "macos")]
+    {
+        format!("{}.dylib", lib_name)
+    }
+    #[cfg(all(not(target_os = "windows"), not(target_os = "macos")))]
+    {
+        format!("{}.so", lib_name)
+    }
+}
+
+// 获取所有可能的库文件名（CodeNothing规范）
+fn get_possible_library_filenames(lib_name: &str) -> Vec<String> {
+    vec![
+        // 当前平台的标准格式
+        get_library_filename(lib_name),
+        // 其他平台格式（跨平台兼容）
+        format!("{}.dll", lib_name),
+        format!("{}.dylib", lib_name),
+        format!("{}.so", lib_name),
+    ]
+}
+
 // 获取库路径
 fn get_library_path(lib_name: &str) -> PathBuf {
     let mut path = match env::current_exe() {
@@ -31,22 +59,59 @@ fn get_library_path(lib_name: &str) -> PathBuf {
         },
         Err(_) => PathBuf::from("."),
     };
-    
+
     // 添加library子目录
     path.push("library");
-    
-    // 根据操作系统添加不同的扩展名
-    #[cfg(target_os = "windows")]
-    {
-        path.push(format!("{}.dll", lib_name));
-    }
-    #[cfg(not(target_os = "windows"))]
-    {
-        path.push(format!("{}.so", lib_name));
-    }
-    
+
+    // 使用平台特定的库文件名
+    path.push(get_library_filename(lib_name));
+
     debug_println(&format!("尝试加载库文件: {:?}", path));
     path
+}
+
+// 查找库文件（CodeNothing规范：只查找两个目录）
+fn find_library_file(lib_name: &str) -> Option<PathBuf> {
+    let search_paths = vec![
+        // 1. 解释器目录/library
+        {
+            let mut path = match env::current_exe() {
+                Ok(exe_path) => {
+                    match exe_path.parent() {
+                        Some(parent) => parent.to_path_buf(),
+                        None => PathBuf::from("."),
+                    }
+                },
+                Err(_) => PathBuf::from("."),
+            };
+            path.push("library");
+            path
+        },
+        // 2. 当前目录/library
+        {
+            let mut path = PathBuf::from(".");
+            path.push("library");
+            path
+        },
+    ];
+
+    let possible_filenames = get_possible_library_filenames(lib_name);
+
+    for search_path in search_paths {
+        for filename in &possible_filenames {
+            let mut full_path = search_path.clone();
+            full_path.push(filename);
+
+            debug_println(&format!("检查库文件: {:?}", full_path));
+
+            if full_path.exists() {
+                debug_println(&format!("找到库文件: {:?}", full_path));
+                return Some(full_path);
+            }
+        }
+    }
+
+    None
 }
 
 // 获取库支持的命名空间
@@ -128,109 +193,56 @@ pub fn load_library(lib_name: &str) -> Result<Arc<HashMap<String, LibraryFunctio
         }
     }
     
-    // 库尚未加载，尝试加载
-    let lib_path = get_library_path(lib_name);
-    
-    if !lib_path.exists() {
-        // 尝试在当前目录和其他可能的位置查找
-        debug_println(&format!("找不到库文件: {:?}，尝试其他位置", lib_path));
-        
-        // 尝试当前目录
-        let mut current_path = PathBuf::from(".");
-        current_path.push("library");
-        #[cfg(target_os = "windows")]
-        {
-            current_path.push(format!("{}.dll", lib_name));
+    // 库尚未加载，尝试查找并加载
+    let lib_path = match find_library_file(lib_name) {
+        Some(path) => path,
+        None => {
+            let primary_path = get_library_path(lib_name);
+            return Err(format!(
+                "找不到库文件 '{}'\n查找位置:\n- 解释器目录/library/\n- 当前目录/library/\n支持的文件格式: {}",
+                lib_name,
+                get_possible_library_filenames(lib_name).join(", ")
+            ));
         }
-        #[cfg(not(target_os = "windows"))]
-        {
-            current_path.push(format!("lib{}.so", lib_name));
+    };
+
+    unsafe {
+        // 加载库
+        let lib = match Library::new(&lib_path) {
+            Ok(l) => Arc::new(l),
+            Err(e) => return Err(format!("无法加载库 '{:?}': {}", lib_path, e)),
+        };
+
+        debug_println(&format!("成功加载库文件: {:?}", lib_path));
+
+        // 获取初始化函数
+        let init_fn: Symbol<InitFn> = match lib.get(b"cn_init") {
+            Ok(f) => f,
+            Err(e) => return Err(format!("无法获取库初始化函数 'cn_init': {}", e)),
+        };
+
+        // 调用初始化函数获取函数映射
+        let functions_ptr = init_fn();
+        if functions_ptr.is_null() {
+            return Err("库初始化函数返回空指针".to_string());
         }
-        
-        debug_println(&format!("尝试加载库文件: {:?}", current_path));
-        
-        if !current_path.exists() {
-            return Err(format!("找不到库文件: {:?} 或 {:?}", lib_path, current_path));
+
+        // 将原始指针转换为HashMap，然后包装为Arc
+        let boxed_functions = Box::from_raw(functions_ptr);
+        let functions = *boxed_functions; // 解引用Box<HashMap>为HashMap
+
+        // 调试输出函数列表
+        debug_println(&format!("库 '{}' 中的函数:", lib_name));
+        for (func_name, _) in &functions {
+            debug_println(&format!("  - {}", func_name));
         }
-        
-        // 使用找到的路径
-        unsafe {
-            // 加载库
-            let lib = match Library::new(&current_path) {
-                Ok(l) => Arc::new(l),
-                Err(e) => return Err(format!("无法加载库: {}", e)),
-            };
-            
-            debug_println(&format!("成功加载库文件: {:?}", current_path));
-            
-            // 获取初始化函数
-            let init_fn: Symbol<InitFn> = match lib.get(b"cn_init") {
-                Ok(f) => f,
-                Err(e) => return Err(format!("无法获取库初始化函数: {}", e)),
-            };
-            
-            // 调用初始化函数获取函数映射
-            let functions_ptr = init_fn();
-            if functions_ptr.is_null() {
-                return Err("库初始化函数返回空指针".to_string());
-            }
-            
-            // 将原始指针转换为HashMap，然后包装为Arc
-            let boxed_functions = Box::from_raw(functions_ptr);
-            let functions = *boxed_functions; // 解引用Box<HashMap>为HashMap
-            
-            // 调试输出函数列表
-            debug_println(&format!("库 '{}' 中的函数:", lib_name));
-            for (func_name, _) in &functions {
-                debug_println(&format!("  - {}", func_name));
-            }
-            
-            let functions_arc = Arc::new(functions);
-            
-            // 将库添加到已加载库缓存
-            loaded_libs.insert(lib_name.to_string(), lib);
-            
-            Ok(functions_arc)
-        }
-    } else {
-        unsafe {
-            // 加载库
-            let lib = match Library::new(&lib_path) {
-                Ok(l) => Arc::new(l),
-                Err(e) => return Err(format!("无法加载库: {}", e)),
-            };
-            
-            debug_println(&format!("成功加载库文件: {:?}", lib_path));
-            
-            // 获取初始化函数
-            let init_fn: Symbol<InitFn> = match lib.get(b"cn_init") {
-                Ok(f) => f,
-                Err(e) => return Err(format!("无法获取库初始化函数: {}", e)),
-            };
-            
-            // 调用初始化函数获取函数映射
-            let functions_ptr = init_fn();
-            if functions_ptr.is_null() {
-                return Err("库初始化函数返回空指针".to_string());
-            }
-            
-            // 将原始指针转换为HashMap，然后包装为Arc
-            let boxed_functions = Box::from_raw(functions_ptr);
-            let functions = *boxed_functions; // 解引用Box<HashMap>为HashMap
-            
-            // 调试输出函数列表
-            debug_println(&format!("库 '{}' 中的函数:", lib_name));
-            for (func_name, _) in &functions {
-                debug_println(&format!("  - {}", func_name));
-            }
-            
-            let functions_arc = Arc::new(functions);
-            
-            // 将库添加到已加载库缓存
-            loaded_libs.insert(lib_name.to_string(), lib);
-            
-            Ok(functions_arc)
-        }
+
+        let functions_arc = Arc::new(functions);
+
+        // 将库添加到已加载库缓存
+        loaded_libs.insert(lib_name.to_string(), lib);
+
+        Ok(functions_arc)
     }
 }
 
