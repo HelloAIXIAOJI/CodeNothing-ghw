@@ -1,9 +1,10 @@
 use crate::ast::{Expression, BinaryOperator, CompareOperator, LogicalOperator, SwitchCase, CasePattern};
-use super::value::{Value, ObjectInstance, EnumInstance, PointerInstance, PointerType};
+use super::value::{Value, ObjectInstance, EnumInstance, PointerInstance, PointerType, FunctionPointerInstance};
 use super::memory_manager::{allocate_memory, read_memory, write_memory, is_valid_address, is_null_pointer, validate_pointer, is_dangling_pointer};
 use super::interpreter_core::{Interpreter, debug_println};
 use std::collections::HashMap;
 use super::function_calls::FunctionCallHandler;
+use super::statement_executor::StatementExecutor;
 use super::jit;
 
 pub trait ExpressionEvaluator {
@@ -98,17 +99,22 @@ impl<'a> ExpressionEvaluator for Interpreter<'a> {
                 if let Some(value) = self.constants.get(name) {
                     return value.clone();
                 }
-                
+
                 // 再检查局部变量
                 if let Some(value) = self.local_env.get(name) {
                     return value.clone();
                 }
-                
+
                 // 最后检查全局变量
                 if let Some(value) = self.global_env.get(name) {
                     return value.clone();
                 }
-                
+
+                // 检查是否是函数名，如果是则创建函数指针
+                if self.functions.contains_key(name) {
+                    return self.create_function_pointer(name);
+                }
+
                 // 如果都找不到，返回None
                 Value::None
             },
@@ -319,6 +325,15 @@ impl<'a> ExpressionEvaluator for Interpreter<'a> {
             },
             Expression::FunctionPointerCall(func_expr, args) => {
                 self.call_function_pointer(func_expr, args)
+            },
+            Expression::FunctionReference(func_name) => {
+                self.create_function_pointer(func_name)
+            },
+            Expression::LambdaFunction(params, return_type, body) => {
+                self.create_lambda_function_pointer(params, return_type, body)
+            },
+            Expression::None => {
+                Value::None
             },
             Expression::SwitchExpression(switch_expr, cases, default_expr) => {
                 let switch_value = self.evaluate_expression(switch_expr);
@@ -639,6 +654,10 @@ impl<'a> Interpreter<'a> {
             Value::Pointer(ptr) => {
                 // 指针值方法调用
                 self.handle_pointer_method(&ptr, method_name, &evaluated_args)
+            },
+            Value::FunctionPointer(func_ptr) => {
+                // 函数指针方法调用
+                self.handle_function_pointer_method(&func_ptr, method_name, &evaluated_args)
             },
             _ => {
                 // 不支持的对象类型
@@ -1448,6 +1467,48 @@ impl<'a> Interpreter<'a> {
         }
     }
 
+    fn handle_function_pointer_method(&self, func_ptr: &FunctionPointerInstance, method_name: &str, args: &[String]) -> Value {
+        match method_name {
+            "toString" => {
+                // 返回函数指针的字符串表示
+                if func_ptr.is_null {
+                    Value::String("null".to_string())
+                } else if func_ptr.is_lambda {
+                    Value::String("*fn(lambda)".to_string())
+                } else {
+                    Value::String(format!("*fn({})", func_ptr.function_name))
+                }
+            },
+            "getName" => {
+                // 返回函数名
+                if func_ptr.is_lambda {
+                    Value::String("lambda".to_string())
+                } else {
+                    Value::String(func_ptr.function_name.clone())
+                }
+            },
+            "getParamCount" => {
+                // 返回参数数量
+                Value::Int(func_ptr.param_types.len() as i32)
+            },
+            "getReturnType" => {
+                // 返回返回类型的字符串表示
+                Value::String(Value::type_to_string(&func_ptr.return_type))
+            },
+            "isNull" => {
+                // 返回是否为空
+                Value::Bool(func_ptr.is_null)
+            },
+            "isLambda" => {
+                // 返回是否为Lambda
+                Value::Bool(func_ptr.is_lambda)
+            },
+            _ => {
+                panic!("函数指针类型不支持方法: {}", method_name);
+            }
+        }
+    }
+
     // 指针操作方法
     fn create_pointer(&mut self, expr: &Expression) -> Value {
         debug_println("创建指针");
@@ -1579,19 +1640,153 @@ impl<'a> Interpreter<'a> {
         let func_val = self.evaluate_expression(func_expr);
 
         match func_val {
-            Value::Pointer(ptr) => {
-                if ptr.is_null {
+            Value::FunctionPointer(func_ptr) => {
+                if func_ptr.is_null {
                     panic!("尝试调用空函数指针");
                 }
 
-                // 这里需要实现函数指针的实际调用逻辑
-                // 暂时返回一个占位值
-                debug_println(&format!("调用函数指针，地址: 0x{:x}", ptr.address));
-                Value::Int(0) // 占位实现
+                // 求值参数
+                let mut evaluated_args = Vec::new();
+                for arg in args {
+                    evaluated_args.push(self.evaluate_expression(arg));
+                }
+
+                if func_ptr.is_lambda {
+                    // 调用Lambda函数
+                    self.call_lambda_function(&func_ptr, evaluated_args)
+                } else {
+                    // 调用普通函数
+                    self.call_named_function(&func_ptr.function_name, evaluated_args)
+                }
             },
             _ => {
                 panic!("尝试调用非函数指针: {:?}", func_val);
             }
+        }
+    }
+
+    // 创建函数指针
+    fn create_function_pointer(&mut self, func_name: &str) -> Value {
+        debug_println(&format!("创建函数指针: {}", func_name));
+
+        // 检查函数是否存在
+        if !self.functions.contains_key(func_name) {
+            panic!("函数 '{}' 不存在", func_name);
+        }
+
+        let function = &self.functions[func_name];
+
+        // 提取参数类型
+        let param_types: Vec<crate::ast::Type> = function.parameters.iter()
+            .map(|p| p.param_type.clone())
+            .collect();
+
+        let func_ptr = FunctionPointerInstance {
+            function_name: func_name.to_string(),
+            param_types,
+            return_type: Box::new(function.return_type.clone()),
+            is_null: false,
+            is_lambda: false,
+            lambda_body: None,
+        };
+
+        debug_println(&format!("创建函数指针成功: {}", func_name));
+        Value::FunctionPointer(func_ptr)
+    }
+
+    // 创建Lambda函数指针
+    fn create_lambda_function_pointer(&mut self, params: &[crate::ast::Parameter], return_type: &crate::ast::Type, body: &crate::ast::Statement) -> Value {
+        debug_println("创建Lambda函数指针");
+
+        // 提取参数类型
+        let param_types: Vec<crate::ast::Type> = params.iter()
+            .map(|p| p.param_type.clone())
+            .collect();
+
+        let func_ptr = FunctionPointerInstance {
+            function_name: "lambda".to_string(),
+            param_types,
+            return_type: Box::new(return_type.clone()),
+            is_null: false,
+            is_lambda: true,
+            lambda_body: Some(Box::new(body.clone())),
+        };
+
+        debug_println("创建Lambda函数指针成功");
+        Value::FunctionPointer(func_ptr)
+    }
+
+    // 调用Lambda函数
+    fn call_lambda_function(&mut self, func_ptr: &FunctionPointerInstance, args: Vec<Value>) -> Value {
+        debug_println("调用Lambda函数");
+
+        if let Some(_body) = &func_ptr.lambda_body {
+            // 暂时简化实现，返回占位值
+            debug_println("Lambda函数调用（简化实现）");
+            Value::Int(0) // 占位实现
+        } else {
+            panic!("Lambda函数体为空");
+        }
+    }
+
+    // 调用命名函数
+    fn call_named_function(&mut self, func_name: &str, args: Vec<Value>) -> Value {
+        debug_println(&format!("通过函数指针调用函数: {}", func_name));
+
+        // 检查函数是否存在
+        if !self.functions.contains_key(func_name) {
+            panic!("函数 '{}' 不存在", func_name);
+        }
+
+        let function = self.functions[func_name].clone();
+
+        // 检查参数数量
+        if args.len() != function.parameters.len() {
+            panic!("函数 '{}' 期望 {} 个参数，但得到 {} 个",
+                   func_name, function.parameters.len(), args.len());
+        }
+
+        // 保存当前局部环境
+        let saved_local_env = self.local_env.clone();
+
+        // 清空局部环境，为函数调用创建新的作用域
+        self.local_env.clear();
+
+        // 绑定参数
+        for (i, param) in function.parameters.iter().enumerate() {
+            if i < args.len() {
+                self.local_env.insert(param.name.clone(), args[i].clone());
+            }
+        }
+
+        // 执行函数体（简化实现）
+        let mut result = Value::None;
+
+        // 暂时简化：只处理简单的return语句
+        for statement in &function.body {
+            if let crate::ast::Statement::Return(expr) = statement {
+                result = self.evaluate_expression(expr);
+                break;
+            }
+            // 其他语句暂时跳过
+        }
+
+        // 恢复局部环境
+        self.local_env = saved_local_env;
+
+        // 如果没有显式返回值，根据返回类型返回默认值
+        if matches!(result, Value::None) {
+            match function.return_type {
+                crate::ast::Type::Int => Value::Int(0),
+                crate::ast::Type::Float => Value::Float(0.0),
+                crate::ast::Type::Bool => Value::Bool(false),
+                crate::ast::Type::String => Value::String("".to_string()),
+                crate::ast::Type::Long => Value::Long(0),
+                crate::ast::Type::Void => Value::None,
+                _ => Value::None,
+            }
+        } else {
+            result
         }
     }
 
