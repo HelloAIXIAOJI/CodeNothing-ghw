@@ -1,4 +1,4 @@
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Type {
     Int,
     Float,
@@ -15,7 +15,7 @@ pub enum Type {
     Enum(String), // 新增：枚举类型
     Pointer(Box<Type>), // 新增：指针类型 (*Type)
     OptionalPointer(Box<Type>), // 新增：可选指针类型 (?*Type)
-    FunctionPointer(Vec<Type>, Box<Type>), // 新增：函数指针类型 (*fn(args) -> ret)
+    FunctionPointer(Vec<Type>, Box<Type>), // 新增：函数指针类型 (*fn(args) : ret)
     // 未来可以扩展更多类型
 }
 
@@ -74,7 +74,12 @@ pub enum Expression {
     AddressOf(Box<Expression>), // 取地址操作 (&expression)
     Dereference(Box<Expression>), // 解引用操作 (*expression)
     PointerArithmetic(Box<Expression>, PointerArithmeticOp, Box<Expression>), // 指针算术
+
+    // 函数指针相关表达式
     FunctionPointerCall(Box<Expression>, Vec<Expression>), // 函数指针调用
+    FunctionReference(String), // 函数引用 (函数名)
+    LambdaFunction(Vec<Parameter>, Box<Type>, Box<Statement>), // Lambda函数表达式
+    None, // 空表达式（用于未初始化的变量）
     // 未来可以扩展更多表达式类型
 }
 
