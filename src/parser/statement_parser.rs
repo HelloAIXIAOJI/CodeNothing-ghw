@@ -176,11 +176,19 @@ impl<'a> StatementParser for ParserBase<'a> {
                         // 使用parse_type方法解析类型（支持指针类型）
                         let var_type = self.parse_type()?;
 
-                        // 类型已经通过parse_type解析完成，直接使用
-                        self.expect("=")?;
-                        let init_expr = self.parse_expression()?;
-                        self.expect(";")?;
-                        Ok(Statement::VariableDeclaration(var_name, var_type, init_expr))
+                        // 检查是否有初始值
+                        if self.peek() == Some(&"=".to_string()) {
+                            // 有初始值
+                            self.consume(); // 消费 "="
+                            let init_expr = self.parse_expression()?;
+                            self.expect(";")?;
+                            Ok(Statement::VariableDeclaration(var_name, var_type, init_expr))
+                        } else {
+                            // 没有初始值，只是类型声明
+                            self.expect(";")?;
+                            let default_expr = Expression::None;
+                            Ok(Statement::VariableDeclaration(var_name, var_type, default_expr))
+                        }
                     } else if next_token == "=" {
                         // 变量赋值
                         self.consume(); // 消费 "="
@@ -376,23 +384,34 @@ impl<'a> StatementParser for ParserBase<'a> {
     fn parse_variable_declaration(&mut self) -> Result<Statement, String> {
         // 获取变量名
         let var_name = self.consume().ok_or_else(|| "期望变量名".to_string())?;
-        
+
         // 期望类型声明
         self.expect(":")?;
-        
+
         // 解析类型
         let var_type = self.parse_type()?;
-        
-        // 期望赋值符号
-        self.expect("=")?;
-        
-        // 解析初始值表达式
-        let init_expr = self.parse_expression()?;
-        
-        // 期望分号
-        self.expect(";")?;
-        
-        Ok(Statement::VariableDeclaration(var_name, var_type, init_expr))
+
+        // 检查是否有初始值
+        if self.peek() == Some(&"=".to_string()) {
+            // 有初始值
+            self.consume(); // 消费 "="
+
+            // 解析初始值表达式
+            let init_expr = self.parse_expression()?;
+
+            // 期望分号
+            self.expect(";")?;
+
+            Ok(Statement::VariableDeclaration(var_name, var_type, init_expr))
+        } else {
+            // 没有初始值，只是类型声明
+            self.expect(";")?;
+
+            // 创建一个默认的None表达式作为占位符
+            let default_expr = Expression::None;
+
+            Ok(Statement::VariableDeclaration(var_name, var_type, default_expr))
+        }
     }
     
     fn parse_if_statement(&mut self) -> Result<Statement, String> {
