@@ -715,6 +715,75 @@ impl<'a> ExpressionParser for ParserBase<'a> {
                     self.consume();
                     Ok(Type::Auto)
                 },
+                "*" => {
+                    // 指针类型或函数指针类型
+                    self.consume(); // 消费 "*"
+
+                    if self.peek() == Some(&"fn".to_string()) {
+                        // 函数指针类型: *fn(int, int) : int
+                        self.consume(); // 消费 "fn"
+                        self.expect("(")?;
+
+                        let mut param_types = Vec::new();
+                        if self.peek() != Some(&")".to_string()) {
+                            loop {
+                                param_types.push(self.parse_expression_type()?);
+                                if self.peek() != Some(&",".to_string()) {
+                                    break;
+                                }
+                                self.consume(); // 消费 ","
+                            }
+                        }
+
+                        self.expect(")")?;
+                        self.expect(":")?; // 使用冒号而不是箭头
+                        let return_type = Box::new(self.parse_expression_type()?);
+
+                        Ok(Type::FunctionPointer(param_types, return_type))
+                    } else {
+                        // 普通指针类型: *int, *string 等
+                        let target_type = Box::new(self.parse_expression_type()?);
+                        Ok(Type::Pointer(target_type))
+                    }
+                },
+                "?" => {
+                    // 可选指针类型: ?*int 或 ?*fn(...)
+                    self.consume(); // 消费 "?"
+
+                    if self.peek() == Some(&"*".to_string()) {
+                        self.consume(); // 消费 "*"
+
+                        if self.peek() == Some(&"fn".to_string()) {
+                            // 可选函数指针类型: ?*fn(int, int) : int
+                            self.consume(); // 消费 "fn"
+                            self.expect("(")?;
+
+                            let mut param_types = Vec::new();
+                            if self.peek() != Some(&")".to_string()) {
+                                loop {
+                                    param_types.push(self.parse_expression_type()?);
+                                    if self.peek() != Some(&",".to_string()) {
+                                        break;
+                                    }
+                                    self.consume(); // 消费 ","
+                                }
+                            }
+
+                            self.expect(")")?;
+                            self.expect(":")?;
+                            let return_type = Box::new(self.parse_expression_type()?);
+
+                            let func_ptr_type = Type::FunctionPointer(param_types, return_type);
+                            Ok(Type::OptionalPointer(Box::new(func_ptr_type)))
+                        } else {
+                            // 普通可选指针类型: ?*int
+                            let target_type = Box::new(self.parse_expression_type()?);
+                            Ok(Type::OptionalPointer(target_type))
+                        }
+                    } else {
+                        Err("期望 '*' 在 '?' 之后".to_string())
+                    }
+                },
                 "fn" => {
                     // 函数类型: fn(int, string) -> bool
                     self.consume(); // 消费 "fn"
