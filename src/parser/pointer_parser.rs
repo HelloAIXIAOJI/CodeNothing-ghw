@@ -103,12 +103,12 @@ impl<'a> PointerParser for ParserBase<'a> {
         }
 
         self.expect(")")?;
-        self.expect("->")?;
+        self.expect(":")?;  // 使用冒号而不是箭头
 
         // 解析返回类型
         let return_type = self.parse_base_type()?;
 
-        debug_println(&format!("解析函数指针类型: fn({:?}) -> {:?}", param_types, return_type));
+        debug_println(&format!("解析函数指针类型: fn({:?}) : {:?}", param_types, return_type));
         Ok(Type::FunctionPointer(param_types, Box::new(return_type)))
     }
 
