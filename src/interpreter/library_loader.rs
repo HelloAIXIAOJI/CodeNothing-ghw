@@ -313,6 +313,15 @@ pub fn convert_value_to_string_arg(value: &Value) -> String {
                 format!("*{:p}", ptr.address as *const usize)
             }
         },
+        Value::FunctionPointer(func_ptr) => {
+            if func_ptr.is_null {
+                "null".to_string()
+            } else if func_ptr.is_lambda {
+                "*fn(lambda)".to_string()
+            } else {
+                format!("*fn({})", func_ptr.function_name)
+            }
+        },
         Value::None => "null".to_string(),
     }
 }
