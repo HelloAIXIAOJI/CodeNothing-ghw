@@ -54,6 +54,23 @@ impl<'a> StatementExecutor for Interpreter<'a> {
                             self.pointer_target_type_matches(expected_target, &ptr.target_type)
                         },
                         (Type::OptionalPointer(_), Value::None) => true, // 可选指针可以为null
+                        (Type::FunctionPointer(expected_params, expected_return), Value::FunctionPointer(func_ptr)) => {
+                            // 检查函数指针的参数和返回类型是否匹配
+                            if func_ptr.param_types.len() != expected_params.len() {
+                                false
+                            } else {
+                                // 检查参数类型
+                                let params_match = func_ptr.param_types.iter()
+                                    .zip(expected_params.iter())
+                                    .all(|(actual, expected)| actual == expected);
+
+                                // 检查返回类型
+                                let return_match = &*func_ptr.return_type == expected_return.as_ref();
+
+                                params_match && return_match
+                            }
+                        },
+                        (Type::FunctionPointer(_, _), Value::None) => true, // 未初始化的函数指针
                         _ => false
                     };
                     
@@ -140,6 +157,23 @@ impl<'a> StatementExecutor for Interpreter<'a> {
                                 self.pointer_target_type_matches(expected_target, &ptr.target_type)
                             },
                             (Type::OptionalPointer(_), Value::None) => true,
+                            // 函数指针类型匹配（第二个检查点）
+                            (Type::FunctionPointer(expected_params, expected_return), Value::FunctionPointer(func_ptr)) => {
+                                // 检查函数指针的参数和返回类型是否匹配
+                                if func_ptr.param_types.len() != expected_params.len() {
+                                    false
+                                } else {
+                                    // 检查参数类型
+                                    let params_match = func_ptr.param_types.iter()
+                                        .zip(expected_params.iter())
+                                        .all(|(actual, expected)| actual == expected);
+
+                                    // 检查返回类型
+                                    let return_match = &*func_ptr.return_type == expected_return.as_ref();
+
+                                    params_match && return_match
+                                }
+                            },
                             _ => false
                         };
                         
