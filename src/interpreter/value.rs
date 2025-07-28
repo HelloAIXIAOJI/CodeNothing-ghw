@@ -18,6 +18,7 @@ pub enum Value {
     FunctionReference(String), // 函数引用
     EnumValue(EnumInstance), // 新增：枚举实例
     Pointer(PointerInstance), // 新增：指针实例
+    FunctionPointer(FunctionPointerInstance), // 新增：函数指针实例
     None, // 表示空值或未定义的值
 }
 
@@ -62,6 +63,17 @@ pub enum PointerType {
     Class(String),
     Function(Vec<crate::ast::Type>, Box<crate::ast::Type>), // 函数指针
     Pointer(Box<PointerType>), // 多级指针
+}
+
+// 函数指针实例
+#[derive(Debug, Clone)]
+pub struct FunctionPointerInstance {
+    pub function_name: String, // 函数名
+    pub param_types: Vec<crate::ast::Type>, // 参数类型
+    pub return_type: Box<crate::ast::Type>, // 返回类型
+    pub is_null: bool, // 是否为空
+    pub is_lambda: bool, // 是否为Lambda表达式
+    pub lambda_body: Option<Box<crate::ast::Statement>>, // Lambda函数体
 }
 
 impl Value {
@@ -112,6 +124,15 @@ impl Value {
                 } else {
                     let stars = "*".repeat(ptr.level);
                     format!("{}0x{:x}", stars, ptr.address)
+                }
+            },
+            Value::FunctionPointer(func_ptr) => {
+                if func_ptr.is_null {
+                    "null".to_string()
+                } else if func_ptr.is_lambda {
+                    format!("*fn(lambda) : {}", Value::type_to_string(&func_ptr.return_type))
+                } else {
+                    format!("*fn({}) : {}", func_ptr.function_name, Value::type_to_string(&func_ptr.return_type))
                 }
             },
             Value::Lambda(params, _) => {
@@ -190,7 +211,39 @@ impl fmt::Display for Value {
                     write!(f, ")")
                 }
             },
+            Value::FunctionPointer(func_ptr) => {
+                if func_ptr.is_null {
+                    write!(f, "null")
+                } else if func_ptr.is_lambda {
+                    write!(f, "*fn(lambda)")
+                } else {
+                    write!(f, "*fn({})", func_ptr.function_name)
+                }
+            },
             Value::None => write!(f, "null"),
         }
     }
-} 
+}
+
+impl Value {
+    // 辅助方法：将类型转换为字符串
+    pub fn type_to_string(type_ref: &crate::ast::Type) -> String {
+        match type_ref {
+            crate::ast::Type::Int => "int".to_string(),
+            crate::ast::Type::Float => "float".to_string(),
+            crate::ast::Type::Bool => "bool".to_string(),
+            crate::ast::Type::String => "string".to_string(),
+            crate::ast::Type::Long => "long".to_string(),
+            crate::ast::Type::Void => "void".to_string(),
+            crate::ast::Type::Class(name) => name.clone(),
+            crate::ast::Type::Array(inner) => format!("[]{}", Self::type_to_string(inner)),
+            crate::ast::Type::Pointer(inner) => format!("*{}", Self::type_to_string(inner)),
+            crate::ast::Type::OptionalPointer(inner) => format!("?*{}", Self::type_to_string(inner)),
+            crate::ast::Type::FunctionPointer(params, ret) => {
+                let param_strs: Vec<String> = params.iter().map(|p| Self::type_to_string(p)).collect();
+                format!("*fn({}) : {}", param_strs.join(", "), Self::type_to_string(ret))
+            },
+            _ => "unknown".to_string(),
+        }
+    }
+}
