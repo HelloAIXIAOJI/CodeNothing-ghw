@@ -285,6 +285,15 @@ impl<'a> FunctionCallHandler for Interpreter<'a> {
             }
             
             if !found {
+                // 检查是否是函数指针变量
+                if let Some(var_value) = self.local_env.get(name).or_else(|| self.global_env.get(name)) {
+                    if let Value::FunctionPointer(func_ptr) = var_value {
+                        // 这是函数指针调用
+                        debug_println(&format!("检测到函数指针调用: {}", name));
+                        let func_ptr_clone = func_ptr.clone();
+                        return self.call_function_pointer_impl(&func_ptr_clone, arg_values);
+                    }
+                }
                 panic!("未定义的函数: {}", name);
             }
             
@@ -292,6 +301,7 @@ impl<'a> FunctionCallHandler for Interpreter<'a> {
             unreachable!();
         }
     }
+
 
     fn handle_namespaced_function_call(&mut self, path: &[String], args: &[Expression]) -> Value {
         // 构建完整的函数路径
@@ -584,4 +594,85 @@ impl<'a> FunctionCallHandler for Interpreter<'a> {
             }
         }
     }
-} 
+
+}
+
+// 函数指针调用的辅助方法
+impl<'a> Interpreter<'a> {
+    fn call_function_pointer_impl(&mut self, func_ptr: &super::value::FunctionPointerInstance, args: Vec<Value>) -> Value {
+        debug_println(&format!("调用函数指针: {}", func_ptr.function_name));
+
+        if func_ptr.is_null {
+            panic!("尝试调用空函数指针");
+        }
+
+        if func_ptr.is_lambda {
+            // 调用Lambda函数（暂时简化）
+            debug_println("调用Lambda函数（简化实现）");
+            Value::Int(0) // 占位实现
+        } else {
+            // 调用普通函数
+            self.call_named_function_impl(&func_ptr.function_name, args)
+        }
+    }
+
+    fn call_named_function_impl(&mut self, func_name: &str, args: Vec<Value>) -> Value {
+        debug_println(&format!("通过函数指针调用函数: {}", func_name));
+
+        // 检查函数是否存在
+        if !self.functions.contains_key(func_name) {
+            panic!("函数 '{}' 不存在", func_name);
+        }
+
+        let function = self.functions[func_name].clone();
+
+        // 检查参数数量
+        if args.len() != function.parameters.len() {
+            panic!("函数 '{}' 期望 {} 个参数，但得到 {} 个",
+                   func_name, function.parameters.len(), args.len());
+        }
+
+        // 保存当前局部环境
+        let saved_local_env = self.local_env.clone();
+
+        // 清空局部环境，为函数调用创建新的作用域
+        self.local_env.clear();
+
+        // 绑定参数
+        for (i, param) in function.parameters.iter().enumerate() {
+            if i < args.len() {
+                self.local_env.insert(param.name.clone(), args[i].clone());
+            }
+        }
+
+        // 执行函数体（简化实现）
+        let mut result = Value::None;
+
+        // 暂时简化：只处理简单的return语句
+        for statement in &function.body {
+            if let crate::ast::Statement::Return(expr) = statement {
+                result = self.evaluate_expression(expr);
+                break;
+            }
+            // 其他语句暂时跳过
+        }
+
+        // 恢复局部环境
+        self.local_env = saved_local_env;
+
+        // 如果没有显式返回值，根据返回类型返回默认值
+        if matches!(result, Value::None) {
+            match function.return_type {
+                crate::ast::Type::Int => Value::Int(0),
+                crate::ast::Type::Float => Value::Float(0.0),
+                crate::ast::Type::Bool => Value::Bool(false),
+                crate::ast::Type::String => Value::String("".to_string()),
+                crate::ast::Type::Long => Value::Long(0),
+                crate::ast::Type::Void => Value::None,
+                _ => Value::None,
+            }
+        } else {
+            result
+        }
+    }
+}
