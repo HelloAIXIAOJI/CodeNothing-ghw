@@ -501,7 +501,7 @@ impl<'a> StatementParser for ParserBase<'a> {
     }
     
     fn parse_type(&mut self) -> Result<Type, String> {
-        // 首先检查是否是指针类型
+        // 首先检查是否是指针类型或数组类型
         if let Some(token) = self.peek() {
             if token == "?" && self.peek_ahead(1) == Some(&"*".to_string()) {
                 // 可选指针类型 ?*Type
@@ -509,6 +509,47 @@ impl<'a> StatementParser for ParserBase<'a> {
             } else if token == "*" {
                 // 普通指针类型 *Type
                 return self.parse_pointer_type();
+            } else if token == "[" {
+                // 数组类型或函数指针数组类型: []int 或 []*fn(int, int) : int
+                self.consume(); // 消费 "["
+                self.expect("]")?; // 期望 "]"
+
+                if self.peek() == Some(&"*".to_string()) {
+                    self.consume(); // 消费 "*"
+
+                    if self.peek() == Some(&"fn".to_string()) {
+                        // 函数指针数组类型: []*fn(int, int) : int
+                        self.consume(); // 消费 "fn"
+                        self.expect("(")?;
+
+                        let mut param_types = Vec::new();
+                        if self.peek() != Some(&")".to_string()) {
+                            loop {
+                                param_types.push(self.parse_type()?);
+                                if self.peek() != Some(&",".to_string()) {
+                                    break;
+                                }
+                                self.consume(); // 消费 ","
+                            }
+                        }
+
+                        self.expect(")")?;
+                        self.expect(":")?;
+                        let return_type = Box::new(self.parse_type()?);
+
+                        let func_ptr_type = Type::FunctionPointer(param_types, return_type);
+                        return Ok(Type::Array(Box::new(func_ptr_type)));
+                    } else {
+                        // 指针数组类型: []*int
+                        let target_type = Box::new(self.parse_type()?);
+                        let ptr_type = Type::Pointer(target_type);
+                        return Ok(Type::Array(Box::new(ptr_type)));
+                    }
+                } else {
+                    // 普通数组类型: []int
+                    let element_type = Box::new(self.parse_type()?);
+                    return Ok(Type::Array(element_type));
+                }
             }
         }
 
