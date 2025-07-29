@@ -322,6 +322,13 @@ pub fn convert_value_to_string_arg(value: &Value) -> String {
                 format!("*fn({})", func_ptr.function_name)
             }
         },
+        Value::LambdaFunctionPointer(lambda_ptr) => {
+            if lambda_ptr.is_null {
+                "null".to_string()
+            } else {
+                "*fn(lambda)".to_string()
+            }
+        },
         Value::None => "null".to_string(),
     }
 }
