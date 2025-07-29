@@ -70,6 +70,28 @@ impl<'a> StatementExecutor for Interpreter<'a> {
                                 params_match && return_match
                             }
                         },
+                        (Type::FunctionPointer(expected_params, expected_return), Value::LambdaFunctionPointer(lambda_ptr)) => {
+                            // 检查Lambda函数指针的参数和返回类型是否匹配
+                            if lambda_ptr.param_types.len() != expected_params.len() {
+                                false
+                            } else {
+                                // 对于Lambda，允许Auto类型匹配任何类型
+                                let params_match = lambda_ptr.param_types.iter()
+                                    .zip(expected_params.iter())
+                                    .all(|(actual, expected)| {
+                                        actual == expected ||
+                                        *actual == crate::ast::Type::Auto ||
+                                        *expected == crate::ast::Type::Auto
+                                    });
+
+                                // 检查返回类型（允许Auto匹配）
+                                let return_match = &*lambda_ptr.return_type == expected_return.as_ref() ||
+                                                   *lambda_ptr.return_type == crate::ast::Type::Auto ||
+                                                   **expected_return == crate::ast::Type::Auto;
+
+                                params_match && return_match
+                            }
+                        },
                         (Type::FunctionPointer(_, _), Value::None) => true, // 未初始化的函数指针
                         _ => false
                     };
@@ -170,6 +192,28 @@ impl<'a> StatementExecutor for Interpreter<'a> {
 
                                     // 检查返回类型
                                     let return_match = &*func_ptr.return_type == expected_return.as_ref();
+
+                                    params_match && return_match
+                                }
+                            },
+                            (Type::FunctionPointer(expected_params, expected_return), Value::LambdaFunctionPointer(lambda_ptr)) => {
+                                // 检查Lambda函数指针的参数和返回类型是否匹配
+                                if lambda_ptr.param_types.len() != expected_params.len() {
+                                    false
+                                } else {
+                                    // 对于Lambda，允许Auto类型匹配任何类型
+                                    let params_match = lambda_ptr.param_types.iter()
+                                        .zip(expected_params.iter())
+                                        .all(|(actual, expected)| {
+                                            actual == expected ||
+                                            *actual == crate::ast::Type::Auto ||
+                                            *expected == crate::ast::Type::Auto
+                                        });
+
+                                    // 检查返回类型（允许Auto匹配）
+                                    let return_match = &*lambda_ptr.return_type == expected_return.as_ref() ||
+                                                       *lambda_ptr.return_type == crate::ast::Type::Auto ||
+                                                       **expected_return == crate::ast::Type::Auto;
 
                                     params_match && return_match
                                 }
