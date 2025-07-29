@@ -608,7 +608,7 @@ impl<'a> FunctionCallHandler for Interpreter<'a> {
 
 // 函数指针调用的辅助方法
 impl<'a> Interpreter<'a> {
-    fn call_function_pointer_impl(&mut self, func_ptr: &super::value::FunctionPointerInstance, args: Vec<Value>) -> Value {
+    pub fn call_function_pointer_impl(&mut self, func_ptr: &super::value::FunctionPointerInstance, args: Vec<Value>) -> Value {
         debug_println(&format!("调用函数指针: {}", func_ptr.function_name));
 
         if func_ptr.is_null {
@@ -768,7 +768,7 @@ impl<'a> Interpreter<'a> {
         }
     }
 
-    fn call_lambda_function_pointer_impl(&mut self, lambda_ptr: &super::value::LambdaFunctionPointerInstance, args: Vec<Value>) -> Value {
+    pub fn call_lambda_function_pointer_impl(&mut self, lambda_ptr: &super::value::LambdaFunctionPointerInstance, args: Vec<Value>) -> Value {
         debug_println(&format!("调用Lambda函数指针: {}", lambda_ptr.function_name));
 
         if lambda_ptr.is_null {
@@ -785,10 +785,16 @@ impl<'a> Interpreter<'a> {
             // 保存当前局部环境
             let saved_local_env = self.local_env.clone();
 
-            // 创建Lambda执行环境
+            // 创建Lambda执行环境，包含闭包环境
             let mut lambda_env = HashMap::new();
 
-            // 绑定参数（使用实际的参数名）
+            // 首先添加闭包环境中的变量
+            for (var_name, var_value) in &lambda_ptr.closure_env {
+                lambda_env.insert(var_name.clone(), var_value.clone());
+                debug_println(&format!("闭包变量: {} = {:?}", var_name, var_value));
+            }
+
+            // 然后绑定参数（参数会覆盖同名的闭包变量）
             for (param, arg) in lambda_ptr.lambda_params.iter().zip(args.iter()) {
                 lambda_env.insert(param.name.clone(), arg.clone());
                 debug_println(&format!("绑定参数: {} = {:?}", param.name, arg));
