@@ -28,8 +28,10 @@ pub enum Expression {
     RawStringLiteral(String), // 新增：原始字符串字面量
     LongLiteral(i64),
     ArrayLiteral(Vec<Expression>),
+    ArrayAccess(Box<Expression>, Box<Expression>), // 数组索引访问 array[index]
     MapLiteral(Vec<(Expression, Expression)>),
     FunctionCall(String, Vec<Expression>),
+    FunctionPointerCall(Box<Expression>, Vec<Expression>), // 函数指针调用 func_ptr(args)
     NamespacedFunctionCall(Vec<String>, Vec<Expression>), // 命名空间函数调用
     GlobalFunctionCall(String, Vec<Expression>), // 全局函数明确调用 (::func)
     LibraryFunctionCall(String, String, Vec<Expression>), // 库函数调用 (lib::func)
@@ -76,7 +78,6 @@ pub enum Expression {
     PointerArithmetic(Box<Expression>, PointerArithmeticOp, Box<Expression>), // 指针算术
 
     // 函数指针相关表达式
-    FunctionPointerCall(Box<Expression>, Vec<Expression>), // 函数指针调用
     FunctionReference(String), // 函数引用 (函数名)
     LambdaFunction(Vec<Parameter>, Box<Type>, Box<Statement>), // Lambda函数表达式
     None, // 空表达式（用于未初始化的变量）
