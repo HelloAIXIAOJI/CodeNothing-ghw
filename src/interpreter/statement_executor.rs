@@ -93,6 +93,17 @@ impl<'a> StatementExecutor for Interpreter<'a> {
                             }
                         },
                         (Type::FunctionPointer(_, _), Value::None) => true, // 未初始化的函数指针
+                        (Type::Array(expected_element_type), Value::Array(arr)) => {
+                            // 检查数组元素类型是否匹配
+                            if arr.is_empty() {
+                                true // 空数组可以匹配任何数组类型
+                            } else {
+                                // 检查所有元素是否匹配期望的元素类型
+                                arr.iter().all(|element| {
+                                    self.value_matches_type(element, expected_element_type)
+                                })
+                            }
+                        },
                         _ => false
                     };
                     
@@ -216,6 +227,17 @@ impl<'a> StatementExecutor for Interpreter<'a> {
                                                        **expected_return == crate::ast::Type::Auto;
 
                                     params_match && return_match
+                                }
+                            },
+                            (Type::Array(expected_element_type), Value::Array(arr)) => {
+                                // 检查数组元素类型是否匹配
+                                if arr.is_empty() {
+                                    true // 空数组可以匹配任何数组类型
+                                } else {
+                                    // 检查所有元素是否匹配期望的元素类型
+                                    arr.iter().all(|element| {
+                                        self.value_matches_type(element, expected_element_type)
+                                    })
                                 }
                             },
                             _ => false
@@ -596,6 +618,53 @@ impl<'a> Interpreter<'a> {
                 self.pointer_target_type_matches(expected_inner, actual_inner)
             },
             _ => false,
+        }
+    }
+
+    // 辅助方法：检查值是否匹配指定类型
+    fn value_matches_type(&self, value: &Value, expected_type: &Type) -> bool {
+        match (expected_type, value) {
+            (Type::Int, Value::Int(_)) => true,
+            (Type::Float, Value::Float(_)) => true,
+            (Type::Bool, Value::Bool(_)) => true,
+            (Type::String, Value::String(_)) => true,
+            (Type::Long, Value::Long(_)) => true,
+            (Type::Array(expected_element_type), Value::Array(arr)) => {
+                if arr.is_empty() {
+                    true
+                } else {
+                    arr.iter().all(|element| self.value_matches_type(element, expected_element_type))
+                }
+            },
+            (Type::FunctionPointer(expected_params, expected_return), Value::FunctionPointer(func_ptr)) => {
+                if func_ptr.param_types.len() != expected_params.len() {
+                    false
+                } else {
+                    let params_match = func_ptr.param_types.iter()
+                        .zip(expected_params.iter())
+                        .all(|(actual, expected)| actual == expected);
+                    let return_match = &*func_ptr.return_type == expected_return.as_ref();
+                    params_match && return_match
+                }
+            },
+            (Type::FunctionPointer(expected_params, expected_return), Value::LambdaFunctionPointer(lambda_ptr)) => {
+                if lambda_ptr.param_types.len() != expected_params.len() {
+                    false
+                } else {
+                    let params_match = lambda_ptr.param_types.iter()
+                        .zip(expected_params.iter())
+                        .all(|(actual, expected)| {
+                            actual == expected ||
+                            *actual == crate::ast::Type::Auto ||
+                            *expected == crate::ast::Type::Auto
+                        });
+                    let return_match = &*lambda_ptr.return_type == expected_return.as_ref() ||
+                                       *lambda_ptr.return_type == crate::ast::Type::Auto ||
+                                       **expected_return == crate::ast::Type::Auto;
+                    params_match && return_match
+                }
+            },
+            _ => false
         }
     }
 }
