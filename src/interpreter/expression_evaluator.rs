@@ -1,5 +1,5 @@
 use crate::ast::{Expression, BinaryOperator, CompareOperator, LogicalOperator, SwitchCase, CasePattern};
-use super::value::{Value, ObjectInstance, EnumInstance, PointerInstance, PointerType, FunctionPointerInstance};
+use super::value::{Value, ObjectInstance, EnumInstance, PointerInstance, PointerType, FunctionPointerInstance, LambdaFunctionPointerInstance};
 use super::memory_manager::{allocate_memory, read_memory, write_memory, is_valid_address, is_null_pointer, validate_pointer, is_dangling_pointer};
 use super::interpreter_core::{Interpreter, debug_println};
 use std::collections::HashMap;
@@ -263,12 +263,12 @@ impl<'a> ExpressionEvaluator for Interpreter<'a> {
             },
             // Lambda表达式和函数式编程
             Expression::Lambda(params, body) => {
-                // 创建Lambda函数值
-                Value::Lambda(params.clone(), body.as_ref().clone())
+                // 创建Lambda函数指针
+                self.create_lambda_expression_pointer(params, body)
             },
             Expression::LambdaBlock(params, statements) => {
-                // 创建Lambda块函数值
-                Value::LambdaBlock(params.clone(), statements.clone())
+                // 创建Lambda块函数指针
+                self.create_lambda_block_pointer(params, statements)
             },
             Expression::FunctionValue(func_name) => {
                 // 函数值引用
@@ -658,6 +658,10 @@ impl<'a> Interpreter<'a> {
             Value::FunctionPointer(func_ptr) => {
                 // 函数指针方法调用
                 self.handle_function_pointer_method(&func_ptr, method_name, &evaluated_args)
+            },
+            Value::LambdaFunctionPointer(lambda_ptr) => {
+                // Lambda函数指针方法调用
+                self.handle_lambda_function_pointer_method(&lambda_ptr, method_name, &evaluated_args)
             },
             _ => {
                 // 不支持的对象类型
@@ -1509,6 +1513,52 @@ impl<'a> Interpreter<'a> {
         }
     }
 
+    fn handle_lambda_function_pointer_method(&self, lambda_ptr: &LambdaFunctionPointerInstance, method_name: &str, args: &[String]) -> Value {
+        match method_name {
+            "toString" => {
+                // 返回Lambda函数指针的字符串表示
+                if lambda_ptr.is_null {
+                    Value::String("null".to_string())
+                } else {
+                    let param_strs: Vec<String> = lambda_ptr.param_types.iter()
+                        .map(|t| Value::type_to_string(t))
+                        .collect();
+                    Value::String(format!("*fn({}) : {}", param_strs.join(", "), Value::type_to_string(&lambda_ptr.return_type)))
+                }
+            },
+            "getName" => {
+                // 返回函数名
+                Value::String("lambda".to_string())
+            },
+            "getParamCount" => {
+                // 返回参数数量
+                Value::Int(lambda_ptr.param_types.len() as i32)
+            },
+            "getReturnType" => {
+                // 返回返回类型的字符串表示
+                Value::String(Value::type_to_string(&lambda_ptr.return_type))
+            },
+            "isNull" => {
+                // 返回是否为空
+                Value::Bool(lambda_ptr.is_null)
+            },
+            "isLambda" => {
+                // 返回是否为Lambda
+                Value::Bool(true) // Lambda函数指针总是Lambda
+            },
+            "getParamNames" => {
+                // 返回参数名列表（Lambda特有的方法）
+                let param_names: Vec<String> = lambda_ptr.lambda_params.iter()
+                    .map(|p| p.name.clone())
+                    .collect();
+                Value::String(format!("[{}]", param_names.join(", ")))
+            },
+            _ => {
+                panic!("Lambda函数指针类型不支持方法: {}", method_name);
+            }
+        }
+    }
+
     // 指针操作方法
     fn create_pointer(&mut self, expr: &Expression) -> Value {
         debug_println("创建指针");
@@ -1659,6 +1709,20 @@ impl<'a> Interpreter<'a> {
                     self.call_named_function(&func_ptr.function_name, evaluated_args)
                 }
             },
+            Value::LambdaFunctionPointer(lambda_ptr) => {
+                if lambda_ptr.is_null {
+                    panic!("尝试调用空Lambda函数指针");
+                }
+
+                // 求值参数
+                let mut evaluated_args = Vec::new();
+                for arg in args {
+                    evaluated_args.push(self.evaluate_expression(arg));
+                }
+
+                // 调用Lambda函数
+                self.call_lambda_function_with_params(&lambda_ptr, evaluated_args)
+            },
             _ => {
                 panic!("尝试调用非函数指针: {:?}", func_val);
             }
@@ -1720,10 +1784,157 @@ impl<'a> Interpreter<'a> {
     fn call_lambda_function(&mut self, func_ptr: &FunctionPointerInstance, args: Vec<Value>) -> Value {
         debug_println("调用Lambda函数");
 
-        if let Some(_body) = &func_ptr.lambda_body {
-            // 暂时简化实现，返回占位值
-            debug_println("Lambda函数调用（简化实现）");
-            Value::Int(0) // 占位实现
+        if let Some(body) = &func_ptr.lambda_body {
+            // 保存当前局部环境
+            let saved_local_env = self.local_env.clone();
+
+            // 创建Lambda执行环境
+            let mut lambda_env = HashMap::new();
+
+            // 绑定参数
+            for (i, arg) in args.iter().enumerate() {
+                if i < func_ptr.param_types.len() {
+                    let param_name = format!("param_{}", i); // 简化的参数名
+                    lambda_env.insert(param_name, arg.clone());
+                }
+            }
+
+            // 设置Lambda环境
+            self.local_env.extend(lambda_env);
+
+            // 执行Lambda体
+            let result = match body.as_ref() {
+                crate::ast::Statement::Return(expr) => {
+                    self.evaluate_expression(expr)
+                },
+                crate::ast::Statement::FunctionCallStatement(expr) => {
+                    self.evaluate_expression(expr)
+                },
+                _ => {
+                    // 对于其他类型的语句，暂时返回None
+                    Value::None
+                }
+            };
+
+            // 恢复环境
+            self.local_env = saved_local_env;
+
+            result
+        } else {
+            panic!("Lambda函数体为空");
+        }
+    }
+
+    // 创建Lambda表达式函数指针
+    fn create_lambda_expression_pointer(&mut self, params: &[crate::ast::Parameter], body: &crate::ast::Expression) -> Value {
+        debug_println("创建Lambda表达式函数指针");
+
+        // 提取参数类型
+        let param_types: Vec<crate::ast::Type> = params.iter()
+            .map(|p| p.param_type.clone())
+            .collect();
+
+        // 推断返回类型（简化实现，使用Auto）
+        let return_type = crate::ast::Type::Auto;
+
+        // 将表达式包装为Return语句
+        let lambda_body = crate::ast::Statement::Return(body.clone());
+
+        // 创建扩展的函数指针实例，包含参数信息
+        let func_ptr = LambdaFunctionPointerInstance {
+            function_name: "lambda".to_string(),
+            param_types,
+            return_type: Box::new(return_type),
+            is_null: false,
+            is_lambda: true,
+            lambda_body: Some(Box::new(lambda_body)),
+            lambda_params: params.to_vec(), // 保存完整的参数信息
+        };
+
+        debug_println("创建Lambda表达式函数指针成功");
+        Value::LambdaFunctionPointer(func_ptr)
+    }
+
+    // 创建Lambda块函数指针
+    fn create_lambda_block_pointer(&mut self, params: &[crate::ast::Parameter], statements: &[crate::ast::Statement]) -> Value {
+        debug_println("创建Lambda块函数指针");
+
+        // 提取参数类型
+        let param_types: Vec<crate::ast::Type> = params.iter()
+            .map(|p| p.param_type.clone())
+            .collect();
+
+        // 推断返回类型（简化实现，使用Auto）
+        let return_type = crate::ast::Type::Auto;
+
+        // 暂时简化：只支持单个return语句的Lambda块
+        let lambda_body = if let Some(first_stmt) = statements.first() {
+            first_stmt.clone()
+        } else {
+            crate::ast::Statement::Return(crate::ast::Expression::None)
+        };
+
+        let func_ptr = LambdaFunctionPointerInstance {
+            function_name: "lambda".to_string(),
+            param_types,
+            return_type: Box::new(return_type),
+            is_null: false,
+            is_lambda: true,
+            lambda_body: Some(Box::new(lambda_body)),
+            lambda_params: params.to_vec(), // 保存完整的参数信息
+        };
+
+        debug_println("创建Lambda块函数指针成功");
+        Value::LambdaFunctionPointer(func_ptr)
+    }
+
+    // 调用带完整参数信息的Lambda函数
+    fn call_lambda_function_with_params(&mut self, lambda_ptr: &LambdaFunctionPointerInstance, args: Vec<Value>) -> Value {
+        debug_println("调用Lambda函数（带参数信息）");
+
+        if let Some(body) = &lambda_ptr.lambda_body {
+            // 检查参数数量
+            if args.len() != lambda_ptr.lambda_params.len() {
+                panic!("Lambda函数期望 {} 个参数，但得到 {} 个",
+                       lambda_ptr.lambda_params.len(), args.len());
+            }
+
+            // 保存当前局部环境
+            let saved_local_env = self.local_env.clone();
+
+            // 创建Lambda执行环境
+            let mut lambda_env = HashMap::new();
+
+            // 绑定参数（使用实际的参数名）
+            for (i, (param, arg)) in lambda_ptr.lambda_params.iter().zip(args.iter()).enumerate() {
+                lambda_env.insert(param.name.clone(), arg.clone());
+                debug_println(&format!("绑定参数: {} = {:?}", param.name, arg));
+            }
+
+            // 设置Lambda环境
+            self.local_env.extend(lambda_env);
+
+            // 执行Lambda体
+            let result = match body.as_ref() {
+                crate::ast::Statement::Return(expr) => {
+                    self.evaluate_expression(expr)
+                },
+                crate::ast::Statement::FunctionCallStatement(expr) => {
+                    self.evaluate_expression(expr)
+                },
+                // 暂时不支持Block语句，因为AST中没有定义
+                // 如果需要支持多语句Lambda，需要在AST中添加Block语句类型
+                _ => {
+                    // 对于其他类型的语句，暂时返回None
+                    Value::None
+                }
+            };
+
+            // 恢复环境
+            self.local_env = saved_local_env;
+
+            debug_println(&format!("Lambda函数执行完成，结果: {:?}", result));
+            result
         } else {
             panic!("Lambda函数体为空");
         }
