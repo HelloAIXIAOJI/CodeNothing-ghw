@@ -19,6 +19,7 @@ pub enum Value {
     EnumValue(EnumInstance), // 新增：枚举实例
     Pointer(PointerInstance), // 新增：指针实例
     FunctionPointer(FunctionPointerInstance), // 新增：函数指针实例
+    LambdaFunctionPointer(LambdaFunctionPointerInstance), // 新增：Lambda函数指针实例
     None, // 表示空值或未定义的值
 }
 
@@ -74,6 +75,18 @@ pub struct FunctionPointerInstance {
     pub is_null: bool, // 是否为空
     pub is_lambda: bool, // 是否为Lambda表达式
     pub lambda_body: Option<Box<crate::ast::Statement>>, // Lambda函数体
+}
+
+// Lambda函数指针实例（包含完整参数信息）
+#[derive(Debug, Clone)]
+pub struct LambdaFunctionPointerInstance {
+    pub function_name: String, // 函数名
+    pub param_types: Vec<crate::ast::Type>, // 参数类型
+    pub return_type: Box<crate::ast::Type>, // 返回类型
+    pub is_null: bool, // 是否为空
+    pub is_lambda: bool, // 是否为Lambda表达式
+    pub lambda_body: Option<Box<crate::ast::Statement>>, // Lambda函数体
+    pub lambda_params: Vec<crate::ast::Parameter>, // 完整的参数信息（包含名称）
 }
 
 impl Value {
@@ -133,6 +146,16 @@ impl Value {
                     format!("*fn(lambda) : {}", Value::type_to_string(&func_ptr.return_type))
                 } else {
                     format!("*fn({}) : {}", func_ptr.function_name, Value::type_to_string(&func_ptr.return_type))
+                }
+            },
+            Value::LambdaFunctionPointer(lambda_ptr) => {
+                if lambda_ptr.is_null {
+                    "null".to_string()
+                } else {
+                    let param_strs: Vec<String> = lambda_ptr.param_types.iter()
+                        .map(|t| Value::type_to_string(t))
+                        .collect();
+                    format!("*fn({}) : {}", param_strs.join(", "), Value::type_to_string(&lambda_ptr.return_type))
                 }
             },
             Value::Lambda(params, _) => {
@@ -218,6 +241,13 @@ impl fmt::Display for Value {
                     write!(f, "*fn(lambda)")
                 } else {
                     write!(f, "*fn({})", func_ptr.function_name)
+                }
+            },
+            Value::LambdaFunctionPointer(lambda_ptr) => {
+                if lambda_ptr.is_null {
+                    write!(f, "null")
+                } else {
+                    write!(f, "*fn(lambda)")
                 }
             },
             Value::None => write!(f, "null"),
