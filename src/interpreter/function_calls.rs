@@ -287,11 +287,20 @@ impl<'a> FunctionCallHandler for Interpreter<'a> {
             if !found {
                 // 检查是否是函数指针变量
                 if let Some(var_value) = self.local_env.get(name).or_else(|| self.global_env.get(name)) {
-                    if let Value::FunctionPointer(func_ptr) = var_value {
-                        // 这是函数指针调用
-                        debug_println(&format!("检测到函数指针调用: {}", name));
-                        let func_ptr_clone = func_ptr.clone();
-                        return self.call_function_pointer_impl(&func_ptr_clone, arg_values);
+                    match var_value {
+                        Value::FunctionPointer(func_ptr) => {
+                            // 这是函数指针调用
+                            debug_println(&format!("检测到函数指针调用: {}", name));
+                            let func_ptr_clone = func_ptr.clone();
+                            return self.call_function_pointer_impl(&func_ptr_clone, arg_values);
+                        },
+                        Value::LambdaFunctionPointer(lambda_ptr) => {
+                            // 这是Lambda函数指针调用
+                            debug_println(&format!("检测到Lambda函数指针调用: {}", name));
+                            let lambda_ptr_clone = lambda_ptr.clone();
+                            return self.call_lambda_function_pointer_impl(&lambda_ptr_clone, arg_values);
+                        },
+                        _ => {}
                     }
                 }
                 panic!("未定义的函数: {}", name);
@@ -635,26 +644,109 @@ impl<'a> Interpreter<'a> {
         // 保存当前局部环境
         let saved_local_env = self.local_env.clone();
 
-        // 清空局部环境，为函数调用创建新的作用域
-        self.local_env.clear();
+        // 创建新的局部环境，不影响全局环境
+        let mut new_local_env = HashMap::new();
 
-        // 绑定参数
+        // 绑定参数到新的局部环境
         for (i, param) in function.parameters.iter().enumerate() {
             if i < args.len() {
-                self.local_env.insert(param.name.clone(), args[i].clone());
+                new_local_env.insert(param.name.clone(), args[i].clone());
             }
         }
 
-        // 执行函数体（简化实现）
+        // 设置新的局部环境
+        self.local_env = new_local_env;
+
+        // 执行函数体（完整实现）
         let mut result = Value::None;
 
-        // 暂时简化：只处理简单的return语句
+        // 执行所有语句
         for statement in &function.body {
-            if let crate::ast::Statement::Return(expr) = statement {
-                result = self.evaluate_expression(expr);
-                break;
+            match statement {
+                crate::ast::Statement::Return(expr) => {
+                    result = self.evaluate_expression(expr);
+                    break; // 遇到return立即退出
+                },
+                crate::ast::Statement::VariableDeclaration(name, _var_type, init_expr) => {
+                    let init_value = self.evaluate_expression(init_expr);
+                    self.local_env.insert(name.clone(), init_value);
+                },
+                crate::ast::Statement::VariableAssignment(name, expr) => {
+                    let value = self.evaluate_expression(expr);
+                    // 优先更新局部变量，如果不存在则创建
+                    self.local_env.insert(name.clone(), value);
+                },
+                crate::ast::Statement::FunctionCallStatement(expr) => {
+                    // 执行函数调用语句，但不保存返回值
+                    self.evaluate_expression(expr);
+                },
+                crate::ast::Statement::IfElse(condition, if_body, else_blocks) => {
+                    let condition_value = self.evaluate_expression(condition);
+                    if self.is_truthy(&condition_value) {
+                        // 执行if块
+                        for stmt in if_body {
+                            match stmt {
+                                crate::ast::Statement::Return(expr) => {
+                                    result = self.evaluate_expression(expr);
+                                    // 恢复环境并返回
+                                    self.local_env = saved_local_env;
+                                    return result;
+                                },
+                                crate::ast::Statement::VariableDeclaration(name, _var_type, init_expr) => {
+                                    let init_value = self.evaluate_expression(init_expr);
+                                    self.local_env.insert(name.clone(), init_value);
+                                },
+                                crate::ast::Statement::VariableAssignment(name, expr) => {
+                                    let value = self.evaluate_expression(expr);
+                                    self.local_env.insert(name.clone(), value);
+                                },
+                                _ => {
+                                    // 其他语句类型暂时跳过
+                                }
+                            }
+                        }
+                    } else {
+                        // 检查else-if和else块
+                        for (else_condition, else_body) in else_blocks {
+                            let should_execute = if let Some(cond) = else_condition {
+                                let cond_value = self.evaluate_expression(cond);
+                                self.is_truthy(&cond_value)
+                            } else {
+                                true // else块
+                            };
+
+                            if should_execute {
+                                for stmt in else_body {
+                                    match stmt {
+                                        crate::ast::Statement::Return(expr) => {
+                                            result = self.evaluate_expression(expr);
+                                            // 恢复环境并返回
+                                            self.local_env = saved_local_env;
+                                            return result;
+                                        },
+                                        crate::ast::Statement::VariableDeclaration(name, _var_type, init_expr) => {
+                                            let init_value = self.evaluate_expression(init_expr);
+                                            self.local_env.insert(name.clone(), init_value);
+                                        },
+                                        crate::ast::Statement::VariableAssignment(name, expr) => {
+                                            let value = self.evaluate_expression(expr);
+                                            self.local_env.insert(name.clone(), value);
+                                        },
+                                        _ => {
+                                            // 其他语句类型暂时跳过
+                                        }
+                                    }
+                                }
+                                break;
+                            }
+                        }
+                    }
+                },
+                _ => {
+                    // 其他语句类型暂时跳过
+                    debug_println(&format!("跳过语句类型: {:?}", statement));
+                }
             }
-            // 其他语句暂时跳过
         }
 
         // 恢复局部环境
@@ -673,6 +765,72 @@ impl<'a> Interpreter<'a> {
             }
         } else {
             result
+        }
+    }
+
+    fn call_lambda_function_pointer_impl(&mut self, lambda_ptr: &super::value::LambdaFunctionPointerInstance, args: Vec<Value>) -> Value {
+        debug_println(&format!("调用Lambda函数指针: {}", lambda_ptr.function_name));
+
+        if lambda_ptr.is_null {
+            panic!("尝试调用空Lambda函数指针");
+        }
+
+        if let Some(body) = &lambda_ptr.lambda_body {
+            // 检查参数数量
+            if args.len() != lambda_ptr.lambda_params.len() {
+                panic!("Lambda函数期望 {} 个参数，但得到 {} 个",
+                       lambda_ptr.lambda_params.len(), args.len());
+            }
+
+            // 保存当前局部环境
+            let saved_local_env = self.local_env.clone();
+
+            // 创建Lambda执行环境
+            let mut lambda_env = HashMap::new();
+
+            // 绑定参数（使用实际的参数名）
+            for (param, arg) in lambda_ptr.lambda_params.iter().zip(args.iter()) {
+                lambda_env.insert(param.name.clone(), arg.clone());
+                debug_println(&format!("绑定参数: {} = {:?}", param.name, arg));
+            }
+
+            // 设置Lambda环境（替换而不是扩展）
+            self.local_env = lambda_env;
+
+            // 执行Lambda体
+            let result = match body.as_ref() {
+                crate::ast::Statement::Return(expr) => {
+                    self.evaluate_expression(expr)
+                },
+                crate::ast::Statement::FunctionCallStatement(expr) => {
+                    self.evaluate_expression(expr)
+                },
+                _ => {
+                    // 对于其他类型的语句，暂时返回None
+                    Value::None
+                }
+            };
+
+            // 恢复环境
+            self.local_env = saved_local_env;
+
+            debug_println(&format!("Lambda函数执行完成，结果: {:?}", result));
+            result
+        } else {
+            panic!("Lambda函数体为空");
+        }
+    }
+
+    // 辅助方法：判断值是否为真
+    fn is_truthy(&self, value: &Value) -> bool {
+        match value {
+            Value::Bool(b) => *b,
+            Value::Int(i) => *i != 0,
+            Value::Float(f) => *f != 0.0,
+            Value::Long(l) => *l != 0,
+            Value::String(s) => !s.is_empty(),
+            Value::None => false,
+            _ => true, // 其他类型默认为真
         }
     }
 }
