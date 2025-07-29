@@ -617,6 +617,37 @@ impl<'a> ExpressionParser for ParserBase<'a> {
                         let var_name = self.consume().unwrap();
                         self.consume(); // 消费 "--"
                         Ok(Expression::PostDecrement(var_name))
+                    } else if self.peek() == Some(&"[".to_string()) {
+                        // 数组索引访问
+                        self.consume(); // 消费 "["
+                        let index_expr = self.parse_expression()?;
+                        self.expect("]")?;
+
+                        let array_expr = Expression::Variable(name);
+                        let mut result = Expression::ArrayAccess(Box::new(array_expr), Box::new(index_expr));
+
+                        // 检查是否有后续的函数调用
+                        if self.peek() == Some(&"(".to_string()) {
+                            self.consume(); // 消费 "("
+
+                            let mut args = Vec::new();
+                            if self.peek() != Some(&")".to_string()) {
+                                loop {
+                                    args.push(self.parse_expression()?);
+                                    if self.peek() != Some(&",".to_string()) {
+                                        break;
+                                    }
+                                    self.consume(); // 消费 ","
+                                }
+                            }
+
+                            self.expect(")")?;
+
+                            // 创建函数调用表达式，但使用数组访问作为函数表达式
+                            result = Expression::FunctionPointerCall(Box::new(result), args);
+                        }
+
+                        Ok(result)
                     } else if self.peek() == Some(&".".to_string()) {
                         // 字段访问或方法调用或链式调用
                         self.consume(); // 消费 "."
@@ -734,6 +765,48 @@ impl<'a> ExpressionParser for ParserBase<'a> {
                 "auto" => {
                     self.consume();
                     Ok(Type::Auto)
+                },
+                "[" => {
+                    // 数组类型或函数指针数组类型: []int 或 []*fn(int, int) : int
+                    self.consume(); // 消费 "["
+                    self.expect("]")?; // 期望 "]"
+
+                    if self.peek() == Some(&"*".to_string()) {
+                        self.consume(); // 消费 "*"
+
+                        if self.peek() == Some(&"fn".to_string()) {
+                            // 函数指针数组类型: []*fn(int, int) : int
+                            self.consume(); // 消费 "fn"
+                            self.expect("(")?;
+
+                            let mut param_types = Vec::new();
+                            if self.peek() != Some(&")".to_string()) {
+                                loop {
+                                    param_types.push(self.parse_expression_type()?);
+                                    if self.peek() != Some(&",".to_string()) {
+                                        break;
+                                    }
+                                    self.consume(); // 消费 ","
+                                }
+                            }
+
+                            self.expect(")")?;
+                            self.expect(":")?;
+                            let return_type = Box::new(self.parse_expression_type()?);
+
+                            let func_ptr_type = Type::FunctionPointer(param_types, return_type);
+                            Ok(Type::Array(Box::new(func_ptr_type)))
+                        } else {
+                            // 指针数组类型: []*int
+                            let target_type = Box::new(self.parse_expression_type()?);
+                            let ptr_type = Type::Pointer(target_type);
+                            Ok(Type::Array(Box::new(ptr_type)))
+                        }
+                    } else {
+                        // 普通数组类型: []int
+                        let element_type = Box::new(self.parse_expression_type()?);
+                        Ok(Type::Array(element_type))
+                    }
                 },
                 "*" => {
                     // 指针类型或函数指针类型
