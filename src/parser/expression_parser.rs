@@ -412,20 +412,40 @@ impl<'a> ExpressionParser for ParserBase<'a> {
                         }
                     }
                     
-                    // 检查是否是Lambda表达式 (x => expr 或 (x, y) => expr)
+                    // 检查是否是Lambda表达式 (x => expr 或 x : int => expr)
                     if self.peek_ahead(1) == Some(&"=>".to_string()) {
                         // 单参数Lambda: x => expr
                         let param_name = self.consume().unwrap();
                         self.consume(); // 消费 "=>"
-                        
+
                         let param = Parameter {
                             name: param_name,
                             param_type: Type::Auto, // Lambda参数默认使用auto类型
                             default_value: None,
                         };
-                        
+
                         let body = self.parse_expression()?;
                         return Ok(Expression::Lambda(vec![param], Box::new(body)));
+                    } else if self.peek_ahead(1) == Some(&":".to_string()) {
+                        // 带类型的单参数Lambda: x : int => expr
+                        let param_name = self.consume().unwrap();
+                        self.consume(); // 消费 ":"
+                        let param_type = self.parse_expression_type()?;
+
+                        if self.peek() == Some(&"=>".to_string()) {
+                            self.consume(); // 消费 "=>"
+
+                            let param = Parameter {
+                                name: param_name,
+                                param_type,
+                                default_value: None,
+                            };
+
+                            let body = self.parse_expression()?;
+                            return Ok(Expression::Lambda(vec![param], Box::new(body)));
+                        }
+                        // 如果不是Lambda，回退处理（这里简化处理）
+                        return Err("期望 '=>' 在类型注解后".to_string());
                     }
                     
                     // 变量或函数调用
