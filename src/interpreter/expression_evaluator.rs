@@ -73,6 +73,25 @@ impl<'a> ExpressionEvaluator for Interpreter<'a> {
                 }
                 Value::Array(values)
             },
+            Expression::ArrayAccess(array_expr, index_expr) => {
+                let array_value = self.evaluate_expression(array_expr);
+                let index_value = self.evaluate_expression(index_expr);
+
+                match (array_value, index_value) {
+                    (Value::Array(arr), Value::Int(index)) => {
+                        if index < 0 || index as usize >= arr.len() {
+                            panic!("数组索引越界: 索引 {} 超出数组长度 {}", index, arr.len());
+                        }
+                        arr[index as usize].clone()
+                    },
+                    (Value::Array(_), _) => {
+                        panic!("数组索引必须是整数类型");
+                    },
+                    _ => {
+                        panic!("只能对数组进行索引访问");
+                    }
+                }
+            },
             Expression::MapLiteral(entries) => {
                 let mut map = std::collections::HashMap::new();
                 for (key_expr, value_expr) in entries {
@@ -87,6 +106,22 @@ impl<'a> ExpressionEvaluator for Interpreter<'a> {
             },
             Expression::FunctionCall(name, args) => {
                 self.handle_function_call(name, args)
+            },
+            Expression::FunctionPointerCall(func_expr, args) => {
+                let func_value = self.evaluate_expression(func_expr);
+                let arg_values: Vec<Value> = args.iter().map(|arg| self.evaluate_expression(arg)).collect();
+
+                match func_value {
+                    Value::FunctionPointer(func_ptr) => {
+                        self.call_function_pointer_impl(&func_ptr, arg_values)
+                    },
+                    Value::LambdaFunctionPointer(lambda_ptr) => {
+                        self.call_lambda_function_pointer_impl(&lambda_ptr, arg_values)
+                    },
+                    _ => {
+                        panic!("只能调用函数指针或Lambda函数指针");
+                    }
+                }
             },
             Expression::GlobalFunctionCall(name, args) => {
                 self.handle_global_function_call(name, args)
@@ -866,6 +901,9 @@ impl<'a> Interpreter<'a> {
             Expression::FunctionCall(_, args) => {
                 args.iter().any(|arg| self.contains_method_call(arg))
             },
+            Expression::FunctionPointerCall(func_expr, args) => {
+                self.contains_method_call(func_expr) || args.iter().any(|arg| self.contains_method_call(arg))
+            },
             Expression::NamespacedFunctionCall(_, args) => {
                 args.iter().any(|arg| self.contains_method_call(arg))
             },
@@ -877,6 +915,9 @@ impl<'a> Interpreter<'a> {
             },
             Expression::ArrayLiteral(elements) => {
                 elements.iter().any(|elem| self.contains_method_call(elem))
+            },
+            Expression::ArrayAccess(array_expr, index_expr) => {
+                self.contains_method_call(array_expr) || self.contains_method_call(index_expr)
             },
             Expression::MapLiteral(entries) => {
                 entries.iter().any(|(key, value)| {
@@ -1840,6 +1881,17 @@ impl<'a> Interpreter<'a> {
         // 将表达式包装为Return语句
         let lambda_body = crate::ast::Statement::Return(body.clone());
 
+        // 捕获当前环境作为闭包环境
+        let mut closure_env = std::collections::HashMap::new();
+
+        // 分析Lambda体中使用的变量，捕获外部作用域的变量
+        let used_vars = self.analyze_lambda_variables(body, params);
+        for var_name in used_vars {
+            if let Some(value) = self.local_env.get(&var_name).or_else(|| self.global_env.get(&var_name)) {
+                closure_env.insert(var_name, value.clone());
+            }
+        }
+
         // 创建扩展的函数指针实例，包含参数信息
         let func_ptr = LambdaFunctionPointerInstance {
             function_name: "lambda".to_string(),
@@ -1849,6 +1901,7 @@ impl<'a> Interpreter<'a> {
             is_lambda: true,
             lambda_body: Some(Box::new(lambda_body)),
             lambda_params: params.to_vec(), // 保存完整的参数信息
+            closure_env,
         };
 
         debug_println("创建Lambda表达式函数指针成功");
@@ -1874,6 +1927,9 @@ impl<'a> Interpreter<'a> {
             crate::ast::Statement::Return(crate::ast::Expression::None)
         };
 
+        // 为Lambda块创建空的闭包环境（Lambda块通常不需要闭包）
+        let closure_env = std::collections::HashMap::new();
+
         let func_ptr = LambdaFunctionPointerInstance {
             function_name: "lambda".to_string(),
             param_types,
@@ -1882,10 +1938,79 @@ impl<'a> Interpreter<'a> {
             is_lambda: true,
             lambda_body: Some(Box::new(lambda_body)),
             lambda_params: params.to_vec(), // 保存完整的参数信息
+            closure_env,
         };
 
         debug_println("创建Lambda块函数指针成功");
         Value::LambdaFunctionPointer(func_ptr)
+    }
+
+    // 分析Lambda表达式中使用的变量，用于闭包捕获
+    fn analyze_lambda_variables(&self, expr: &Expression, params: &[crate::ast::Parameter]) -> Vec<String> {
+        let mut used_vars = Vec::new();
+        let param_names: std::collections::HashSet<String> = params.iter().map(|p| p.name.clone()).collect();
+
+        self.collect_variables_from_expression(expr, &mut used_vars, &param_names);
+
+        // 去重
+        used_vars.sort();
+        used_vars.dedup();
+
+        debug_println(&format!("Lambda闭包捕获变量: {:?}", used_vars));
+        used_vars
+    }
+
+    // 递归收集表达式中使用的变量
+    fn collect_variables_from_expression(&self, expr: &Expression, used_vars: &mut Vec<String>, param_names: &std::collections::HashSet<String>) {
+        match expr {
+            Expression::Variable(name) => {
+                // 如果不是参数，则是外部变量
+                if !param_names.contains(name) {
+                    used_vars.push(name.clone());
+                }
+            },
+            Expression::BinaryOp(left, _, right) => {
+                self.collect_variables_from_expression(left, used_vars, param_names);
+                self.collect_variables_from_expression(right, used_vars, param_names);
+            },
+            Expression::PreIncrement(var_name) | Expression::PreDecrement(var_name) |
+            Expression::PostIncrement(var_name) | Expression::PostDecrement(var_name) => {
+                if !param_names.contains(var_name) {
+                    used_vars.push(var_name.clone());
+                }
+            },
+            Expression::FunctionCall(_, args) => {
+                for arg in args {
+                    self.collect_variables_from_expression(arg, used_vars, param_names);
+                }
+            },
+            Expression::FunctionPointerCall(func_expr, args) => {
+                self.collect_variables_from_expression(func_expr, used_vars, param_names);
+                for arg in args {
+                    self.collect_variables_from_expression(arg, used_vars, param_names);
+                }
+            },
+            Expression::ArrayAccess(array_expr, index_expr) => {
+                self.collect_variables_from_expression(array_expr, used_vars, param_names);
+                self.collect_variables_from_expression(index_expr, used_vars, param_names);
+            },
+            Expression::ArrayLiteral(elements) => {
+                for elem in elements {
+                    self.collect_variables_from_expression(elem, used_vars, param_names);
+                }
+            },
+            Expression::FieldAccess(obj_expr, _) => {
+                self.collect_variables_from_expression(obj_expr, used_vars, param_names);
+            },
+            Expression::MethodCall(obj_expr, _, args) => {
+                self.collect_variables_from_expression(obj_expr, used_vars, param_names);
+                for arg in args {
+                    self.collect_variables_from_expression(arg, used_vars, param_names);
+                }
+            },
+            // 其他表达式类型不包含变量引用
+            _ => {}
+        }
     }
 
     // 调用带完整参数信息的Lambda函数
