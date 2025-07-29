@@ -1,7 +1,7 @@
 # CodeNothing 更新日志
 
-## [v0.5.2] - 2025-07-28
-### 🎯 重大新功能：函数指针完整实现 (Function Pointers)
+## [v0.5.3] - 2025-07-29
+### 🎯 重大新功能：函数指针和Lambda函数完整实现 (Function Pointers & Lambda Functions)
 
 #### 🚀 核心特性
 - **完整的函数指针语法支持**
@@ -9,6 +9,12 @@
   - 函数指针赋值：`mathFunc = addNumbers;`
   - 函数指针调用：`result = mathFunc(10, 5);`
   - 可选函数指针：`optFunc : ?*fn(int) : string;`
+
+- **Lambda函数完整实现**
+  - Lambda表达式语法：`(x => x + 1)`, `((a, b) => a + b)`
+  - 带类型注解的Lambda：`((a : int, b : int) => a + b)`
+  - Lambda函数指针创建和调用
+  - Lambda函数参数绑定和执行
 
 - **函数指针方法**
   - `toString()` - 获取函数指针的字符串表示
@@ -22,13 +28,15 @@
   - 函数指针作为参数传递
   - 函数指针作为返回值
   - 运行时函数选择和调用
+  - 复杂函数指针调用（支持局部变量、条件语句等）
+  - 递归函数指针调用
 
 #### 技术实现
-- **AST扩展**: 新增 `FunctionPointer` 类型和相关表达式
+- **AST扩展**: 新增 `FunctionPointer` 和 `LambdaFunctionPointer` 类型
 - **类型系统**: 完整的函数指针类型检查和匹配
-- **语法解析**: 支持 `*fn(参数类型...) : 返回类型` 语法
-- **运行时调用**: 真实的函数指针调用机制
-- **内存管理**: 函数指针的创建、赋值和销毁
+- **语法解析**: 支持 `*fn(参数类型...) : 返回类型` 和Lambda语法
+- **运行时调用**: 真实的函数指针和Lambda调用机制
+- **环境管理**: 正确的作用域和局部变量处理
 
 #### 示例代码
 ```codenothing
@@ -37,24 +45,34 @@ fn add(a : int, b : int) : int {
     return a + b;
 };
 
-fn multiply(a : int, b : int) : int {
-    return a * b;
-};
-
 // 函数指针使用
 mathFunc : *fn(int, int) : int = add;
 result1 : int = mathFunc(10, 5); // 15
 
-mathFunc = multiply;
-result2 : int = mathFunc(10, 5); // 50
+// Lambda函数
+square : *fn(int) : int = (x => x * x);
+result2 : int = square(7); // 49
+
+// 多参数Lambda
+power : *fn(int, int) : int = ((base, exp) => base * base * exp);
+result3 : int = power(3, 2); // 18
 
 // 高阶函数
 fn calculate(a : int, b : int, op : *fn(int, int) : int) : int {
     return op(a, b);
 };
 
-result3 : int = calculate(10, 5, add); // 15
+result4 : int = calculate(10, 5, add); // 15
+result5 : int = calculate(10, 5, ((a, b) => a - b)); // 5
 ```
+
+---
+
+## [v0.5.2] - 2025-07-28
+### 🔧 函数指针基础框架
+- 函数指针数据结构设计
+- 基础语法解析支持
+- 函数指针方法框架
 
 ---
 
@@ -198,7 +216,7 @@ derefStatus : Status = *statusPtr;
 #### 已知限制
 - ✅ ~~暂不支持指针算术运算（如ptr + 1）~~ **已实现**
 - ✅ ~~暂不支持多级指针（**int）~~ **已实现**
-- ✅ ~~函数指针~~ **已在v0.5.2实现**
+- ✅ ~~函数指针和Lambda函数~~ **已在v0.5.3完整实现**
 - ✅ ~~`(*ptr).method()` 语法暂不支持~~ **已实现**
 - 指针递增递减操作符（++ptr, ptr++）计划在v0.5.x实现
 - 智能指针（shared_ptr, unique_ptr）计划在v0.6.0实现
