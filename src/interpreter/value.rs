@@ -87,6 +87,7 @@ pub struct LambdaFunctionPointerInstance {
     pub is_lambda: bool, // 是否为Lambda表达式
     pub lambda_body: Option<Box<crate::ast::Statement>>, // Lambda函数体
     pub lambda_params: Vec<crate::ast::Parameter>, // 完整的参数信息（包含名称）
+    pub closure_env: std::collections::HashMap<String, Value>, // 闭包环境
 }
 
 impl Value {
