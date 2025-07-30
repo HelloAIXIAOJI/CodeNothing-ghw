@@ -1,4 +1,4 @@
-use crate::ast::{Type, Expression, PointerArithmeticOp};
+use crate::ast::{Type, Expression, PointerArithmeticOp, PointerMemberAccessOp};
 use crate::parser::parser_base::ParserBase;
 use crate::parser::statement_parser::StatementParser;
 use crate::parser::expression_parser::ExpressionParser;
@@ -11,6 +11,11 @@ pub trait PointerParser {
     fn parse_dereference(&mut self) -> Result<Expression, String>;
     fn parse_function_pointer_type(&mut self) -> Result<Type, String>;
     fn parse_pointer_arithmetic(&mut self, left: Expression) -> Result<Expression, String>;
+    fn parse_pointer_member_access(&mut self, left: Expression) -> Result<Expression, String>;
+    fn parse_array_pointer_type(&mut self) -> Result<Type, String>;
+    fn parse_pointer_array_type(&mut self) -> Result<Type, String>;
+    fn parse_array_pointer_access(&mut self, left: Expression) -> Result<Expression, String>;
+    fn parse_pointer_array_access(&mut self, left: Expression) -> Result<Expression, String>;
     fn is_pointer_type(&self, token: &str) -> bool;
     fn count_pointer_level(&self, tokens: &[String]) -> usize;
 }
@@ -30,6 +35,11 @@ impl<'a> PointerParser for ParserBase<'a> {
 
             Ok(Type::OptionalPointer(Box::new(target_type)))
         } else if self.peek() == Some(&"*".to_string()) {
+            // 检查是否是数组指针 (*[size]Type)
+            if self.peek_ahead(1) == Some(&"[".to_string()) {
+                return self.parse_array_pointer_type();
+            }
+
             // 计算指针级别
             let mut level = 0;
             while self.peek() == Some(&"*".to_string()) {
@@ -52,8 +62,11 @@ impl<'a> PointerParser for ParserBase<'a> {
 
             debug_println(&format!("解析{}级指针类型: {:?}", level, target_type));
             Ok(target_type)
+        } else if self.peek() == Some(&"[".to_string()) {
+            // 检查是否是指针数组 ([size]*Type)
+            return self.parse_pointer_array_type();
         } else {
-            Err("期望指针类型标记 '*' 或 '?*'".to_string())
+            Err("期望指针类型标记 '*'、'?*' 或 '['".to_string())
         }
     }
     
@@ -146,13 +159,109 @@ impl<'a> PointerParser for ParserBase<'a> {
         }
         level
     }
+
+    // 新增：解析指针成员访问
+    fn parse_pointer_member_access(&mut self, left: Expression) -> Result<Expression, String> {
+        debug_println("开始解析指针成员访问");
+
+        // 检查操作符类型
+        let op = if self.peek() == Some(&"->".to_string()) {
+            self.consume(); // 消费 "->"
+            PointerMemberAccessOp::Arrow
+        } else if self.peek() == Some(&".".to_string()) {
+            self.consume(); // 消费 "."
+            PointerMemberAccessOp::Dot
+        } else {
+            return Err("期望指针成员访问操作符 '->' 或 '.'".to_string());
+        };
+
+        // 解析成员名
+        let member_name = self.consume().ok_or_else(|| "期望成员名".to_string())?;
+
+        debug_println(&format!("解析指针成员访问: {:?} {:?} {}", left, op, member_name));
+        Ok(Expression::PointerMemberAccess(Box::new(left), member_name))
+    }
+
+    // 新增：解析数组指针类型 (*[size]Type)
+    fn parse_array_pointer_type(&mut self) -> Result<Type, String> {
+        debug_println("开始解析数组指针类型");
+
+        self.expect("*")?; // 消费 "*"
+        self.expect("[")?; // 消费 "["
+
+        // 解析数组大小
+        let size_token = self.consume().ok_or_else(|| "期望数组大小".to_string())?;
+        let size = size_token.parse::<usize>()
+            .map_err(|_| format!("无效的数组大小: {}", size_token))?;
+
+        self.expect("]")?; // 消费 "]"
+
+        // 解析元素类型
+        let element_type = self.parse_base_type()?;
+
+        debug_println(&format!("解析数组指针类型: *[{}]{:?}", size, element_type));
+        Ok(Type::ArrayPointer(Box::new(element_type), size))
+    }
+
+    // 新增：解析指针数组类型 ([size]*Type)
+    fn parse_pointer_array_type(&mut self) -> Result<Type, String> {
+        debug_println("开始解析指针数组类型");
+
+        self.expect("[")?; // 消费 "["
+
+        // 解析数组大小
+        let size_token = self.consume().ok_or_else(|| "期望数组大小".to_string())?;
+        let size = size_token.parse::<usize>()
+            .map_err(|_| format!("无效的数组大小: {}", size_token))?;
+
+        self.expect("]")?; // 消费 "]"
+        self.expect("*")?; // 消费 "*"
+
+        // 解析指针目标类型
+        let target_type = self.parse_base_type()?;
+
+        debug_println(&format!("解析指针数组类型: [{}]*{:?}", size, target_type));
+        Ok(Type::PointerArray(Box::new(target_type), size))
+    }
+
+    // 新增：解析数组指针访问 ((*arrayPtr)[index])
+    fn parse_array_pointer_access(&mut self, left: Expression) -> Result<Expression, String> {
+        debug_println("开始解析数组指针访问");
+
+        self.expect("[")?; // 消费 "["
+
+        // 解析索引表达式
+        let index_expr = self.parse_expression()?;
+
+        self.expect("]")?; // 消费 "]"
+
+        debug_println(&format!("解析数组指针访问: {:?}[{:?}]", left, index_expr));
+        Ok(Expression::ArrayPointerAccess(Box::new(left), Box::new(index_expr)))
+    }
+
+    // 新增：解析指针数组访问 (ptrArray[index])
+    fn parse_pointer_array_access(&mut self, left: Expression) -> Result<Expression, String> {
+        debug_println("开始解析指针数组访问");
+
+        self.expect("[")?; // 消费 "["
+
+        // 解析索引表达式
+        let index_expr = self.parse_expression()?;
+
+        self.expect("]")?; // 消费 "]"
+
+        debug_println(&format!("解析指针数组访问: {:?}[{:?}]", left, index_expr));
+        Ok(Expression::PointerArrayAccess(Box::new(left), Box::new(index_expr)))
+    }
 }
 
 impl<'a> ParserBase<'a> {
     // 辅助方法：检查是否是指针操作符
     pub fn is_pointer_operator(&self, token: &str) -> bool {
-        token == "&" || token == "*"
+        token == "&" || token == "*" || token == "->" || token == "."
     }
+
+
     
     // 辅助方法：解析指针目标类型（支持多级指针）
     fn parse_pointer_target_type(&mut self) -> Result<Type, String> {
