@@ -3,6 +3,7 @@ use std::fs::File;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::collections::HashMap;
+use std::time::Instant;
 
 mod ast;
 mod parser;
@@ -159,20 +160,49 @@ fn init_program() -> Program {
     }
 }
 
+// 格式化执行时间
+fn format_execution_time(duration_ms: f64) -> String {
+    if duration_ms < 1000.0 {
+        format!("{:.3} ms", duration_ms)
+    } else if duration_ms < 60000.0 {
+        let seconds = duration_ms / 1000.0;
+        format!("{:.3} ms [{:.1} s]", duration_ms, seconds)
+    } else {
+        let total_seconds = duration_ms / 1000.0;
+        let minutes = (total_seconds / 60.0).floor();
+        let seconds = total_seconds % 60.0;
+        format!("{:.3} ms [{:.0} min {:.1} s]", duration_ms, minutes, seconds)
+    }
+}
+
 fn main() {
     let args: Vec<String> = std::env::args().collect();
     
     if args.len() < 2 {
-        println!("用法: {} <文件路径> [--cn-parser] [--cn-debug]", args[0]);
+        println!("用法: {} <文件路径> [选项]", args[0]);
+        println!("");
+        println!("选项:");
+        println!("  --cn-parser     显示详细的解析信息");
+        println!("  --cn-lexer      显示词法分析信息");
+        println!("  --cn-debug      启用调试模式");
+        println!("  --cn-return     显示程序执行结果");
+        println!("  --cn-query-jit  显示JIT编译统计信息");
+        println!("  --cn-time       显示程序执行时间");
+        println!("");
+        println!("示例:");
+        println!("  {} hello.cn", args[0]);
+        println!("  {} hello.cn --cn-time", args[0]);
+        println!("  {} hello.cn --cn-return --cn-time", args[0]);
         return;
     }
-    
+
     let file_path = &args[1];
     let debug_parser = args.iter().any(|arg| arg == "--cn-parser");
     let debug_lexer = args.iter().any(|arg| arg == "--cn-lexer");
     let debug_mode = args.iter().any(|arg| arg == "--cn-debug");
     let show_return = args.iter().any(|arg| arg == "--cn-return");
     let query_jit = args.iter().any(|arg| arg == "--cn-query-jit");
+    let show_time = args.iter().any(|arg| arg == "--cn-time");
     
     // 如果是调试模式，先调试io库中的函数
     if debug_mode {
@@ -186,7 +216,10 @@ fn main() {
     
     // 创建文件预处理器
     let mut preprocessor = FilePreprocessor::new();
-    
+
+    // 开始计时（如果启用了时间显示）
+    let start_time = if show_time { Some(Instant::now()) } else { None };
+
     // 预处理文件，处理所有导入（不传递父目录，让process_file自己处理相对路径）
     match preprocessor.process_file(file_path, None) {
         Ok(processed_content) => {
@@ -231,6 +264,13 @@ fn main() {
                     if query_jit && jit::was_jit_used() {
                         print!("{}", jit::jit_stats());
                     }
+
+                    // 显示执行时间（如果启用了时间显示）
+                    if let Some(start) = start_time {
+                        let duration = start.elapsed();
+                        let duration_ms = duration.as_secs_f64() * 1000.0;
+                        println!("执行时间: {}", format_execution_time(duration_ms));
+                    }
                 },
                 Err(errors) => {
                     // 显示所有错误信息
@@ -250,6 +290,13 @@ fn main() {
                     
                     println!("\n可以使用 --cn-parser 选项查看更详细的解析信息。");
                     println!("由于存在解析错误，程序无法执行。");
+
+                    // 显示执行时间（如果启用了时间显示）
+                    if let Some(start) = start_time {
+                        let duration = start.elapsed();
+                        let duration_ms = duration.as_secs_f64() * 1000.0;
+                        println!("解析时间: {}", format_execution_time(duration_ms));
+                    }
                 }
             }
         },
