@@ -2,6 +2,46 @@ use std::collections::HashMap;
 use std::fmt;
 use crate::ast::{Parameter, Expression, Statement};
 
+/// 指针操作错误类型
+#[derive(Debug, Clone)]
+pub enum PointerError {
+    NullPointerAccess,
+    DanglingPointerAccess(usize),
+    InvalidAddress(usize),
+    MemoryAllocationFailed(String),
+    MemoryReadFailed(String),
+    MemoryWriteFailed(String),
+    PointerArithmeticOverflow,
+    PointerArithmeticUnderflow,
+    IncompatiblePointerTypes,
+    FunctionPointerArithmetic,
+    InvalidPointerLevel,
+    TagValidationFailed(u64),
+    AddressOutOfRange(usize),
+}
+
+impl fmt::Display for PointerError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            PointerError::NullPointerAccess => write!(f, "尝试访问空指针"),
+            PointerError::DanglingPointerAccess(addr) => write!(f, "尝试访问悬空指针: 0x{:x}", addr),
+            PointerError::InvalidAddress(addr) => write!(f, "无效的内存地址: 0x{:x}", addr),
+            PointerError::MemoryAllocationFailed(msg) => write!(f, "内存分配失败: {}", msg),
+            PointerError::MemoryReadFailed(msg) => write!(f, "内存读取失败: {}", msg),
+            PointerError::MemoryWriteFailed(msg) => write!(f, "内存写入失败: {}", msg),
+            PointerError::PointerArithmeticOverflow => write!(f, "指针算术运算溢出"),
+            PointerError::PointerArithmeticUnderflow => write!(f, "指针算术运算下溢"),
+            PointerError::IncompatiblePointerTypes => write!(f, "不兼容的指针类型"),
+            PointerError::FunctionPointerArithmetic => write!(f, "不允许对函数指针进行算术运算"),
+            PointerError::InvalidPointerLevel => write!(f, "无效的指针级别"),
+            PointerError::TagValidationFailed(tag) => write!(f, "指针标记验证失败: {}", tag),
+            PointerError::AddressOutOfRange(addr) => write!(f, "地址超出有效范围: 0x{:x}", addr),
+        }
+    }
+}
+
+impl std::error::Error for PointerError {}
+
 // 定义值类型，用于存储不同类型的值
 #[derive(Debug, Clone)]
 pub enum Value {
@@ -50,6 +90,7 @@ pub struct PointerInstance {
     pub target_type: PointerType, // 指向的类型
     pub is_null: bool, // 是否为空指针
     pub level: usize, // 指针级别（1=*int, 2=**int, 等）
+    pub tag_id: Option<u64>, // 指针标记ID，用于安全检查
 }
 
 // 指针类型信息
