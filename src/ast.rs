@@ -16,6 +16,8 @@ pub enum Type {
     Pointer(Box<Type>), // 新增：指针类型 (*Type)
     OptionalPointer(Box<Type>), // 新增：可选指针类型 (?*Type)
     FunctionPointer(Vec<Type>, Box<Type>), // 新增：函数指针类型 (*fn(args) : ret)
+    ArrayPointer(Box<Type>, usize), // 新增：数组指针类型 (*[size]Type)
+    PointerArray(Box<Type>, usize), // 新增：指针数组类型 ([size]*Type)
     // 未来可以扩展更多类型
 }
 
@@ -76,6 +78,9 @@ pub enum Expression {
     AddressOf(Box<Expression>), // 取地址操作 (&expression)
     Dereference(Box<Expression>), // 解引用操作 (*expression)
     PointerArithmetic(Box<Expression>, PointerArithmeticOp, Box<Expression>), // 指针算术
+    PointerMemberAccess(Box<Expression>, String), // 指针成员访问 (ptr->member 或 ptr.member)
+    ArrayPointerAccess(Box<Expression>, Box<Expression>), // 数组指针访问 ((*arrayPtr)[index])
+    PointerArrayAccess(Box<Expression>, Box<Expression>), // 指针数组访问 (ptrArray[index])
 
     // 函数指针相关表达式
     FunctionReference(String), // 函数引用 (函数名)
@@ -315,4 +320,11 @@ pub struct EnumVariant {
 pub struct EnumField {
     pub name: Option<String>, // 字段名（可选，支持元组式和结构体式）
     pub field_type: Type,
+}
+
+// 指针成员访问操作符类型
+#[derive(Debug, Clone, PartialEq)]
+pub enum PointerMemberAccessOp {
+    Arrow,  // -> 操作符
+    Dot,    // . 操作符（用于指针的直接成员访问）
 }
