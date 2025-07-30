@@ -58,6 +58,8 @@ pub enum Value {
     FunctionReference(String), // 函数引用
     EnumValue(EnumInstance), // 新增：枚举实例
     Pointer(PointerInstance), // 新增：指针实例
+    ArrayPointer(ArrayPointerInstance), // 新增：数组指针实例
+    PointerArray(PointerArrayInstance), // 新增：指针数组实例
     FunctionPointer(FunctionPointerInstance), // 新增：函数指针实例
     LambdaFunctionPointer(LambdaFunctionPointerInstance), // 新增：Lambda函数指针实例
     None, // 表示空值或未定义的值
@@ -93,6 +95,24 @@ pub struct PointerInstance {
     pub tag_id: Option<u64>, // 指针标记ID，用于安全检查
 }
 
+// 数组指针实例 (*[size]Type)
+#[derive(Debug, Clone)]
+pub struct ArrayPointerInstance {
+    pub address: usize, // 数组的内存地址
+    pub element_type: PointerType, // 数组元素类型
+    pub array_size: usize, // 数组大小
+    pub is_null: bool, // 是否为空指针
+    pub tag_id: Option<u64>, // 指针标记ID
+}
+
+// 指针数组实例 ([size]*Type)
+#[derive(Debug, Clone)]
+pub struct PointerArrayInstance {
+    pub pointers: Vec<PointerInstance>, // 指针数组
+    pub element_type: PointerType, // 指针指向的类型
+    pub array_size: usize, // 数组大小
+}
+
 // 指针类型信息
 #[derive(Debug, Clone)]
 pub enum PointerType {
@@ -105,6 +125,7 @@ pub enum PointerType {
     Class(String),
     Function(Vec<crate::ast::Type>, Box<crate::ast::Type>), // 函数指针
     Pointer(Box<PointerType>), // 多级指针
+    Array(Box<PointerType>, usize), // 数组类型（元素类型，大小）
 }
 
 // 函数指针实例
@@ -180,6 +201,16 @@ impl Value {
                     let stars = "*".repeat(ptr.level);
                     format!("{}0x{:x}", stars, ptr.address)
                 }
+            },
+            Value::ArrayPointer(array_ptr) => {
+                if array_ptr.is_null {
+                    "null".to_string()
+                } else {
+                    format!("*[{}]@0x{:x}", array_ptr.array_size, array_ptr.address)
+                }
+            },
+            Value::PointerArray(ptr_array) => {
+                format!("[{}]*ptr", ptr_array.array_size)
             },
             Value::FunctionPointer(func_ptr) => {
                 if func_ptr.is_null {
@@ -291,6 +322,16 @@ impl fmt::Display for Value {
                 } else {
                     write!(f, "*fn(lambda)")
                 }
+            },
+            Value::ArrayPointer(array_ptr) => {
+                if array_ptr.is_null {
+                    write!(f, "null")
+                } else {
+                    write!(f, "*[{}]@0x{:x}", array_ptr.array_size, array_ptr.address)
+                }
+            },
+            Value::PointerArray(ptr_array) => {
+                write!(f, "[{}]*ptr", ptr_array.array_size)
             },
             Value::None => write!(f, "null"),
         }
