@@ -1,5 +1,6 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
+use std::time::{SystemTime, UNIX_EPOCH};
 use super::value::Value;
 
 /// 内存块信息
@@ -10,6 +11,17 @@ pub struct MemoryBlock {
     pub value: Value,
     pub is_allocated: bool,
     pub ref_count: usize,
+    pub allocation_time: u64, // 分配时间戳
+    pub last_access_time: u64, // 最后访问时间
+}
+
+/// 指针标记信息，用于跟踪指针生命周期
+#[derive(Debug, Clone)]
+pub struct PointerTag {
+    pub tag_id: u64,
+    pub address: usize,
+    pub is_valid: bool,
+    pub creation_time: u64,
 }
 
 /// 内存管理器
@@ -17,85 +29,179 @@ pub struct MemoryBlock {
 pub struct MemoryManager {
     memory_blocks: HashMap<usize, MemoryBlock>,
     next_address: usize,
-    free_addresses: Vec<usize>,
+    quarantine_addresses: Vec<(usize, u64)>, // 隔离区：(地址, 释放时间)
     total_allocated: usize,
     max_memory: usize,
+    pointer_tags: HashMap<u64, PointerTag>, // 指针标记映射
+    next_tag_id: u64,
+    quarantine_time_ms: u64, // 隔离时间（毫秒）
+    valid_address_ranges: Vec<(usize, usize)>, // 有效地址范围
 }
 
 impl MemoryManager {
     pub fn new() -> Self {
-        Self {
+        let mut manager = Self {
             memory_blocks: HashMap::new(),
             next_address: 0x1000, // 从较高地址开始，避免与系统地址冲突
-            free_addresses: Vec::new(),
+            quarantine_addresses: Vec::new(),
             total_allocated: 0,
             max_memory: 1024 * 1024 * 100, // 100MB 限制
-        }
+            pointer_tags: HashMap::new(),
+            next_tag_id: 1,
+            quarantine_time_ms: 5000, // 5秒隔离时间
+            valid_address_ranges: Vec::new(),
+        };
+
+        // 初始化有效地址范围
+        manager.valid_address_ranges.push((0x1000, 0x1000 + 1024 * 1024 * 100));
+        manager
     }
 
-    /// 分配内存并返回地址
-    pub fn allocate(&mut self, value: Value) -> Result<usize, String> {
+    /// 获取当前时间戳（毫秒）
+    fn current_time_ms() -> u64 {
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_millis() as u64
+    }
+
+    /// 检查地址是否在有效范围内
+    fn is_address_in_valid_range(&self, address: usize) -> bool {
+        self.valid_address_ranges.iter().any(|(start, end)| {
+            address >= *start && address < *end
+        })
+    }
+
+    /// 分配内存并返回地址和指针标记
+    pub fn allocate(&mut self, value: Value) -> Result<(usize, u64), String> {
         let size = self.calculate_size(&value);
-        
+
         // 检查内存限制
         if self.total_allocated + size > self.max_memory {
             return Err("内存不足".to_string());
         }
 
-        // 尝试重用释放的地址
-        let address = if let Some(addr) = self.free_addresses.pop() {
-            addr
-        } else {
-            let addr = self.next_address;
-            self.next_address += size.max(8); // 至少8字节对齐
-            addr
-        };
+        // 清理隔离区中过期的地址
+        self.cleanup_quarantine();
 
+        // 分配新地址（不重用，避免悬空指针问题）
+        let address = self.next_address;
+        self.next_address += size.max(8); // 至少8字节对齐
+
+        // 检查地址是否在有效范围内
+        if !self.is_address_in_valid_range(address) {
+            return Err("地址超出有效范围".to_string());
+        }
+
+        let current_time = Self::current_time_ms();
         let block = MemoryBlock {
             address,
             size,
             value,
             is_allocated: true,
             ref_count: 1,
+            allocation_time: current_time,
+            last_access_time: current_time,
+        };
+
+        // 创建指针标记
+        let tag_id = self.next_tag_id;
+        self.next_tag_id += 1;
+
+        let tag = PointerTag {
+            tag_id,
+            address,
+            is_valid: true,
+            creation_time: current_time,
         };
 
         self.memory_blocks.insert(address, block);
+        self.pointer_tags.insert(tag_id, tag);
         self.total_allocated += size;
 
-        Ok(address)
+        Ok((address, tag_id))
     }
 
-    /// 释放内存
+    /// 清理隔离区中过期的地址
+    fn cleanup_quarantine(&mut self) {
+        let current_time = Self::current_time_ms();
+        self.quarantine_addresses.retain(|(_, release_time)| {
+            current_time - release_time < self.quarantine_time_ms
+        });
+    }
+
+    /// 释放内存（使用隔离机制）
     pub fn deallocate(&mut self, address: usize) -> Result<(), String> {
-        if let Some(mut block) = self.memory_blocks.remove(&address) {
+        if let Some(block) = self.memory_blocks.get_mut(&address) {
             if !block.is_allocated {
                 return Err("尝试释放已释放的内存".to_string());
             }
 
+            // 标记为已释放
             block.is_allocated = false;
             self.total_allocated -= block.size;
-            self.free_addresses.push(address);
-            
+
+            // 将地址放入隔离区而不是立即重用
+            let current_time = Self::current_time_ms();
+            self.quarantine_addresses.push((address, current_time));
+
+            // 使所有指向此地址的标记失效
+            self.invalidate_pointer_tags_for_address(address);
+
             Ok(())
         } else {
             Err("无效的内存地址".to_string())
         }
     }
 
-    /// 读取内存中的值
-    pub fn read(&self, address: usize) -> Result<Value, String> {
-        if let Some(block) = self.memory_blocks.get(&address) {
+    /// 使指向特定地址的所有指针标记失效
+    fn invalidate_pointer_tags_for_address(&mut self, address: usize) {
+        for tag in self.pointer_tags.values_mut() {
+            if tag.address == address {
+                tag.is_valid = false;
+            }
+        }
+    }
+
+    /// 读取内存中的值（带指针标记验证）
+    pub fn read(&mut self, address: usize, tag_id: Option<u64>) -> Result<Value, String> {
+        // 验证指针标记
+        if let Some(tag_id) = tag_id {
+            if let Some(tag) = self.pointer_tags.get(&tag_id) {
+                if !tag.is_valid || tag.address != address {
+                    return Err("指针标记无效或地址不匹配".to_string());
+                }
+            } else {
+                return Err("指针标记不存在".to_string());
+            }
+        }
+
+        if let Some(block) = self.memory_blocks.get_mut(&address) {
             if !block.is_allocated {
                 return Err("尝试访问已释放的内存".to_string());
             }
+
+            // 更新最后访问时间
+            block.last_access_time = Self::current_time_ms();
             Ok(block.value.clone())
         } else {
             Err("无效的内存地址".to_string())
         }
     }
 
-    /// 写入内存
-    pub fn write(&mut self, address: usize, value: Value) -> Result<(), String> {
+    /// 写入内存（带指针标记验证）
+    pub fn write(&mut self, address: usize, value: Value, tag_id: Option<u64>) -> Result<(), String> {
+        // 验证指针标记
+        if let Some(tag_id) = tag_id {
+            if let Some(tag) = self.pointer_tags.get(&tag_id) {
+                if !tag.is_valid || tag.address != address {
+                    return Err("指针标记无效或地址不匹配".to_string());
+                }
+            } else {
+                return Err("指针标记不存在".to_string());
+            }
+        }
+
         // 先计算新值大小，避免借用冲突
         let new_size = self.calculate_size(&value);
 
@@ -109,6 +215,7 @@ impl MemoryManager {
             }
 
             block.value = value;
+            block.last_access_time = Self::current_time_ms();
             Ok(())
         } else {
             Err("无效的内存地址".to_string())
@@ -150,10 +257,33 @@ impl MemoryManager {
         address == 0
     }
 
-    /// 检查是否为悬空指针
-    pub fn is_dangling_pointer(&self, address: usize) -> bool {
+    /// 检查是否为悬空指针（使用指针标记）
+    pub fn is_dangling_pointer(&self, tag_id: u64) -> bool {
+        if let Some(tag) = self.pointer_tags.get(&tag_id) {
+            if !tag.is_valid {
+                return true; // 标记已失效
+            }
+
+            // 检查地址是否仍然有效
+            if let Some(block) = self.memory_blocks.get(&tag.address) {
+                !block.is_allocated
+            } else {
+                true // 内存块不存在
+            }
+        } else {
+            true // 标记不存在
+        }
+    }
+
+    /// 检查是否为悬空指针（传统方式，用于向后兼容）
+    pub fn is_dangling_pointer_by_address(&self, address: usize) -> bool {
         if address == 0 {
             return false; // 空指针不是悬空指针
+        }
+
+        // 检查地址是否在隔离区中
+        if self.quarantine_addresses.iter().any(|(addr, _)| *addr == address) {
+            return true;
         }
 
         // 检查地址是否曾经被分配但现在已释放
@@ -191,14 +321,27 @@ impl MemoryManager {
         leaks
     }
 
-    /// 验证指针有效性
-    pub fn validate_pointer(&self, address: usize) -> Result<(), String> {
+    /// 验证指针有效性（使用指针标记）
+    pub fn validate_pointer(&self, address: usize, tag_id: Option<u64>) -> Result<(), String> {
         if self.is_null_pointer(address) {
             return Err("空指针访问".to_string());
         }
 
-        if self.is_dangling_pointer(address) {
-            return Err("悬空指针访问".to_string());
+        // 检查地址是否在有效范围内
+        if !self.is_address_in_valid_range(address) {
+            return Err("地址超出有效范围".to_string());
+        }
+
+        // 如果有标记，验证标记
+        if let Some(tag_id) = tag_id {
+            if self.is_dangling_pointer(tag_id) {
+                return Err("悬空指针访问".to_string());
+            }
+        } else {
+            // 没有标记时使用传统方式检查
+            if self.is_dangling_pointer_by_address(address) {
+                return Err("悬空指针访问".to_string());
+            }
         }
 
         if !self.is_valid_address(address) {
@@ -208,24 +351,69 @@ impl MemoryManager {
         Ok(())
     }
 
+    /// 安全的指针算术运算（带边界检查）
+    pub fn safe_pointer_arithmetic(&self, address: usize, offset: isize, element_size: usize, tag_id: Option<u64>) -> Result<usize, String> {
+        // 验证原指针
+        self.validate_pointer(address, tag_id)?;
+
+        // 计算新地址，检查溢出
+        let new_address = if offset >= 0 {
+            address.checked_add((offset as usize).checked_mul(element_size).ok_or("乘法溢出")?)
+                .ok_or("地址加法溢出")?
+        } else {
+            address.checked_sub(((-offset) as usize).checked_mul(element_size).ok_or("乘法溢出")?)
+                .ok_or("地址减法下溢")?
+        };
+
+        // 检查新地址是否在有效范围内
+        if !self.is_address_in_valid_range(new_address) {
+            return Err("指针算术结果超出有效范围".to_string());
+        }
+
+        Ok(new_address)
+    }
+
     /// 获取内存块大小
     pub fn get_block_size(&self, address: usize) -> Option<usize> {
         self.memory_blocks.get(&address).map(|block| block.size)
     }
 
-    /// 计算值的内存大小
+    /// 计算值的内存大小（平台无关）
     fn calculate_size(&self, value: &Value) -> usize {
         match value {
-            Value::Int(_) => 4,
-            Value::Long(_) => 8,
-            Value::Float(_) => 4,
-            Value::Bool(_) => 1,
-            Value::String(s) => s.len() + 8, // 字符串长度 + 元数据
-            Value::Array(arr) => arr.len() * 8 + 16, // 数组元素 + 元数据
-            Value::Object(_) => 64, // 对象基础大小
-            Value::EnumValue(_) => 32, // 枚举基础大小
-            Value::Pointer(_) => 8, // 指针大小
-            _ => 8, // 默认大小
+            Value::Int(_) => std::mem::size_of::<i32>(),
+            Value::Long(_) => std::mem::size_of::<i64>(),
+            Value::Float(_) => std::mem::size_of::<f64>(),
+            Value::Bool(_) => std::mem::size_of::<bool>(),
+            Value::String(s) => {
+                // 字符串内容 + 长度信息 + 容量信息
+                s.len() + std::mem::size_of::<usize>() * 2
+            },
+            Value::Array(arr) => {
+                // 数组元素大小 + 长度信息 + 容量信息
+                let element_size = if arr.is_empty() {
+                    std::mem::size_of::<usize>() // 默认元素大小
+                } else {
+                    self.calculate_size(&arr[0]) // 使用第一个元素的大小
+                };
+                arr.len() * element_size + std::mem::size_of::<usize>() * 2
+            },
+            Value::Object(_) => std::mem::size_of::<usize>() * 8, // 对象基础大小
+            Value::EnumValue(_) => std::mem::size_of::<usize>() * 4, // 枚举基础大小
+            Value::Pointer(_) => std::mem::size_of::<usize>(), // 指针大小
+            Value::FunctionPointer(_) => std::mem::size_of::<usize>(), // 函数指针大小
+            Value::LambdaFunctionPointer(_) => std::mem::size_of::<usize>(), // Lambda函数指针大小
+            Value::Lambda(_, _) => std::mem::size_of::<usize>() * 2, // Lambda表达式大小
+            Value::LambdaBlock(_, _) => std::mem::size_of::<usize>() * 2, // Lambda块大小
+            Value::FunctionReference(_) => std::mem::size_of::<usize>(), // 函数引用大小
+            Value::Map(map) => {
+                // 映射大小：键值对数量 * (键大小 + 值大小) + 元数据
+                let pair_size = map.iter().map(|(k, v)| {
+                    k.len() + std::mem::size_of::<usize>() + self.calculate_size(v)
+                }).sum::<usize>();
+                pair_size + std::mem::size_of::<usize>() * 2
+            },
+            Value::None => std::mem::size_of::<usize>(), // None值大小
         }
     }
 
@@ -234,7 +422,7 @@ impl MemoryManager {
         MemoryStats {
             total_allocated: self.total_allocated,
             total_blocks: self.memory_blocks.len(),
-            free_addresses: self.free_addresses.len(),
+            free_addresses: self.quarantine_addresses.len(),
             max_memory: self.max_memory,
         }
     }
@@ -275,7 +463,7 @@ lazy_static::lazy_static! {
 }
 
 /// 便捷函数：分配内存
-pub fn allocate_memory(value: Value) -> Result<usize, String> {
+pub fn allocate_memory(value: Value) -> Result<(usize, u64), String> {
     MEMORY_MANAGER.lock().unwrap().allocate(value)
 }
 
@@ -286,12 +474,22 @@ pub fn deallocate_memory(address: usize) -> Result<(), String> {
 
 /// 便捷函数：读取内存
 pub fn read_memory(address: usize) -> Result<Value, String> {
-    MEMORY_MANAGER.lock().unwrap().read(address)
+    MEMORY_MANAGER.lock().unwrap().read(address, None)
+}
+
+/// 便捷函数：安全读取内存（带标记验证）
+pub fn read_memory_safe(address: usize, tag_id: u64) -> Result<Value, String> {
+    MEMORY_MANAGER.lock().unwrap().read(address, Some(tag_id))
 }
 
 /// 便捷函数：写入内存
 pub fn write_memory(address: usize, value: Value) -> Result<(), String> {
-    MEMORY_MANAGER.lock().unwrap().write(address, value)
+    MEMORY_MANAGER.lock().unwrap().write(address, value, None)
+}
+
+/// 便捷函数：安全写入内存（带标记验证）
+pub fn write_memory_safe(address: usize, value: Value, tag_id: u64) -> Result<(), String> {
+    MEMORY_MANAGER.lock().unwrap().write(address, value, Some(tag_id))
 }
 
 /// 便捷函数：检查地址有效性
@@ -304,14 +502,29 @@ pub fn is_null_pointer(address: usize) -> bool {
     MEMORY_MANAGER.lock().unwrap().is_null_pointer(address)
 }
 
-/// 便捷函数：检查悬空指针
-pub fn is_dangling_pointer(address: usize) -> bool {
-    MEMORY_MANAGER.lock().unwrap().is_dangling_pointer(address)
+/// 便捷函数：检查悬空指针（使用标记）
+pub fn is_dangling_pointer(tag_id: u64) -> bool {
+    MEMORY_MANAGER.lock().unwrap().is_dangling_pointer(tag_id)
+}
+
+/// 便捷函数：检查悬空指针（传统方式）
+pub fn is_dangling_pointer_by_address(address: usize) -> bool {
+    MEMORY_MANAGER.lock().unwrap().is_dangling_pointer_by_address(address)
 }
 
 /// 便捷函数：验证指针
 pub fn validate_pointer(address: usize) -> Result<(), String> {
-    MEMORY_MANAGER.lock().unwrap().validate_pointer(address)
+    MEMORY_MANAGER.lock().unwrap().validate_pointer(address, None)
+}
+
+/// 便捷函数：安全验证指针（带标记）
+pub fn validate_pointer_safe(address: usize, tag_id: u64) -> Result<(), String> {
+    MEMORY_MANAGER.lock().unwrap().validate_pointer(address, Some(tag_id))
+}
+
+/// 便捷函数：安全指针算术
+pub fn safe_pointer_arithmetic(address: usize, offset: isize, element_size: usize, tag_id: Option<u64>) -> Result<usize, String> {
+    MEMORY_MANAGER.lock().unwrap().safe_pointer_arithmetic(address, offset, element_size, tag_id)
 }
 
 /// 便捷函数：检查边界
