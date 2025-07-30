@@ -134,6 +134,7 @@ pub fn perform_binary_operation(left: &Value, op: &BinaryOperator, right: &Value
                 target_type: ptr.target_type.clone(),
                 is_null: false,
                 level: ptr.level,
+                tag_id: None, // 算术结果不继承标记
             };
 
             Value::Pointer(new_ptr)
@@ -154,6 +155,7 @@ pub fn perform_binary_operation(left: &Value, op: &BinaryOperator, right: &Value
                 target_type: ptr.target_type.clone(),
                 is_null: false,
                 level: ptr.level,
+                tag_id: None, // 算术结果不继承标记
             };
 
             Value::Pointer(new_ptr)
