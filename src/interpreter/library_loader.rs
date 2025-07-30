@@ -329,6 +329,16 @@ pub fn convert_value_to_string_arg(value: &Value) -> String {
                 "*fn(lambda)".to_string()
             }
         },
+        Value::ArrayPointer(array_ptr) => {
+            if array_ptr.is_null {
+                "null".to_string()
+            } else {
+                format!("*[{}]@0x{:x}", array_ptr.array_size, array_ptr.address)
+            }
+        },
+        Value::PointerArray(ptr_array) => {
+            format!("[{}]*ptr", ptr_array.array_size)
+        },
         Value::None => "null".to_string(),
     }
 }
