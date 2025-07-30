@@ -401,6 +401,14 @@ impl MemoryManager {
             Value::Object(_) => std::mem::size_of::<usize>() * 8, // 对象基础大小
             Value::EnumValue(_) => std::mem::size_of::<usize>() * 4, // 枚举基础大小
             Value::Pointer(_) => std::mem::size_of::<usize>(), // 指针大小
+            Value::ArrayPointer(array_ptr) => {
+                // 数组指针大小：指针本身 + 数组元数据
+                std::mem::size_of::<usize>() + std::mem::size_of::<usize>() * 2
+            },
+            Value::PointerArray(ptr_array) => {
+                // 指针数组大小：指针数量 * 指针大小 + 元数据
+                ptr_array.pointers.len() * std::mem::size_of::<usize>() + std::mem::size_of::<usize>() * 2
+            },
             Value::FunctionPointer(_) => std::mem::size_of::<usize>(), // 函数指针大小
             Value::LambdaFunctionPointer(_) => std::mem::size_of::<usize>(), // Lambda函数指针大小
             Value::Lambda(_, _) => std::mem::size_of::<usize>() * 2, // Lambda表达式大小
