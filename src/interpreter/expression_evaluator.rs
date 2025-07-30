@@ -376,6 +376,33 @@ impl<'a> ExpressionEvaluator for Interpreter<'a> {
                     }
                 }
             },
+            Expression::PointerMemberAccess(ptr_expr, member_name) => {
+                match self.evaluate_pointer_member_access_safe(ptr_expr, member_name) {
+                    Ok(value) => value,
+                    Err(e) => {
+                        eprintln!("指针成员访问错误: {}", e);
+                        Value::None
+                    }
+                }
+            },
+            Expression::ArrayPointerAccess(array_ptr_expr, index_expr) => {
+                match self.evaluate_array_pointer_access_safe(array_ptr_expr, index_expr) {
+                    Ok(value) => value,
+                    Err(e) => {
+                        eprintln!("数组指针访问错误: {}", e);
+                        Value::None
+                    }
+                }
+            },
+            Expression::PointerArrayAccess(ptr_array_expr, index_expr) => {
+                match self.evaluate_pointer_array_access_safe(ptr_array_expr, index_expr) {
+                    Ok(value) => value,
+                    Err(e) => {
+                        eprintln!("指针数组访问错误: {}", e);
+                        Value::None
+                    }
+                }
+            },
             Expression::FunctionPointerCall(func_expr, args) => {
                 self.call_function_pointer(func_expr, args)
             },
@@ -2548,6 +2575,10 @@ impl<'a> Interpreter<'a> {
                 std::mem::size_of::<usize>()
             },
             PointerType::Pointer(_) => std::mem::size_of::<usize>(), // 指针大小
+            PointerType::Array(element_type, size) => {
+                // 数组大小 = 元素大小 * 元素数量
+                self.get_pointer_element_size(element_type) * size
+            },
         }
     }
 
@@ -2594,5 +2625,299 @@ impl<'a> Interpreter<'a> {
         }
 
         Ok(())
+    }
+
+    // 安全版本的指针成员访问
+    fn evaluate_pointer_member_access_safe(&mut self, ptr_expr: &Expression, member_name: &str) -> Result<Value, PointerError> {
+        debug_println("执行安全指针成员访问");
+
+        // 计算指针表达式
+        let pointer_value = self.evaluate_expression(ptr_expr);
+
+        match pointer_value {
+            Value::Pointer(ptr) => {
+                if ptr.is_null {
+                    return Err(PointerError::NullPointerAccess);
+                }
+
+                // 检查指针操作的有效性
+                self.check_pointer_operation_validity(&ptr, "成员访问")?;
+
+                // 使用增强的安全检查
+                let validation_result = if let Some(tag_id) = ptr.tag_id {
+                    validate_pointer_safe(ptr.address, tag_id)
+                } else {
+                    validate_pointer(ptr.address)
+                };
+
+                if let Err(_) = validation_result {
+                    return Err(PointerError::InvalidAddress(ptr.address));
+                }
+
+                // 检查悬空指针
+                let is_dangling = if let Some(tag_id) = ptr.tag_id {
+                    is_dangling_pointer(tag_id)
+                } else {
+                    is_dangling_pointer_by_address(ptr.address)
+                };
+
+                if is_dangling {
+                    return Err(PointerError::DanglingPointerAccess(ptr.address));
+                }
+
+                // 安全读取内存中的对象
+                let read_result = if let Some(tag_id) = ptr.tag_id {
+                    read_memory_safe(ptr.address, tag_id)
+                } else {
+                    read_memory(ptr.address)
+                };
+
+                match read_result {
+                    Ok(object_value) => {
+                        // 根据对象类型访问成员
+                        match object_value {
+                            Value::Object(obj) => {
+                                // 访问对象成员
+                                if let Some(member_value) = obj.fields.get(member_name) {
+                                    debug_println(&format!("安全指针成员访问: 0x{:x}->{} = {:?}", ptr.address, member_name, member_value));
+                                    Ok(member_value.clone())
+                                } else {
+                                    Err(PointerError::InvalidAddress(ptr.address)) // 成员不存在
+                                }
+                            },
+                            Value::EnumValue(enum_val) => {
+                                // 访问枚举成员（如果有的话）
+                                match member_name {
+                                    "variant" => Ok(Value::String(enum_val.variant_name.clone())),
+                                    "name" => Ok(Value::String(enum_val.enum_name.clone())),
+                                    _ => {
+                                        // 尝试访问枚举的字段（通过索引）
+                                        match member_name.parse::<usize>() {
+                                            Ok(index) => {
+                                                if index < enum_val.fields.len() {
+                                                    Ok(enum_val.fields[index].clone())
+                                                } else {
+                                                    Err(PointerError::InvalidAddress(ptr.address))
+                                                }
+                                            },
+                                            Err(_) => {
+                                                // 如果不是数字索引，返回错误
+                                                Err(PointerError::InvalidAddress(ptr.address))
+                                            }
+                                        }
+                                    }
+                                }
+                            },
+                            Value::String(s) => {
+                                // 字符串的内置方法
+                                match member_name {
+                                    "length" => Ok(Value::Int(s.len() as i32)),
+                                    _ => Err(PointerError::InvalidAddress(ptr.address))
+                                }
+                            },
+                            Value::Array(arr) => {
+                                // 数组的内置方法
+                                match member_name {
+                                    "length" => Ok(Value::Int(arr.len() as i32)),
+                                    _ => Err(PointerError::InvalidAddress(ptr.address))
+                                }
+                            },
+                            _ => {
+                                // 其他类型暂不支持成员访问
+                                Err(PointerError::InvalidAddress(ptr.address))
+                            }
+                        }
+                    },
+                    Err(e) => {
+                        Err(PointerError::MemoryReadFailed(e))
+                    }
+                }
+            },
+            _ => {
+                Err(PointerError::InvalidAddress(0)) // 非指针值
+            }
+        }
+    }
+
+    // 安全版本的数组指针访问
+    fn evaluate_array_pointer_access_safe(&mut self, array_ptr_expr: &Expression, index_expr: &Expression) -> Result<Value, PointerError> {
+        debug_println("执行安全数组指针访问");
+
+        // 计算数组指针表达式
+        let array_pointer_value = self.evaluate_expression(array_ptr_expr);
+        let index_value = self.evaluate_expression(index_expr);
+
+        // 获取索引值
+        let index = match index_value {
+            Value::Int(i) => i as usize,
+            _ => return Err(PointerError::InvalidAddress(0)),
+        };
+
+        match array_pointer_value {
+            Value::ArrayPointer(array_ptr) => {
+                if array_ptr.is_null {
+                    return Err(PointerError::NullPointerAccess);
+                }
+
+                // 检查索引边界
+                if index >= array_ptr.array_size {
+                    return Err(PointerError::AddressOutOfRange(array_ptr.address + index));
+                }
+
+                // 计算元素地址
+                let element_size = self.get_pointer_type_size(&array_ptr.element_type);
+                let element_address = array_ptr.address + (index * element_size);
+
+                // 验证元素地址
+                let validation_result = if let Some(tag_id) = array_ptr.tag_id {
+                    validate_pointer_safe(element_address, tag_id)
+                } else {
+                    validate_pointer(element_address)
+                };
+
+                if let Err(_) = validation_result {
+                    return Err(PointerError::InvalidAddress(element_address));
+                }
+
+                // 读取元素值
+                let read_result = if let Some(tag_id) = array_ptr.tag_id {
+                    read_memory_safe(element_address, tag_id)
+                } else {
+                    read_memory(element_address)
+                };
+
+                match read_result {
+                    Ok(element_value) => {
+                        debug_println(&format!("安全数组指针访问: 0x{:x}[{}] = {:?}", array_ptr.address, index, element_value));
+                        Ok(element_value)
+                    },
+                    Err(e) => {
+                        Err(PointerError::MemoryReadFailed(e))
+                    }
+                }
+            },
+            Value::Pointer(ptr) => {
+                // 如果是普通指针，尝试作为数组访问
+                if ptr.is_null {
+                    return Err(PointerError::NullPointerAccess);
+                }
+
+                // 计算元素地址（假设指针指向数组的第一个元素）
+                let element_size = self.get_pointer_element_size(&ptr.target_type);
+                let element_address = ptr.address + (index * element_size);
+
+                // 使用安全的指针算术
+                match safe_pointer_arithmetic(ptr.address, index as isize, element_size, ptr.tag_id) {
+                    Ok(safe_address) => {
+                        // 读取元素值
+                        let read_result = if let Some(tag_id) = ptr.tag_id {
+                            read_memory_safe(safe_address, tag_id)
+                        } else {
+                            read_memory(safe_address)
+                        };
+
+                        match read_result {
+                            Ok(element_value) => {
+                                debug_println(&format!("安全指针数组访问: 0x{:x}[{}] = {:?}", ptr.address, index, element_value));
+                                Ok(element_value)
+                            },
+                            Err(e) => {
+                                Err(PointerError::MemoryReadFailed(e))
+                            }
+                        }
+                    },
+                    Err(e) => {
+                        if e.contains("溢出") {
+                            Err(PointerError::PointerArithmeticOverflow)
+                        } else if e.contains("范围") {
+                            Err(PointerError::AddressOutOfRange(ptr.address))
+                        } else {
+                            Err(PointerError::InvalidAddress(ptr.address))
+                        }
+                    }
+                }
+            },
+            _ => {
+                Err(PointerError::InvalidAddress(0)) // 非指针值
+            }
+        }
+    }
+
+    // 获取指针类型的大小
+    fn get_pointer_type_size(&self, ptr_type: &PointerType) -> usize {
+        match ptr_type {
+            PointerType::Int => std::mem::size_of::<i32>(),
+            PointerType::Float => std::mem::size_of::<f64>(),
+            PointerType::Bool => std::mem::size_of::<bool>(),
+            PointerType::String => std::mem::size_of::<usize>(),
+            PointerType::Long => std::mem::size_of::<i64>(),
+            PointerType::Enum(_) => std::mem::size_of::<usize>() * 4,
+            PointerType::Class(_) => std::mem::size_of::<usize>() * 8,
+            PointerType::Function(_, _) => std::mem::size_of::<usize>(),
+            PointerType::Pointer(_) => std::mem::size_of::<usize>(),
+            PointerType::Array(element_type, size) => {
+                self.get_pointer_type_size(element_type) * size
+            },
+        }
+    }
+
+    // 安全版本的指针数组访问
+    fn evaluate_pointer_array_access_safe(&mut self, ptr_array_expr: &Expression, index_expr: &Expression) -> Result<Value, PointerError> {
+        debug_println("执行安全指针数组访问");
+
+        // 计算指针数组表达式
+        let pointer_array_value = self.evaluate_expression(ptr_array_expr);
+        let index_value = self.evaluate_expression(index_expr);
+
+        // 获取索引值
+        let index = match index_value {
+            Value::Int(i) => {
+                if i < 0 {
+                    return Err(PointerError::InvalidAddress(0));
+                }
+                i as usize
+            },
+            _ => return Err(PointerError::InvalidAddress(0)),
+        };
+
+        match pointer_array_value {
+            Value::PointerArray(ptr_array) => {
+                // 检查索引边界
+                if index >= ptr_array.array_size {
+                    return Err(PointerError::AddressOutOfRange(index));
+                }
+
+                // 检查指针数组是否有足够的元素
+                if index >= ptr_array.pointers.len() {
+                    return Err(PointerError::AddressOutOfRange(index));
+                }
+
+                // 获取指定索引的指针
+                let pointer = &ptr_array.pointers[index];
+
+                // 返回指针值（不是解引用）
+                debug_println(&format!("安全指针数组访问: ptrArray[{}] = 0x{:x}", index, pointer.address));
+                Ok(Value::Pointer(pointer.clone()))
+            },
+            Value::Array(array) => {
+                // 如果是普通数组，检查是否包含指针
+                if index >= array.len() {
+                    return Err(PointerError::AddressOutOfRange(index));
+                }
+
+                match &array[index] {
+                    Value::Pointer(ptr) => {
+                        debug_println(&format!("安全数组指针访问: array[{}] = 0x{:x}", index, ptr.address));
+                        Ok(Value::Pointer(ptr.clone()))
+                    },
+                    _ => {
+                        Err(PointerError::InvalidAddress(0)) // 数组元素不是指针
+                    }
+                }
+            },
+            _ => {
+                Err(PointerError::InvalidAddress(0)) // 非指针数组值
+            }
+        }
     }
 }
