@@ -139,7 +139,9 @@ impl<'a> ExpressionParser for ParserBase<'a> {
             if op == "!" {
                 self.consume(); // 消费操作符
                 let expr = self.parse_unary_expression()?;
-                return Ok(Expression::LogicalOp(Box::new(expr), LogicalOperator::Not, Box::new(Expression::BoolLiteral(false))));
+                // 创建一个特殊的逻辑操作表达式来表示否定
+                // 使用一个虚拟的false表达式作为右操作数，但在解释器中只使用左操作数
+                return Ok(Expression::LogicalOp(Box::new(Expression::BoolLiteral(false)), LogicalOperator::Not, Box::new(expr)));
             } else if op == "&" {
                 // 取地址操作
                 return self.parse_address_of();
