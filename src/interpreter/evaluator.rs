@@ -12,22 +12,34 @@ pub trait Evaluator {
 
 pub fn perform_binary_operation(left: &Value, op: &BinaryOperator, right: &Value) -> Value {
     match (left, op, right) {
-        // 整数运算（JIT）
-        (Value::Int(l), BinaryOperator::Add, Value::Int(r)) => Value::Int(jit::jit_add((*l).into(), (*r).into()).try_into().unwrap()),
-        (Value::Int(l), BinaryOperator::Subtract, Value::Int(r)) => Value::Int(jit::jit_sub((*l).into(), (*r).into()).try_into().unwrap()),
-        (Value::Int(l), BinaryOperator::Multiply, Value::Int(r)) => Value::Int(jit::jit_mul((*l).into(), (*r).into()).try_into().unwrap()),
-        (Value::Int(l), BinaryOperator::Divide, Value::Int(r)) => Value::Int(jit::jit_div((*l).into(), (*r).into()).try_into().unwrap()),
-        (Value::Int(l), BinaryOperator::Modulo, Value::Int(r)) => Value::Int(jit::jit_mod((*l).into(), (*r).into()).try_into().unwrap()),
-        // 浮点数运算（JIT）
-        (Value::Float(l), BinaryOperator::Add, Value::Float(r)) => Value::Float(jit::jit_add_f64(*l, *r)),
-        (Value::Float(l), BinaryOperator::Subtract, Value::Float(r)) => Value::Float(jit::jit_sub_f64(*l, *r)),
-        (Value::Float(l), BinaryOperator::Multiply, Value::Float(r)) => Value::Float(jit::jit_mul_f64(*l, *r)),
-        (Value::Float(l), BinaryOperator::Divide, Value::Float(r)) => Value::Float(jit::jit_div_f64(*l, *r)),
-        // 长整型运算（JIT）
-        (Value::Long(l), BinaryOperator::Add, Value::Long(r)) => Value::Long(jit::jit_add(*l, *r)),
-        (Value::Long(l), BinaryOperator::Subtract, Value::Long(r)) => Value::Long(jit::jit_sub(*l, *r)),
-        (Value::Long(l), BinaryOperator::Multiply, Value::Long(r)) => Value::Long(jit::jit_mul(*l, *r)),
-        (Value::Long(l), BinaryOperator::Divide, Value::Long(r)) => Value::Long(jit::jit_div(*l, *r)),
+        // 整数运算（直接计算，避免JIT开销）
+        (Value::Int(l), BinaryOperator::Add, Value::Int(r)) => Value::Int(l + r),
+        (Value::Int(l), BinaryOperator::Subtract, Value::Int(r)) => Value::Int(l - r),
+        (Value::Int(l), BinaryOperator::Multiply, Value::Int(r)) => Value::Int(l * r),
+        (Value::Int(l), BinaryOperator::Divide, Value::Int(r)) => {
+            if *r == 0 { panic!("除以零错误"); }
+            Value::Int(l / r)
+        },
+        (Value::Int(l), BinaryOperator::Modulo, Value::Int(r)) => {
+            if *r == 0 { panic!("除以零错误"); }
+            Value::Int(l % r)
+        },
+        // 浮点数运算（直接计算）
+        (Value::Float(l), BinaryOperator::Add, Value::Float(r)) => Value::Float(l + r),
+        (Value::Float(l), BinaryOperator::Subtract, Value::Float(r)) => Value::Float(l - r),
+        (Value::Float(l), BinaryOperator::Multiply, Value::Float(r)) => Value::Float(l * r),
+        (Value::Float(l), BinaryOperator::Divide, Value::Float(r)) => {
+            if *r == 0.0 { panic!("除以零错误"); }
+            Value::Float(l / r)
+        },
+        // 长整型运算（直接计算）
+        (Value::Long(l), BinaryOperator::Add, Value::Long(r)) => Value::Long(l + r),
+        (Value::Long(l), BinaryOperator::Subtract, Value::Long(r)) => Value::Long(l - r),
+        (Value::Long(l), BinaryOperator::Multiply, Value::Long(r)) => Value::Long(l * r),
+        (Value::Long(l), BinaryOperator::Divide, Value::Long(r)) => {
+            if *r == 0 { panic!("除以零错误"); }
+            Value::Long(l / r)
+        },
         (Value::Long(l), BinaryOperator::Modulo, Value::Long(r)) => Value::Long(jit::jit_mod(*l, *r)),
         
         // 整数和浮点数混合运算
