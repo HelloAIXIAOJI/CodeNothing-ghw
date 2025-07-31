@@ -8,6 +8,7 @@ use std::time::Instant;
 mod ast;
 mod parser;
 mod interpreter;
+mod analyzer;
 use interpreter::jit;
 
 use ast::Program;
@@ -253,7 +254,37 @@ fn main() {
                         }
                         println!("");
                     }
-                    
+
+                    // 进行类型检查
+                    let mut type_checker = analyzer::TypeChecker::new();
+                    match type_checker.check_program(&program) {
+                        Ok(()) => {
+                            if debug_mode {
+                                println!("✓ 类型检查通过");
+                            }
+                        },
+                        Err(type_errors) => {
+                            println!("发现 {} 个类型错误:", type_errors.len());
+                            for (i, error) in type_errors.iter().enumerate() {
+                                if let (Some(line), Some(column)) = (error.line, error.column) {
+                                    println!("类型错误 {}: {} (行 {}, 列 {})", i+1, error.message, line, column);
+                                } else {
+                                    println!("类型错误 {}: {}", i+1, error.message);
+                                }
+                            }
+                            println!("");
+                            println!("由于存在类型错误，程序无法执行。");
+
+                            // 显示执行时间（如果启用了时间显示）
+                            if let Some(start) = start_time {
+                                let duration = start.elapsed();
+                                let duration_ms = duration.as_secs_f64() * 1000.0;
+                                println!("类型检查时间: {}", format_execution_time(duration_ms));
+                            }
+                            return;
+                        }
+                    }
+
                     // 执行程序
                     let result = interpreter::interpret(&program);
                     
