@@ -1,7 +1,7 @@
 use crate::ast::{Expression, BinaryOperator, CompareOperator, LogicalOperator, SwitchCase, CasePattern};
 use super::value::{Value, ObjectInstance, EnumInstance, PointerInstance, PointerType, FunctionPointerInstance, LambdaFunctionPointerInstance, PointerError};
 use super::memory_manager::{allocate_memory, read_memory, write_memory, is_valid_address, is_null_pointer, validate_pointer, is_dangling_pointer, read_memory_safe, validate_pointer_safe, is_dangling_pointer_by_address, safe_pointer_arithmetic};
-use super::interpreter_core::{Interpreter, debug_println};
+use super::interpreter_core::{Interpreter, debug_println, VariableLocation};
 use std::collections::HashMap;
 use super::function_calls::FunctionCallHandler;
 use super::statement_executor::StatementExecutor;
@@ -14,24 +14,97 @@ pub trait ExpressionEvaluator {
     fn is_pure_int_expression(&self, expr: &Expression) -> bool;
 }
 
+impl<'a> Interpreter<'a> {
+    /// 快速变量查找，使用缓存优化
+    fn get_variable_fast(&mut self, name: &str) -> Value {
+        // 首先检查缓存
+        if let Some(location) = self.variable_cache.get(name) {
+            match location {
+                VariableLocation::Constant => {
+                    if let Some(value) = self.constants.get(name) {
+                        return value.clone();
+                    }
+                },
+                VariableLocation::Local => {
+                    if let Some(value) = self.local_env.get(name) {
+                        return value.clone();
+                    }
+                },
+                VariableLocation::Global => {
+                    if let Some(value) = self.global_env.get(name) {
+                        return value.clone();
+                    }
+                },
+                VariableLocation::Function => {
+                    if self.functions.contains_key(name) {
+                        return self.create_function_pointer(name);
+                    }
+                },
+            }
+        }
+
+        // 缓存未命中，执行完整查找并更新缓存
+        if let Some(value) = self.constants.get(name) {
+            self.variable_cache.insert(name.to_string(), VariableLocation::Constant);
+            return value.clone();
+        }
+
+        if let Some(value) = self.local_env.get(name) {
+            self.variable_cache.insert(name.to_string(), VariableLocation::Local);
+            return value.clone();
+        }
+
+        if let Some(value) = self.global_env.get(name) {
+            self.variable_cache.insert(name.to_string(), VariableLocation::Global);
+            return value.clone();
+        }
+
+        if self.functions.contains_key(name) {
+            self.variable_cache.insert(name.to_string(), VariableLocation::Function);
+            return self.create_function_pointer(name);
+        }
+
+        Value::None
+    }
+
+    /// 检查是否为纯常量表达式（可以在编译时求值）
+    fn is_pure_constant_expression(&self, expr: &Expression) -> bool {
+        match expr {
+            Expression::IntLiteral(_) | Expression::FloatLiteral(_) |
+            Expression::BoolLiteral(_) | Expression::StringLiteral(_) |
+            Expression::LongLiteral(_) => true,
+            Expression::BinaryOp(left, _, right) => {
+                self.is_pure_constant_expression(left) && self.is_pure_constant_expression(right)
+            },
+            // 注意：AST中没有UnaryOp，先注释掉
+            // Expression::UnaryOp(_, operand) => self.is_pure_constant_expression(operand),
+            _ => false,
+        }
+    }
+}
+
 impl<'a> ExpressionEvaluator for Interpreter<'a> {
     fn evaluate_expression(&mut self, expr: &Expression) -> Value {
-        // 暂时禁用 JIT 编译来调试变量问题
-        // if !self.contains_method_call(expr) && self.is_pure_int_expression(expr) {
-        // if let Some(val) = jit::jit_eval_const_expr(expr) {
-        //     return val;
-        // }
-        // // 尝试整体JIT int型带变量表达式
-        // if let Some(jit_expr) = jit::jit_compile_int_expr(expr) {
-        //     // 收集变量名和当前作用域变量值
-        //     let mut vars = std::collections::HashMap::new();
-        //     for name in &jit_expr.var_names {
-        //         // 只支持Int类型变量
-        //         let val = if let Some(Value::Int(i)) = self.local_env.get(name) {
-        //             *i as i64
-        //         } else if let Some(Value::Int(i)) = self.global_env.get(name) {
-        //             *i as i64
-        //         } else {
+        // 启用常量表达式JIT优化
+        if self.is_pure_constant_expression(expr) {
+            if let Some(val) = jit::jit_eval_const_expr(expr) {
+                return val;
+            }
+        }
+
+        // 快速路径：直接处理简单表达式，避免递归调用开销
+        match expr {
+            Expression::IntLiteral(i) => return Value::Int(*i),
+            Expression::FloatLiteral(f) => return Value::Float(*f),
+            Expression::BoolLiteral(b) => return Value::Bool(*b),
+            Expression::StringLiteral(s) => return Value::String(s.clone()),
+            Expression::LongLiteral(l) => return Value::Long(*l),
+            Expression::Variable(name) => {
+                // 优化变量查找：使用更高效的查找顺序
+                return self.get_variable_fast(name);
+            },
+            _ => {} // 继续处理复杂表达式
+        }
         //             panic!("JIT表达式变量{}未赋Int值", name);
         //         };
         //         vars.insert(name.clone(), val);
@@ -156,8 +229,23 @@ impl<'a> ExpressionEvaluator for Interpreter<'a> {
             Expression::BinaryOp(left, op, right) => {
                 let left_val = self.evaluate_expression(left);
                 let right_val = self.evaluate_expression(right);
-                
-                self.perform_binary_operation(&left_val, op, &right_val)
+
+                // 内联简单的整数运算，避免函数调用开销
+                match (&left_val, op, &right_val) {
+                    (Value::Int(l), BinaryOperator::Add, Value::Int(r)) => Value::Int(l + r),
+                    (Value::Int(l), BinaryOperator::Subtract, Value::Int(r)) => Value::Int(l - r),
+                    (Value::Int(l), BinaryOperator::Multiply, Value::Int(r)) => Value::Int(l * r),
+                    (Value::Int(l), BinaryOperator::Divide, Value::Int(r)) => {
+                        if *r == 0 { panic!("除以零错误"); }
+                        Value::Int(l / r)
+                    },
+                    (Value::Int(l), BinaryOperator::Modulo, Value::Int(r)) => {
+                        if *r == 0 { panic!("除以零错误"); }
+                        Value::Int(l % r)
+                    },
+                    // 对于复杂运算，回退到原有实现
+                    _ => self.perform_binary_operation(&left_val, op, &right_val)
+                }
             },
             Expression::CompareOp(left, op, right) => {
                 let left_val = self.evaluate_expression(left);
