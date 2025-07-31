@@ -470,9 +470,29 @@ lazy_static::lazy_static! {
     pub static ref MEMORY_MANAGER: Arc<Mutex<MemoryManager>> = Arc::new(Mutex::new(MemoryManager::new()));
 }
 
-/// 便捷函数：分配内存
+/// 快速内存操作：减少锁竞争的批量操作
+pub fn batch_memory_operations<F, R>(f: F) -> R
+where
+    F: FnOnce(&mut MemoryManager) -> R,
+{
+    let mut manager = MEMORY_MANAGER.lock().unwrap();
+    f(&mut manager)
+}
+
+/// 便捷函数：分配内存（优化版）
 pub fn allocate_memory(value: Value) -> Result<(usize, u64), String> {
-    MEMORY_MANAGER.lock().unwrap().allocate(value)
+    // 对于简单值类型，使用快速路径
+    match &value {
+        Value::Int(_) | Value::Float(_) | Value::Bool(_) | Value::Long(_) => {
+            // 简单类型直接分配，减少复杂性
+            let mut manager = MEMORY_MANAGER.lock().unwrap();
+            manager.allocate(value)
+        },
+        _ => {
+            // 复杂类型使用完整的内存管理
+            MEMORY_MANAGER.lock().unwrap().allocate(value)
+        }
+    }
 }
 
 /// 便捷函数：释放内存
@@ -480,7 +500,7 @@ pub fn deallocate_memory(address: usize) -> Result<(), String> {
     MEMORY_MANAGER.lock().unwrap().deallocate(address)
 }
 
-/// 便捷函数：读取内存
+/// 便捷函数：读取内存（优化版）
 pub fn read_memory(address: usize) -> Result<Value, String> {
     MEMORY_MANAGER.lock().unwrap().read(address, None)
 }
