@@ -1,5 +1,14 @@
 use crate::ast::{Program, Expression, Statement, BinaryOperator, Type, Namespace, CompareOperator, LogicalOperator, Function, NamespaceType, Class, Enum};
 use std::collections::HashMap;
+
+/// 变量位置枚举，用于缓存变量查找结果
+#[derive(Debug, Clone, PartialEq)]
+pub enum VariableLocation {
+    Constant,
+    Local,
+    Global,
+    Function,
+}
 use super::value::{Value, ObjectInstance};
 use super::evaluator::{Evaluator, perform_binary_operation, evaluate_compare_operation};
 use super::executor::{Executor, ExecutionResult, update_variable_value, handle_increment, handle_decrement, execute_if_else};
@@ -126,6 +135,8 @@ pub struct Interpreter<'a> {
     pub static_members: HashMap<String, crate::interpreter::value::StaticMembers>,
     // 变量类型存储，键是变量名，值是声明的类型
     pub variable_types: HashMap<String, Type>,
+    // 变量查找缓存：存储最近访问的变量位置
+    pub variable_cache: HashMap<String, VariableLocation>,
 }
 
 impl<'a> Interpreter<'a> {
@@ -163,6 +174,7 @@ impl<'a> Interpreter<'a> {
             enums: HashMap::new(),
             static_members: HashMap::new(),
             variable_types: HashMap::new(), // 初始化变量类型映射
+            variable_cache: HashMap::new(), // 初始化变量缓存
         };
         
         // 初始化常量
