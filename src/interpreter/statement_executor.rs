@@ -22,41 +22,48 @@ impl<'a> StatementExecutor for Interpreter<'a> {
                 ExecutionResult::Return(value)
             },
             Statement::VariableDeclaration(name, declared_type, expr) => {
-                let value = self.evaluate_expression(&expr);
+                let mut value = self.evaluate_expression(&expr);
                 
                 // 如果声明的类型是 Auto，则不进行类型检查（弱类型）
                 if !matches!(declared_type, Type::Auto) {
-                    // 进行强类型检查
-                    let type_matches = match (&declared_type, &value) {
-                        (Type::Int, Value::Int(_)) => true,
-                        (Type::Float, Value::Float(_)) => true,
-                        (Type::Bool, Value::Bool(_)) => true,
-                        (Type::String, Value::String(_)) => true,
-                        (Type::Long, Value::Long(_)) => true,
-                        (Type::Void, Value::None) => true,
-                        (Type::Class(class_name), Value::Object(obj)) => class_name == &obj.class_name,
-                        (Type::Enum(enum_name), Value::EnumValue(enum_val)) => enum_name == &enum_val.enum_name,
+                    // 进行强类型检查，包括自动类型转换
+                    let (type_matches, converted_value) = match (&declared_type, &value) {
+                        (Type::Int, Value::Int(_)) => (true, value.clone()),
+                        (Type::Float, Value::Float(_)) => (true, value.clone()),
+                        (Type::Bool, Value::Bool(_)) => (true, value.clone()),
+                        (Type::String, Value::String(_)) => (true, value.clone()),
+                        (Type::Long, Value::Long(_)) => (true, value.clone()),
+                        (Type::Void, Value::None) => (true, value.clone()),
+                        // 自动类型转换：int -> long
+                        (Type::Long, Value::Int(i)) => (true, Value::Long(*i as i64)),
+                        // 自动类型转换：int -> float
+                        (Type::Float, Value::Int(i)) => (true, Value::Float(*i as f64)),
+                        (Type::Class(class_name), Value::Object(obj)) => (class_name == &obj.class_name, value.clone()),
+                        (Type::Enum(enum_name), Value::EnumValue(enum_val)) => (enum_name == &enum_val.enum_name, value.clone()),
                         // 智能类型匹配：如果声明为Class类型，但值是EnumValue，检查名称是否匹配
                         (Type::Class(type_name), Value::EnumValue(enum_val)) => {
                             // 检查是否是已知的枚举类型
-                            if self.enums.contains_key(type_name) {
+                            let matches = if self.enums.contains_key(type_name) {
                                 type_name == &enum_val.enum_name
                             } else {
                                 false
-                            }
+                            };
+                            (matches, value.clone())
                         },
                         // 指针类型匹配
                         (Type::Pointer(expected_target), Value::Pointer(ptr)) => {
                             // 检查指针目标类型是否匹配
-                            self.pointer_target_type_matches(expected_target, &ptr.target_type)
+                            let matches = self.pointer_target_type_matches(expected_target, &ptr.target_type);
+                            (matches, value.clone())
                         },
                         (Type::OptionalPointer(expected_target), Value::Pointer(ptr)) => {
-                            self.pointer_target_type_matches(expected_target, &ptr.target_type)
+                            let matches = self.pointer_target_type_matches(expected_target, &ptr.target_type);
+                            (matches, value.clone())
                         },
-                        (Type::OptionalPointer(_), Value::None) => true, // 可选指针可以为null
+                        (Type::OptionalPointer(_), Value::None) => (true, value.clone()), // 可选指针可以为null
                         (Type::FunctionPointer(expected_params, expected_return), Value::FunctionPointer(func_ptr)) => {
                             // 检查函数指针的参数和返回类型是否匹配
-                            if func_ptr.param_types.len() != expected_params.len() {
+                            let matches = if func_ptr.param_types.len() != expected_params.len() {
                                 false
                             } else {
                                 // 检查参数类型
@@ -68,11 +75,12 @@ impl<'a> StatementExecutor for Interpreter<'a> {
                                 let return_match = &*func_ptr.return_type == expected_return.as_ref();
 
                                 params_match && return_match
-                            }
+                            };
+                            (matches, value.clone())
                         },
                         (Type::FunctionPointer(expected_params, expected_return), Value::LambdaFunctionPointer(lambda_ptr)) => {
                             // 检查Lambda函数指针的参数和返回类型是否匹配
-                            if lambda_ptr.param_types.len() != expected_params.len() {
+                            let matches = if lambda_ptr.param_types.len() != expected_params.len() {
                                 false
                             } else {
                                 // 对于Lambda，允许Auto类型匹配任何类型
@@ -90,28 +98,33 @@ impl<'a> StatementExecutor for Interpreter<'a> {
                                                    **expected_return == crate::ast::Type::Auto;
 
                                 params_match && return_match
-                            }
+                            };
+                            (matches, value.clone())
                         },
-                        (Type::FunctionPointer(_, _), Value::None) => true, // 未初始化的函数指针
+                        (Type::FunctionPointer(_, _), Value::None) => (true, value.clone()), // 未初始化的函数指针
                         (Type::Array(expected_element_type), Value::Array(arr)) => {
                             // 检查数组元素类型是否匹配
-                            if arr.is_empty() {
+                            let matches = if arr.is_empty() {
                                 true // 空数组可以匹配任何数组类型
                             } else {
                                 // 检查所有元素是否匹配期望的元素类型
                                 arr.iter().all(|element| {
                                     self.value_matches_type(element, expected_element_type)
                                 })
-                            }
+                            };
+                            (matches, value.clone())
                         },
-                        _ => false
+                        _ => (false, value.clone())
                     };
-                    
+
                     if !type_matches {
-                        panic!("变量 '{}' 的类型不匹配：期望 {:?}，但得到 {:?}", name, declared_type, value);
+                        panic!("变量 '{}' 的类型不匹配：期望 {:?}，但得到 {:?}", name, declared_type, converted_value);
                     }
+
+                    // 使用转换后的值
+                    value = converted_value;
                 }
-                
+
                 // 存储变量值和类型信息
                 self.local_env.insert(name.clone(), value);
                 // 存储变量的声明类型用于后续赋值检查
@@ -152,48 +165,55 @@ impl<'a> StatementExecutor for Interpreter<'a> {
                     panic!("无法修改常量 '{}'", name);
                 }
                 
-                let value = self.evaluate_expression(&expr);
-                
+                let mut value = self.evaluate_expression(&expr);
+
                 // 检查变量是否存在
                 let variable_exists = self.local_env.contains_key(&name) || self.global_env.contains_key(&name);
                 if !variable_exists {
                     panic!("未定义的变量: {}", name);
                 }
-                
+
                 // 检查类型约束（如果变量有声明类型且不是 Auto）
                 if let Some(declared_type) = self.variable_types.get(&name) {
                     if !matches!(declared_type, Type::Auto) {
-                        // 进行强类型检查
-                        let type_matches = match (declared_type, &value) {
-                            (Type::Int, Value::Int(_)) => true,
-                            (Type::Float, Value::Float(_)) => true,
-                            (Type::Bool, Value::Bool(_)) => true,
-                            (Type::String, Value::String(_)) => true,
-                            (Type::Long, Value::Long(_)) => true,
-                            (Type::Void, Value::None) => true,
-                            (Type::Class(class_name), Value::Object(obj)) => class_name == &obj.class_name,
-                            (Type::Enum(enum_name), Value::EnumValue(enum_val)) => enum_name == &enum_val.enum_name,
+                        // 进行强类型检查，包括自动类型转换
+                        let (type_matches, converted_value) = match (declared_type, &value) {
+                            (Type::Int, Value::Int(_)) => (true, value.clone()),
+                            (Type::Float, Value::Float(_)) => (true, value.clone()),
+                            (Type::Bool, Value::Bool(_)) => (true, value.clone()),
+                            (Type::String, Value::String(_)) => (true, value.clone()),
+                            (Type::Long, Value::Long(_)) => (true, value.clone()),
+                            (Type::Void, Value::None) => (true, value.clone()),
+                            // 自动类型转换：int -> long
+                            (Type::Long, Value::Int(i)) => (true, Value::Long(*i as i64)),
+                            // 自动类型转换：int -> float
+                            (Type::Float, Value::Int(i)) => (true, Value::Float(*i as f64)),
+                            (Type::Class(class_name), Value::Object(obj)) => (class_name == &obj.class_name, value.clone()),
+                            (Type::Enum(enum_name), Value::EnumValue(enum_val)) => (enum_name == &enum_val.enum_name, value.clone()),
                             // 智能类型匹配：如果声明为Class类型，但值是EnumValue，检查名称是否匹配
                             (Type::Class(type_name), Value::EnumValue(enum_val)) => {
                                 // 检查是否是已知的枚举类型
-                                if self.enums.contains_key(type_name) {
+                                let matches = if self.enums.contains_key(type_name) {
                                     type_name == &enum_val.enum_name
                                 } else {
                                     false
-                                }
+                                };
+                                (matches, value.clone())
                             },
                             // 指针类型匹配（第二个检查点）
                             (Type::Pointer(expected_target), Value::Pointer(ptr)) => {
-                                self.pointer_target_type_matches(expected_target, &ptr.target_type)
+                                let matches = self.pointer_target_type_matches(expected_target, &ptr.target_type);
+                                (matches, value.clone())
                             },
                             (Type::OptionalPointer(expected_target), Value::Pointer(ptr)) => {
-                                self.pointer_target_type_matches(expected_target, &ptr.target_type)
+                                let matches = self.pointer_target_type_matches(expected_target, &ptr.target_type);
+                                (matches, value.clone())
                             },
-                            (Type::OptionalPointer(_), Value::None) => true,
+                            (Type::OptionalPointer(_), Value::None) => (true, value.clone()),
                             // 函数指针类型匹配（第二个检查点）
                             (Type::FunctionPointer(expected_params, expected_return), Value::FunctionPointer(func_ptr)) => {
                                 // 检查函数指针的参数和返回类型是否匹配
-                                if func_ptr.param_types.len() != expected_params.len() {
+                                let matches = if func_ptr.param_types.len() != expected_params.len() {
                                     false
                                 } else {
                                     // 检查参数类型
@@ -205,11 +225,12 @@ impl<'a> StatementExecutor for Interpreter<'a> {
                                     let return_match = &*func_ptr.return_type == expected_return.as_ref();
 
                                     params_match && return_match
-                                }
+                                };
+                                (matches, value.clone())
                             },
                             (Type::FunctionPointer(expected_params, expected_return), Value::LambdaFunctionPointer(lambda_ptr)) => {
                                 // 检查Lambda函数指针的参数和返回类型是否匹配
-                                if lambda_ptr.param_types.len() != expected_params.len() {
+                                let matches = if lambda_ptr.param_types.len() != expected_params.len() {
                                     false
                                 } else {
                                     // 对于Lambda，允许Auto类型匹配任何类型
@@ -227,28 +248,33 @@ impl<'a> StatementExecutor for Interpreter<'a> {
                                                        **expected_return == crate::ast::Type::Auto;
 
                                     params_match && return_match
-                                }
+                                };
+                                (matches, value.clone())
                             },
                             (Type::Array(expected_element_type), Value::Array(arr)) => {
                                 // 检查数组元素类型是否匹配
-                                if arr.is_empty() {
+                                let matches = if arr.is_empty() {
                                     true // 空数组可以匹配任何数组类型
                                 } else {
                                     // 检查所有元素是否匹配期望的元素类型
                                     arr.iter().all(|element| {
                                         self.value_matches_type(element, expected_element_type)
                                     })
-                                }
+                                };
+                                (matches, value.clone())
                             },
-                            _ => false
+                            _ => (false, value.clone())
                         };
-                        
+
                         if !type_matches {
-                            panic!("变量 '{}' 类型不匹配：期望 {:?}，但尝试赋值 {:?}", name, declared_type, value);
+                            panic!("变量 '{}' 类型不匹配：期望 {:?}，但尝试赋值 {:?}", name, declared_type, converted_value);
                         }
+
+                        // 使用转换后的值
+                        value = converted_value;
                     }
                 }
-                
+
                 // 更新变量值
                 if self.local_env.contains_key(&name) {
                     self.local_env.insert(name, value);
