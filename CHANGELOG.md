@@ -1,9 +1,164 @@
 # CodeNothing 更新日志
 
+## [v0.5.8] - 2025-07-31
+### 🚀 解析器语法支持完善 (Parser Syntax Enhancement)
+
+#### 🎯 主要改进 (Major Improvements)
+- **词法分析器增强**
+  - ✅ 添加箭头操作符(`->`)的词法识别支持
+  - ✅ 完善多字符操作符识别列表
+
+- **表达式解析器完善**
+  - ✅ 实现指针成员访问语法解析 (`ptr->member`)
+  - ✅ 修复括号表达式后缀操作符处理
+  - ✅ 支持复杂表达式的成员访问链 (`(*ptr).method()`)
+  - ✅ 增强后缀操作符处理循环
+
+- **类型解析器扩展**
+  - ✅ 支持固定大小数组指针类型 (`*[size]Type`)
+  - ✅ 支持固定大小指针数组类型 (`[size]*Type`)
+  - ✅ 完善数组类型和指针类型的组合解析
+
+#### 🔧 技术实现细节 (Technical Implementation)
+
+**词法分析器修复**
+```rust
+// 添加箭头操作符到多字符操作符列表
+if ["==", "!=", ">=", "<=", "&&", "||", "::", "..", "++", "--",
+    "+=", "-=", "*=", "/=", "%=", "=>", "->"].contains(&two_char_op.as_str())
+```
+
+**表达式解析器增强**
+```rust
+// 支持变量后的箭头操作符
+} else if self.peek() == Some(&"->".to_string()) {
+    self.consume(); // 消费 "->"
+    let member_name = self.consume().ok_or_else(|| "期望成员名".to_string())?;
+    let pointer_expr = Expression::Variable(name);
+    Ok(Expression::PointerMemberAccess(Box::new(pointer_expr), member_name))
+}
+
+// 支持括号表达式后的后缀操作符
+loop {
+    if self.peek() == Some(&".".to_string()) {
+        // 方法调用或字段访问
+    } else if self.peek() == Some(&"->".to_string()) {
+        // 指针成员访问
+    } else if self.peek() == Some(&"[".to_string()) {
+        // 数组访问
+    } else {
+        break;
+    }
+}
+```
+
+**类型解析器扩展**
+```rust
+// 数组指针类型: *[5]int
+if self.peek() == Some(&"[".to_string()) {
+    self.consume(); // 消费 "["
+    let size_token = self.consume().ok_or_else(|| "期望数组大小".to_string())?;
+    let size = size_token.parse::<usize>()?;
+    self.expect("]")?;
+    let element_type = Box::new(self.parse_expression_type()?);
+    Ok(Type::ArrayPointer(element_type, size))
+}
+
+// 指针数组类型: [5]*int
+if let Some(size) = array_size {
+    Ok(Type::PointerArray(target_type, size))
+}
+```
+
+#### 🧪 测试验证 (Test Validation)
+- ✅ **高级指针语法测试** (`advanced_pointer_syntax_test.cn`) - 完全通过
+- ✅ **指针成员访问测试** (`working_pointer_member_test.cn`) - 完全通过
+- ✅ **复杂表达式解析** - `(*ptr).method()` 语法正常工作
+- ✅ **后缀操作符链** - 支持多级成员访问和方法调用
+
+#### 📊 解析能力提升 (Parsing Capability Enhancement)
+
+| 语法特性 | v0.5.7状态 | v0.5.8状态 | 改进说明 |
+|---------|-----------|-----------|----------|
+| 箭头操作符 `->` | ❌ 不支持 | ✅ 完全支持 | 词法和语法解析完整实现 |
+| 括号表达式后缀 | ❌ 部分支持 | ✅ 完全支持 | 修复后缀操作符处理循环 |
+| 数组指针类型 | ❌ 不支持 | ✅ 完全支持 | `*[size]Type` 类型解析 |
+| 指针数组类型 | ❌ 不支持 | ✅ 完全支持 | `[size]*Type` 类型解析 |
+| 复杂成员访问 | ❌ 解析错误 | ✅ 完全支持 | `(*ptr).method()` 正常工作 |
+
+#### 🔧 编译时类型检查器 (Compile-time Type Checker)
+
+**新增静态类型分析模块**
+- ✅ 实现完整的编译时类型检查系统 (`src/analyzer/type_checker.rs`)
+- ✅ 支持变量声明类型验证
+- ✅ 函数参数和返回值类型检查
+- ✅ 表达式类型推断和验证
+- ✅ 二元操作符类型兼容性检查
+
+**类型检查功能覆盖**
+```rust
+// 支持的类型检查
+- 变量声明类型匹配: x : int = "string" ❌
+- 函数参数类型验证: add("hello", 42) ❌
+- 返回值类型检查: return "string" when expecting int ❌
+- 表达式类型推断: 自动推断复杂表达式类型
+- 算术操作类型检查: int + string ❌
+- 比较操作类型验证: 确保操作数类型兼容
+- 逻辑操作类型检查: 确保bool类型操作数
+```
+
+**错误检测和报告**
+- ✅ 详细的类型错误信息，包含期望类型和实际类型
+- ✅ 多错误收集，一次显示所有类型问题
+- ✅ 错误恢复机制，避免级联错误
+- ✅ 在执行前阻止类型不安全的代码运行
+
+**类型兼容性系统**
+- ✅ Auto类型与任何类型兼容（弱类型支持）
+- ✅ 数值类型隐式转换（int → float, int → long）
+- ✅ 指针类型兼容性检查
+- ✅ 数组元素类型一致性验证
+
+#### 🧪 类型检查验证测试 (Type Checking Validation)
+
+**成功案例测试**
+```codenothing
+// examples/type_check_test.cn - 全部通过类型检查
+x : int = 42;           ✅ 类型匹配
+result : int = add(x, 10); ✅ 函数调用类型正确
+length : int = name.length(); ✅ 方法调用类型正确
+```
+
+**错误检测测试**
+```codenothing
+// examples/type_error_test.cn - 成功检测4个类型错误
+x : int = "string";     ❌ 类型不匹配
+add("hello", 42);       ❌ 参数类型错误
+return "string";        ❌ 返回类型错误 (期望int)
+```
+
+#### 🎉 实际效果 (Real-world Impact)
+- **解析成功率**: 从部分语法解析失败提升到完全支持高级指针语法
+- **类型安全性**: 新增编译时类型检查，提前发现类型错误
+- **开发体验**: 详细的类型错误信息帮助开发者快速定位问题
+- **代码质量**: 防止类型相关的运行时错误
+- **语法覆盖**: v0.5.6实现的所有高级指针语法现在都能被正确解析
+
+#### 🔄 向后兼容性 (Backward Compatibility)
+- ✅ 所有现有代码继续正常工作
+- ✅ 类型检查为可选功能，不影响现有工作流
+- ✅ 新语法特性为可选使用
+- ✅ 解析器和类型检查器性能优秀
+- ✅ 错误信息更加准确和有用
+
+---
+
 ## [v0.5.7] - 2025-07-31
 
 ### 🚀 新增特性 (New Features)
 - 加入了 `--cn-time` 参数，用于显示程序执行时间。
+
+---
 
 ## [v0.5.6] - 2025-07-30
 ### 🚀 高级指针语法实现 (Advanced Pointer Syntax Implementation)
