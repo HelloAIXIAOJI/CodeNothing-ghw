@@ -15,52 +15,22 @@ pub trait ExpressionEvaluator {
 }
 
 impl<'a> Interpreter<'a> {
-    /// 快速变量查找，使用缓存优化
-    fn get_variable_fast(&mut self, name: &str) -> Value {
-        // 首先检查缓存
-        if let Some(location) = self.variable_cache.get(name) {
-            match location {
-                VariableLocation::Constant => {
-                    if let Some(value) = self.constants.get(name) {
-                        return value.clone();
-                    }
-                },
-                VariableLocation::Local => {
-                    if let Some(value) = self.local_env.get(name) {
-                        return value.clone();
-                    }
-                },
-                VariableLocation::Global => {
-                    if let Some(value) = self.global_env.get(name) {
-                        return value.clone();
-                    }
-                },
-                VariableLocation::Function => {
-                    if self.functions.contains_key(name) {
-                        return self.create_function_pointer(name);
-                    }
-                },
-            }
-        }
-
-        // 缓存未命中，执行完整查找并更新缓存
+    /// 快速变量查找，暂时禁用缓存以避免副作用
+    pub fn get_variable_fast(&mut self, name: &str) -> Value {
+        // 暂时禁用缓存，直接使用原有的查找逻辑
         if let Some(value) = self.constants.get(name) {
-            self.variable_cache.insert(name.to_string(), VariableLocation::Constant);
             return value.clone();
         }
 
         if let Some(value) = self.local_env.get(name) {
-            self.variable_cache.insert(name.to_string(), VariableLocation::Local);
             return value.clone();
         }
 
         if let Some(value) = self.global_env.get(name) {
-            self.variable_cache.insert(name.to_string(), VariableLocation::Global);
             return value.clone();
         }
 
         if self.functions.contains_key(name) {
-            self.variable_cache.insert(name.to_string(), VariableLocation::Function);
             return self.create_function_pointer(name);
         }
 
