@@ -275,8 +275,53 @@ impl<'a> ExpressionParser for ParserBase<'a> {
                     
                     // 普通括号表达式
                     self.consume(); // 消费左括号
-                    let expr = self.parse_expression()?;
+                    let mut expr = self.parse_expression()?;
                     self.expect(")")?;
+
+                    // 处理括号表达式后的后缀操作符
+                    loop {
+                        if self.peek() == Some(&".".to_string()) {
+                            // 方法调用或字段访问
+                            self.consume(); // 消费 "."
+                            let method_name = self.consume().ok_or_else(|| "期望方法名".to_string())?;
+
+                            if self.peek() == Some(&"(".to_string()) {
+                                // 方法调用
+                                self.consume(); // 消费 "("
+                                let mut args = Vec::new();
+
+                                if self.peek() != Some(&")".to_string()) {
+                                    loop {
+                                        args.push(self.parse_expression()?);
+                                        if self.peek() != Some(&",".to_string()) {
+                                            break;
+                                        }
+                                        self.consume(); // 消费 ","
+                                    }
+                                }
+
+                                self.expect(")")?;
+                                expr = Expression::MethodCall(Box::new(expr), method_name, args);
+                            } else {
+                                // 字段访问
+                                expr = Expression::FieldAccess(Box::new(expr), method_name);
+                            }
+                        } else if self.peek() == Some(&"->".to_string()) {
+                            // 指针成员访问
+                            self.consume(); // 消费 "->"
+                            let member_name = self.consume().ok_or_else(|| "期望成员名".to_string())?;
+                            expr = Expression::PointerMemberAccess(Box::new(expr), member_name);
+                        } else if self.peek() == Some(&"[".to_string()) {
+                            // 数组访问
+                            self.consume(); // 消费 "["
+                            let index_expr = self.parse_expression()?;
+                            self.expect("]")?;
+                            expr = Expression::ArrayAccess(Box::new(expr), Box::new(index_expr));
+                        } else {
+                            break;
+                        }
+                    }
+
                     Ok(expr)
                 },
                 "[" => {
@@ -648,6 +693,15 @@ impl<'a> ExpressionParser for ParserBase<'a> {
                         }
 
                         Ok(result)
+                    } else if self.peek() == Some(&"->".to_string()) {
+                        // 指针成员访问
+                        self.consume(); // 消费 "->"
+
+                        // 获取成员名
+                        let member_name = self.consume().ok_or_else(|| "期望成员名".to_string())?;
+
+                        let pointer_expr = Expression::Variable(name);
+                        Ok(Expression::PointerMemberAccess(Box::new(pointer_expr), member_name))
                     } else if self.peek() == Some(&".".to_string()) {
                         // 字段访问或方法调用或链式调用
                         self.consume(); // 消费 "."
@@ -767,8 +821,24 @@ impl<'a> ExpressionParser for ParserBase<'a> {
                     Ok(Type::Auto)
                 },
                 "[" => {
-                    // 数组类型或函数指针数组类型: []int 或 []*fn(int, int) : int
+                    // 数组类型或指针数组类型: []int, [5]int, []*int, [5]*int
                     self.consume(); // 消费 "["
+
+                    // 检查是否有数组大小
+                    let array_size = if let Some(size_token) = self.peek() {
+                        if size_token != "]" {
+                            // 有固定大小
+                            let size_str = self.consume().unwrap();
+                            let size = size_str.parse::<usize>()
+                                .map_err(|_| format!("无效的数组大小: {}", size_str))?;
+                            Some(size)
+                        } else {
+                            None
+                        }
+                    } else {
+                        None
+                    };
+
                     self.expect("]")?; // 期望 "]"
 
                     if self.peek() == Some(&"*".to_string()) {
@@ -797,22 +867,48 @@ impl<'a> ExpressionParser for ParserBase<'a> {
                             let func_ptr_type = Type::FunctionPointer(param_types, return_type);
                             Ok(Type::Array(Box::new(func_ptr_type)))
                         } else {
-                            // 指针数组类型: []*int
+                            // 指针数组类型: []*int 或 [5]*int
                             let target_type = Box::new(self.parse_expression_type()?);
-                            let ptr_type = Type::Pointer(target_type);
-                            Ok(Type::Array(Box::new(ptr_type)))
+                            if let Some(size) = array_size {
+                                // 固定大小指针数组: [5]*int
+                                Ok(Type::PointerArray(target_type, size))
+                            } else {
+                                // 动态指针数组: []*int
+                                let ptr_type = Type::Pointer(target_type);
+                                Ok(Type::Array(Box::new(ptr_type)))
+                            }
                         }
                     } else {
-                        // 普通数组类型: []int
+                        // 普通数组类型: []int 或 [5]int
                         let element_type = Box::new(self.parse_expression_type()?);
-                        Ok(Type::Array(element_type))
+                        if let Some(size) = array_size {
+                            // 固定大小数组: [5]int (暂时用Array表示，未来可能需要新类型)
+                            Ok(Type::Array(element_type))
+                        } else {
+                            // 动态数组: []int
+                            Ok(Type::Array(element_type))
+                        }
                     }
                 },
                 "*" => {
-                    // 指针类型或函数指针类型
+                    // 指针类型、函数指针类型或数组指针类型
                     self.consume(); // 消费 "*"
 
-                    if self.peek() == Some(&"fn".to_string()) {
+                    if self.peek() == Some(&"[".to_string()) {
+                        // 数组指针类型: *[5]int
+                        self.consume(); // 消费 "["
+
+                        // 解析数组大小
+                        let size_token = self.consume().ok_or_else(|| "期望数组大小".to_string())?;
+                        let size = size_token.parse::<usize>()
+                            .map_err(|_| format!("无效的数组大小: {}", size_token))?;
+
+                        self.expect("]")?; // 消费 "]"
+
+                        // 解析元素类型
+                        let element_type = Box::new(self.parse_expression_type()?);
+                        Ok(Type::ArrayPointer(element_type, size))
+                    } else if self.peek() == Some(&"fn".to_string()) {
                         // 函数指针类型: *fn(int, int) : int
                         self.consume(); // 消费 "fn"
                         self.expect("(")?;
