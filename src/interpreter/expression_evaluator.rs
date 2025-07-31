@@ -518,10 +518,11 @@ impl<'a> Interpreter<'a> {
                 }
             },
             LogicalOperator::Not => {
-                let val = self.evaluate_expression(left);
+                // 对于否定操作，实际的表达式在右操作数位置
+                let val = self.evaluate_expression(right);
                 match val {
-                    Value::Bool(b) => Value::Bool(jit::jit_not_bool(b)),
-                    _ => panic!("逻辑操作符的操作数必须是布尔类型"),
+                    Value::Bool(b) => Value::Bool(!b),
+                    _ => panic!("逻辑否定操作符的操作数必须是布尔类型"),
                 }
             },
         }
