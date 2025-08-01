@@ -1,2 +1,2 @@
-*.cn linguist-language=Text
-# CN没在linguist，暂用Text
+*.cn linguist-language=C++
+# Codenothing没在linguist，暂用cpp
