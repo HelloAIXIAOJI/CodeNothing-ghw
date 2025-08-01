@@ -286,9 +286,18 @@ impl<'a> ExpressionEvaluator for Interpreter<'a> {
                 }
             },
             Expression::StaticMethodCall(class_name, method_name, args) => {
-                // 首先检查是否是库命名空间函数调用
+                // 🔧 首先检查是否是库命名空间函数调用
                 if self.library_namespaces.contains_key(class_name) {
                     debug_println(&format!("StaticMethodCall被识别为库命名空间函数调用: {}::{}", class_name, method_name));
+                    // 转换为命名空间函数调用
+                    let path = vec![class_name.clone(), method_name.clone()];
+                    return self.handle_namespaced_function_call(&path, args);
+                }
+
+                // 🔧 新增：检查是否是代码命名空间函数调用
+                let potential_ns_path = format!("{}::{}", class_name, method_name);
+                if self.namespaced_functions.contains_key(&potential_ns_path) {
+                    debug_println(&format!("StaticMethodCall被识别为代码命名空间函数调用: {}", potential_ns_path));
                     // 转换为命名空间函数调用
                     let path = vec![class_name.clone(), method_name.clone()];
                     return self.handle_namespaced_function_call(&path, args);
@@ -315,11 +324,11 @@ impl<'a> ExpressionEvaluator for Interpreter<'a> {
                         for statement in &method.body {
                             if let crate::ast::Statement::Return(expr) = statement {
                                 // 简单的变量替换
-                                if let crate::ast::Expression::Variable(var_name) = expr {
+                                if let Some(crate::ast::Expression::Variable(var_name)) = expr {
                                     if let Some(value) = method_env.get(var_name) {
                                         return value.clone();
                                     }
-                                } else if let crate::ast::Expression::BinaryOp(left, op, right) = expr {
+                                } else if let Some(crate::ast::Expression::BinaryOp(left, op, right)) = expr {
                                     // 简单的二元操作
                                     let left_val = if let crate::ast::Expression::Variable(var) = &**left {
                                         method_env.get(var).cloned().unwrap_or(Value::None)
@@ -341,7 +350,11 @@ impl<'a> ExpressionEvaluator for Interpreter<'a> {
                                         }
                                     }
                                 }
-                                return self.evaluate_expression(expr);
+                                if let Some(expr) = expr {
+                        return self.evaluate_expression(expr);
+                    } else {
+                        return Value::None;
+                    }
                             }
                         }
                         Value::None
@@ -1225,7 +1238,11 @@ impl<'a> Interpreter<'a> {
             match statement {
                 Statement::Return(expr) => {
                     // 在方法执行期间，需要设置this上下文和参数环境
-                    return self.evaluate_expression_with_full_context(expr, this_obj, method_env);
+                    if let Some(expr) = expr {
+                        return self.evaluate_expression_with_full_context(expr, this_obj, method_env);
+                    } else {
+                        return Value::None;
+                    }
                 },
                 _ => {
                     // 其他语句暂时跳过
@@ -1379,7 +1396,11 @@ impl<'a> Interpreter<'a> {
                 let mut result = Value::None;
                 for statement in &statements {
                     if let crate::ast::Statement::Return(expr) = statement {
-                        result = self.evaluate_expression(expr);
+                        if let Some(expr) = expr {
+                            result = self.evaluate_expression(expr);
+                        } else {
+                            result = Value::None;
+                        }
                         break;
                     }
                     // 这里需要执行其他语句，但为了简化暂时跳过
@@ -2324,7 +2345,11 @@ impl<'a> Interpreter<'a> {
             // 执行Lambda体
             let result = match body.as_ref() {
                 crate::ast::Statement::Return(expr) => {
-                    self.evaluate_expression(expr)
+                    if let Some(expr) = expr {
+                        self.evaluate_expression(expr)
+                    } else {
+                        Value::None
+                    }
                 },
                 crate::ast::Statement::FunctionCallStatement(expr) => {
                     self.evaluate_expression(expr)
@@ -2357,7 +2382,7 @@ impl<'a> Interpreter<'a> {
         let return_type = crate::ast::Type::Auto;
 
         // 将表达式包装为Return语句
-        let lambda_body = crate::ast::Statement::Return(body.clone());
+        let lambda_body = crate::ast::Statement::Return(Some(body.clone()));
 
         // 捕获当前环境作为闭包环境
         let mut closure_env = std::collections::HashMap::new();
@@ -2402,7 +2427,7 @@ impl<'a> Interpreter<'a> {
         let lambda_body = if let Some(first_stmt) = statements.first() {
             first_stmt.clone()
         } else {
-            crate::ast::Statement::Return(crate::ast::Expression::None)
+            crate::ast::Statement::Return(Some(crate::ast::Expression::None))
         };
 
         // 为Lambda块创建空的闭包环境（Lambda块通常不需要闭包）
@@ -2520,7 +2545,11 @@ impl<'a> Interpreter<'a> {
             // 执行Lambda体
             let result = match body.as_ref() {
                 crate::ast::Statement::Return(expr) => {
-                    self.evaluate_expression(expr)
+                    if let Some(expr) = expr {
+                        self.evaluate_expression(expr)
+                    } else {
+                        Value::None
+                    }
                 },
                 crate::ast::Statement::FunctionCallStatement(expr) => {
                     self.evaluate_expression(expr)
@@ -2579,7 +2608,11 @@ impl<'a> Interpreter<'a> {
         // 暂时简化：只处理简单的return语句
         for statement in &function.body {
             if let crate::ast::Statement::Return(expr) = statement {
-                result = self.evaluate_expression(expr);
+                if let Some(expr) = expr {
+                    result = self.evaluate_expression(expr);
+                } else {
+                    result = Value::None;
+                }
                 break;
             }
             // 其他语句暂时跳过
