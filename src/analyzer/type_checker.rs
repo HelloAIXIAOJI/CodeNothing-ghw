@@ -61,9 +61,38 @@ impl TypeChecker {
         // 第一遍：收集所有函数、类、枚举的定义
         self.collect_program_definitions(program);
 
+        // 🔧 修复：收集命名空间中的函数定义
+        for namespace in &program.namespaces {
+            for function in &namespace.functions {
+                let param_types: Vec<Type> = function.parameters.iter()
+                    .map(|p| p.param_type.clone())
+                    .collect();
+
+                // 添加简化名称（用于导入后的调用）
+                self.function_signatures.insert(
+                    function.name.clone(),
+                    (param_types.clone(), function.return_type.clone())
+                );
+
+                // 添加完整命名空间路径（用于完整路径调用）
+                let full_name = format!("{}::{}", namespace.name, function.name);
+                self.function_signatures.insert(
+                    full_name,
+                    (param_types, function.return_type.clone())
+                );
+            }
+        }
+
         // 第二遍：检查所有函数的类型
         for function in &program.functions {
             self.check_function_declaration(function);
+        }
+
+        // 第三遍：检查命名空间中的函数
+        for namespace in &program.namespaces {
+            for function in &namespace.functions {
+                self.check_function_declaration(function);
+            }
         }
 
         if self.errors.is_empty() {
@@ -84,6 +113,23 @@ impl TypeChecker {
                 function.name.clone(),
                 (param_types, function.return_type.clone())
             );
+        }
+
+        // 🔧 修复：收集导入的命名空间中的库函数
+        // 🔧 移除硬编码的函数签名，应该从动态库系统获取
+        // TODO: 实现从已加载库中动态获取函数签名的机制
+        for (ns_type, path) in &program.imported_namespaces {
+            match ns_type {
+                crate::ast::NamespaceType::Library => {
+                    let _namespace_name = path.join("::");
+                    // 库命名空间的函数签名应该从动态加载的库中获取
+                    // 这里暂时不处理，等待实现动态签名获取机制
+                },
+                crate::ast::NamespaceType::Code => {
+                    let _namespace_name = path.join("::");
+                    // 代码命名空间的函数签名会在后面的命名空间处理中添加
+                }
+            }
         }
 
         // 收集类定义
@@ -117,7 +163,7 @@ impl TypeChecker {
                 self.check_assignment(name, expr);
             },
             Statement::Return(expr) => {
-                self.check_return_statement(&Some(expr.clone()));
+                self.check_return_statement(expr);
             },
             Statement::IfElse(condition, then_block, else_blocks) => {
                 self.check_if_else_statement(condition, then_block, else_blocks);
@@ -567,6 +613,17 @@ impl TypeChecker {
 
     // 检查函数调用
     fn check_function_call(&mut self, name: &str, args: &[Expression]) -> Type {
+        // 🔧 首先检查是否是内置函数
+        match name {
+            "println" | "print" => {
+                // 内置输出函数，接受任意数量的参数
+                return Type::Void;
+            },
+            _ => {
+                // 继续检查用户定义的函数
+            }
+        }
+
         // 先克隆函数签名以避免借用冲突
         if let Some((param_types, return_type)) = self.function_signatures.get(name).cloned() {
             // 检查参数数量
