@@ -141,5 +141,3 @@ cargo build --release
 ---
 
 **CodeNothing v0.6.0: LLL已死，性能新生！** 🎉
-
-*下一个目标: MML锁，我们来了！* 🎯
