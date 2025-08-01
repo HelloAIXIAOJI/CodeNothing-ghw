@@ -204,37 +204,6 @@ impl<'a> FunctionCallHandler for Interpreter<'a> {
         
         debug_println(&format!("调用函数: {}", name));
 
-        // 🔧 首先检查是否是内置std函数（通过using ns std导入）
-        match name {
-            "println" => {
-                // 内置println函数
-                if arg_values.is_empty() {
-                    println!();
-                } else {
-                    let output = arg_values.iter()
-                        .map(|v| v.to_string())
-                        .collect::<Vec<_>>()
-                        .join(" ");
-                    println!("{}", output);
-                }
-                return Value::None;
-            },
-            "print" => {
-                // 内置print函数
-                if !arg_values.is_empty() {
-                    let output = arg_values.iter()
-                        .map(|v| v.to_string())
-                        .collect::<Vec<_>>()
-                        .join(" ");
-                    print!("{}", output);
-                }
-                return Value::None;
-            },
-            _ => {
-                // 继续处理其他函数
-            }
-        }
-
         // 先检查是否是导入的命名空间函数
         if let Some(paths) = self.imported_namespaces.get(name) {
             debug_println(&format!("找到导入的函数: {} -> {:?}", name, paths));
@@ -393,40 +362,6 @@ impl<'a> FunctionCallHandler for Interpreter<'a> {
         }
 
         debug_println(&format!("调用命名空间函数: {}", full_path));
-
-        // 🔧 首先检查是否是内置std命名空间函数
-        if path.len() >= 2 && path[0] == "std" {
-            let func_name = &path[1];
-            match func_name.as_str() {
-                "println" => {
-                    // 内置println函数
-                    if arg_values.is_empty() {
-                        println!();
-                    } else {
-                        let output = arg_values.iter()
-                            .map(|v| v.to_string())
-                            .collect::<Vec<_>>()
-                            .join(" ");
-                        println!("{}", output);
-                    }
-                    return Value::None;
-                },
-                "print" => {
-                    // 内置print函数
-                    if !arg_values.is_empty() {
-                        let output = arg_values.iter()
-                            .map(|v| v.to_string())
-                            .collect::<Vec<_>>()
-                            .join(" ");
-                        print!("{}", output);
-                    }
-                    return Value::None;
-                },
-                _ => {
-                    // 其他std函数暂时不支持
-                }
-            }
-        }
 
         // 检查是否是库命名空间函数
         if path.len() >= 2 {
