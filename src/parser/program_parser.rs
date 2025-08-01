@@ -125,9 +125,17 @@ pub fn parse_program(parser: &mut ParserBase) -> Result<Program, String> {
                 
                 // 期望 ";" 符号
                 parser.expect(";")?;
-                
-                // 添加到命名空间导入列表，使用Code类型
-                imported_namespaces.push((crate::ast::NamespaceType::Code, path));
+
+                // 🔧 修复：根据命名空间名称判断类型
+                // std是内置命名空间，不是外部库
+                let namespace_type = if path.len() == 1 && (path[0] == "io" || path[0] == "time" || path[0] == "math" || path[0] == "fs" || path[0] == "os" || path[0] == "http" || path[0] == "json") {
+                    crate::ast::NamespaceType::Library // 库命名空间
+                } else {
+                    crate::ast::NamespaceType::Code // 代码命名空间（包括std）
+                };
+
+                // 添加到命名空间导入列表
+                imported_namespaces.push((namespace_type, path));
             } else {
                 return Err("期望 'lib_once'、'lib'、'file'、'ns' 或 'namespace' 关键字".to_string());
             }
