@@ -71,12 +71,12 @@ impl<'a> StatementParser for ParserBase<'a> {
                     if self.peek() == Some(&";".to_string()) {
                         self.consume(); // 消费分号
                         // 返回void
-                        Ok(Statement::Return(Expression::BoolLiteral(false))) // 使用布尔字面量作为占位符
+                        Ok(Statement::Return(None))
                     } else {
                         // 解析返回表达式
                         let expr = self.parse_expression()?;
                         self.expect(";")?;
-                        Ok(Statement::Return(expr))
+                        Ok(Statement::Return(Some(expr)))
                     }
                 },
                 "if" => {
@@ -241,42 +241,42 @@ impl<'a> StatementParser for ParserBase<'a> {
                                 "".to_string(), // 静态访问不需要字段名
                                 value_expr
                             ))
-                        } else if self.peek() == Some(&"(".to_string()) {
-                            // 这是函数调用
+                        } else if self.peek() == Some(&"(".to_string()) || self.peek() == Some(&"::".to_string()) {
+                            // 🔧 修复：这是函数调用或多级命名空间调用
                             // 检查是否是库函数调用
-                            if var_name.starts_with("lib_") {
+                            if var_name.starts_with("lib_") && self.peek() == Some(&"(".to_string()) {
                                 // 库函数调用，格式为 lib_xxx::func_name
                                 let lib_name = var_name.trim_start_matches("lib_").to_string();
-                                
+
                                 self.expect("(")?;
-                                
+
                                 let mut args = Vec::new();
-                                
+
                                 if self.peek() != Some(&")".to_string()) {
                                     // 解析参数列表
                                     loop {
                                         let arg = self.parse_expression()?;
                                         args.push(arg);
-                                        
+
                                         if self.peek() != Some(&",".to_string()) {
                                             break;
                                         }
-                                        
+
                                         self.consume(); // 消费 ","
                                     }
                                 }
-                                
+
                                 self.expect(")")?;
                                 self.expect(";")?;
-                                
+
                                 Ok(Statement::LibraryFunctionCallStatement(lib_name, member_name, args))
                             } else {
                                 // 静态方法调用或命名空间函数调用
                                 let mut path = Vec::new();
                                 path.push(var_name.clone()); // 第一个命名空间名
                                 path.push(member_name.clone()); // 函数名或下一级命名空间
-                                
-                                // 解析命名空间路径
+
+                                // 🔧 修复：解析多级命名空间路径（无论下一个是::还是(）
                                 while self.peek() == Some(&"::".to_string()) {
                                     self.consume(); // 消费 "::"
                                     if let Some(name) = self.consume() {
@@ -285,25 +285,25 @@ impl<'a> StatementParser for ParserBase<'a> {
                                         return Err("期望标识符".to_string());
                                     }
                                 }
-                                
+
                                 self.expect("(")?;
-                                
+
                                 // 解析函数调用参数
                                 let mut args = Vec::new();
                                 if self.peek() != Some(&")".to_string()) {
                                     // 至少有一个参数
                                     args.push(self.parse_expression()?);
-                                    
+
                                     // 解析剩余参数
                                     while self.peek() == Some(&",".to_string()) {
                                         self.consume(); // 消费逗号
                                         args.push(self.parse_expression()?);
                                     }
                                 }
-                                
+
                                 self.expect(")")?;
                                 self.expect(";")?;
-                                
+
                                 // 检查是否是静态方法调用（只有两个部分：ClassName::methodName）
                                 if path.len() == 2 {
                                     // 创建静态方法调用表达式
@@ -736,7 +736,7 @@ impl<'a> StatementParser for ParserBase<'a> {
                     self.consume(); // 消费 "=>"
                     let default_expr = self.parse_expression()?;
                     // 对于表达式形式的default，我们将其转换为语句块
-                    default_block = Some(vec![Statement::Return(default_expr)]);
+                    default_block = Some(vec![Statement::Return(Some(default_expr))]);
                 } else {
                     // 语句形式
                     self.expect("{")?;
