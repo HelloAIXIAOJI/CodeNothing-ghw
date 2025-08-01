@@ -18,7 +18,11 @@ impl<'a> StatementExecutor for Interpreter<'a> {
         match statement {
             Statement::Return(expr) => {
                 // 返回语句，计算表达式值并返回
-                let value = self.evaluate_expression(&expr);
+                let value = if let Some(expr) = expr {
+                    self.evaluate_expression(&expr)
+                } else {
+                    Value::None // void返回
+                };
                 ExecutionResult::Return(value)
             },
             Statement::VariableDeclaration(name, declared_type, expr) => {
