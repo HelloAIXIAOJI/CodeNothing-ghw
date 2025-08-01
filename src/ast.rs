@@ -138,7 +138,7 @@ pub enum PointerArithmeticOp {
 
 #[derive(Debug, Clone)]
 pub enum Statement {
-    Return(Expression),
+    Return(Option<Expression>),
     VariableDeclaration(String, Type, Expression),
     ConstantDeclaration(String, Type, Expression), // 新增：常量声明
     VariableAssignment(String, Expression),
