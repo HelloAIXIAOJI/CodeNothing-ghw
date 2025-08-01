@@ -1,17 +1,29 @@
 use std::path::{Path, PathBuf};
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, RwLock};
 use std::env;
 use std::fs;
 use std::io::Read;
 use libloading::{Library, Symbol};
 use once_cell::sync::Lazy;
+use dashmap::DashMap;
 use crate::interpreter::debug_println;
 use crate::interpreter::value::Value;
 
-// 已加载库的缓存，使用Lazy静态变量确保线程安全的初始化
-static LOADED_LIBRARIES: Lazy<Arc<Mutex<HashMap<String, Arc<Library>>>>> = 
-    Lazy::new(|| Arc::new(Mutex::new(HashMap::new())));
+// 🚀 v0.6.0 LLL优化：使用无锁并发HashMap替代全局锁
+// DashMap提供了高性能的并发访问，无需全局锁
+static LOADED_LIBRARIES: Lazy<DashMap<String, Arc<Library>>> =
+    Lazy::new(|| DashMap::new());
+
+// 🚀 函数缓存：避免重复的库函数查找
+static FUNCTION_CACHE: Lazy<DashMap<String, Arc<HashMap<String, LibraryFunction>>>> =
+    Lazy::new(|| DashMap::new());
+
+// 📊 性能统计（可选，用于监控优化效果）
+use std::sync::atomic::{AtomicU64, Ordering};
+static CACHE_HITS: AtomicU64 = AtomicU64::new(0);
+static CACHE_MISSES: AtomicU64 = AtomicU64::new(0);
+static LIBRARY_LOADS: AtomicU64 = AtomicU64::new(0);
 
 // 库函数类型定义
 pub type LibraryFunction = fn(Vec<String>) -> String;
@@ -155,49 +167,40 @@ pub fn debug_library_functions(lib_name: &str) -> Result<(), String> {
     Ok(())
 }
 
-// 加载库并返回其函数映射
+// 🚀 v0.6.0 LLL优化：无锁库加载函数
 pub fn load_library(lib_name: &str) -> Result<Arc<HashMap<String, LibraryFunction>>, String> {
-    debug_println(&format!("开始加载库: {}", lib_name));
-    
-    let mut loaded_libs = match LOADED_LIBRARIES.lock() {
-        Ok(guard) => guard,
-        Err(_) => return Err("无法获取库缓存锁".to_string()),
-    };
-    
-    // 检查库是否已经加载
-    if let Some(lib) = loaded_libs.get(lib_name) {
-        debug_println(&format!("库 '{}' 已加载，获取其函数映射", lib_name));
-        // 库已加载，获取其函数映射
-        unsafe {
-            let init_fn: Symbol<InitFn> = match lib.get(b"cn_init") {
-                Ok(f) => f,
-                Err(e) => return Err(format!("无法获取库初始化函数: {}", e)),
-            };
-            
-            let functions_ptr = init_fn();
-            if functions_ptr.is_null() {
-                return Err("库初始化函数返回空指针".to_string());
-            }
-            
-            // 将原始指针转换为HashMap，然后包装为Arc
-            let boxed_functions = Box::from_raw(functions_ptr);
-            let functions = *boxed_functions; // 解引用Box<HashMap>为HashMap
-            
-            // 调试输出函数列表
-            debug_println(&format!("库 '{}' 中的函数:", lib_name));
-            for (func_name, _) in &functions {
-                debug_println(&format!("  - {}", func_name));
-            }
-            
-            return Ok(Arc::new(functions));
-        }
+    debug_println(&format!("🚀 无锁加载库: {}", lib_name));
+
+    // 🔥 首先检查函数缓存（最快路径）
+    if let Some(functions) = FUNCTION_CACHE.get(lib_name) {
+        CACHE_HITS.fetch_add(1, Ordering::Relaxed);
+        debug_println(&format!("✅ 函数缓存命中: {} (命中次数: {})", lib_name, CACHE_HITS.load(Ordering::Relaxed)));
+        return Ok(functions.clone());
     }
-    
-    // 库尚未加载，尝试查找并加载
+
+    // 🔥 检查库是否已加载（无锁读取）
+    if let Some(lib_entry) = LOADED_LIBRARIES.get(lib_name) {
+        debug_println(&format!("✅ 库已加载，提取函数: {}", lib_name));
+
+        // 提取函数映射并缓存
+        let functions = extract_library_functions(&lib_entry.value(), lib_name)?;
+        FUNCTION_CACHE.insert(lib_name.to_string(), functions.clone());
+
+        return Ok(functions);
+    }
+
+    // 🔥 库尚未加载，执行实际加载（这是唯一可能阻塞的地方）
+    CACHE_MISSES.fetch_add(1, Ordering::Relaxed);
+    LIBRARY_LOADS.fetch_add(1, Ordering::Relaxed);
+    debug_println(&format!("🔄 开始实际加载库: {} (缓存未命中: {}, 总加载: {})",
+        lib_name,
+        CACHE_MISSES.load(Ordering::Relaxed),
+        LIBRARY_LOADS.load(Ordering::Relaxed)
+    ));
+
     let lib_path = match find_library_file(lib_name) {
         Some(path) => path,
         None => {
-            let primary_path = get_library_path(lib_name);
             return Err(format!(
                 "找不到库文件 '{}'\n查找位置:\n- 解释器目录/library/\n- 当前目录/library/\n支持的文件格式: {}",
                 lib_name,
@@ -213,8 +216,23 @@ pub fn load_library(lib_name: &str) -> Result<Arc<HashMap<String, LibraryFunctio
             Err(e) => return Err(format!("无法加载库 '{:?}': {}", lib_path, e)),
         };
 
-        debug_println(&format!("成功加载库文件: {:?}", lib_path));
+        debug_println(&format!("✅ 成功加载库文件: {:?}", lib_path));
 
+        // 提取函数映射
+        let functions = extract_library_functions(&lib, lib_name)?;
+
+        // 🚀 无锁插入到缓存中
+        LOADED_LIBRARIES.insert(lib_name.to_string(), lib);
+        FUNCTION_CACHE.insert(lib_name.to_string(), functions.clone());
+
+        debug_println(&format!("🎯 库 '{}' 加载完成并缓存", lib_name));
+        Ok(functions)
+    }
+}
+
+// 🚀 提取库函数的辅助函数（避免重复代码）
+fn extract_library_functions(lib: &Arc<Library>, lib_name: &str) -> Result<Arc<HashMap<String, LibraryFunction>>, String> {
+    unsafe {
         // 获取初始化函数
         let init_fn: Symbol<InitFn> = match lib.get(b"cn_init") {
             Ok(f) => f,
@@ -232,37 +250,88 @@ pub fn load_library(lib_name: &str) -> Result<Arc<HashMap<String, LibraryFunctio
         let functions = *boxed_functions; // 解引用Box<HashMap>为HashMap
 
         // 调试输出函数列表
-        debug_println(&format!("库 '{}' 中的函数:", lib_name));
+        debug_println(&format!("📋 库 '{}' 中的函数:", lib_name));
         for (func_name, _) in &functions {
             debug_println(&format!("  - {}", func_name));
         }
 
-        let functions_arc = Arc::new(functions);
-
-        // 将库添加到已加载库缓存
-        loaded_libs.insert(lib_name.to_string(), lib);
-
-        Ok(functions_arc)
+        Ok(Arc::new(functions))
     }
 }
 
-// 调用库函数
+// 🚀 v0.6.0 LLL优化：超高速库函数调用
 pub fn call_library_function(lib_name: &str, func_name: &str, args: Vec<String>) -> Result<String, String> {
-    debug_println(&format!("调用库函数: {}::{}", lib_name, func_name));
-    
-    // 加载库
+    debug_println(&format!("🚀 快速调用: {}::{}", lib_name, func_name));
+
+    // 🔥 直接从函数缓存获取（最快路径）
+    if let Some(functions) = FUNCTION_CACHE.get(lib_name) {
+        if let Some(func) = functions.get(func_name) {
+            debug_println(&format!("⚡ 缓存命中，直接调用: {}::{}", lib_name, func_name));
+            return Ok(func(args));
+        }
+    }
+
+    // 🔄 缓存未命中，加载库（这会更新缓存）
+    debug_println(&format!("🔄 缓存未命中，加载库: {}", lib_name));
     let functions = load_library(lib_name)?;
-    
-    // 查找函数
+
+    // 查找并调用函数
     match functions.get(func_name) {
         Some(func) => {
-            // 调用函数
-            debug_println(&format!("找到并调用函数: {}::{}", lib_name, func_name));
+            debug_println(&format!("✅ 找到并调用函数: {}::{}", lib_name, func_name));
             Ok(func(args))
         },
         None => Err(format!("库 '{}' 中未找到函数 '{}'", lib_name, func_name)),
     }
-} 
+}
+
+// 🚀 v0.6.0 新增：性能统计和缓存管理函数
+
+/// 获取库加载性能统计
+pub fn get_library_performance_stats() -> (u64, u64, u64, f64) {
+    let hits = CACHE_HITS.load(Ordering::Relaxed);
+    let misses = CACHE_MISSES.load(Ordering::Relaxed);
+    let loads = LIBRARY_LOADS.load(Ordering::Relaxed);
+    let hit_rate = if hits + misses > 0 {
+        hits as f64 / (hits + misses) as f64 * 100.0
+    } else {
+        0.0
+    };
+    (hits, misses, loads, hit_rate)
+}
+
+/// 打印库加载性能统计
+pub fn print_library_performance_stats() {
+    let (hits, misses, loads, hit_rate) = get_library_performance_stats();
+    debug_println(&format!("📊 库加载性能统计:"));
+    debug_println(&format!("  缓存命中: {}", hits));
+    debug_println(&format!("  缓存未命中: {}", misses));
+    debug_println(&format!("  库加载次数: {}", loads));
+    debug_println(&format!("  缓存命中率: {:.2}%", hit_rate));
+    debug_println(&format!("  已缓存库数量: {}", FUNCTION_CACHE.len()));
+    debug_println(&format!("  已加载库数量: {}", LOADED_LIBRARIES.len()));
+}
+
+/// 清理缓存（用于测试或内存管理）
+pub fn clear_library_cache() {
+    FUNCTION_CACHE.clear();
+    debug_println("🧹 函数缓存已清理");
+}
+
+/// 预加载常用库（可选优化）
+pub fn preload_common_libraries() -> Result<(), String> {
+    let common_libs = ["io", "time", "math"]; // 常用库列表
+
+    debug_println("🚀 开始预加载常用库...");
+    for lib_name in &common_libs {
+        match load_library(lib_name) {
+            Ok(_) => debug_println(&format!("✅ 预加载库成功: {}", lib_name)),
+            Err(e) => debug_println(&format!("⚠️ 预加载库失败: {} - {}", lib_name, e)),
+        }
+    }
+    debug_println("🎯 常用库预加载完成");
+    Ok(())
+}
 
 // 新增函数，将Value类型转换为字符串参数
 pub fn convert_value_to_string_arg(value: &Value) -> String {
