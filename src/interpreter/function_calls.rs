@@ -203,7 +203,38 @@ impl<'a> FunctionCallHandler for Interpreter<'a> {
         }
         
         debug_println(&format!("调用函数: {}", name));
-        
+
+        // 🔧 首先检查是否是内置std函数（通过using ns std导入）
+        match name {
+            "println" => {
+                // 内置println函数
+                if arg_values.is_empty() {
+                    println!();
+                } else {
+                    let output = arg_values.iter()
+                        .map(|v| v.to_string())
+                        .collect::<Vec<_>>()
+                        .join(" ");
+                    println!("{}", output);
+                }
+                return Value::None;
+            },
+            "print" => {
+                // 内置print函数
+                if !arg_values.is_empty() {
+                    let output = arg_values.iter()
+                        .map(|v| v.to_string())
+                        .collect::<Vec<_>>()
+                        .join(" ");
+                    print!("{}", output);
+                }
+                return Value::None;
+            },
+            _ => {
+                // 继续处理其他函数
+            }
+        }
+
         // 先检查是否是导入的命名空间函数
         if let Some(paths) = self.imported_namespaces.get(name) {
             debug_println(&format!("找到导入的函数: {} -> {:?}", name, paths));
@@ -362,7 +393,41 @@ impl<'a> FunctionCallHandler for Interpreter<'a> {
         }
 
         debug_println(&format!("调用命名空间函数: {}", full_path));
-        
+
+        // 🔧 首先检查是否是内置std命名空间函数
+        if path.len() >= 2 && path[0] == "std" {
+            let func_name = &path[1];
+            match func_name.as_str() {
+                "println" => {
+                    // 内置println函数
+                    if arg_values.is_empty() {
+                        println!();
+                    } else {
+                        let output = arg_values.iter()
+                            .map(|v| v.to_string())
+                            .collect::<Vec<_>>()
+                            .join(" ");
+                        println!("{}", output);
+                    }
+                    return Value::None;
+                },
+                "print" => {
+                    // 内置print函数
+                    if !arg_values.is_empty() {
+                        let output = arg_values.iter()
+                            .map(|v| v.to_string())
+                            .collect::<Vec<_>>()
+                            .join(" ");
+                        print!("{}", output);
+                    }
+                    return Value::None;
+                },
+                _ => {
+                    // 其他std函数暂时不支持
+                }
+            }
+        }
+
         // 检查是否是库命名空间函数
         if path.len() >= 2 {
             let ns_name = &path[0];
@@ -480,11 +545,11 @@ impl<'a> FunctionCallHandler for Interpreter<'a> {
                             for statement in &method.body {
                                 if let crate::ast::Statement::Return(expr) = statement {
                                     // 简单的变量替换
-                                    if let crate::ast::Expression::Variable(var_name) = expr {
+                                    if let Some(crate::ast::Expression::Variable(var_name)) = expr {
                                         if let Some(value) = method_env.get(var_name) {
                                             return value.clone();
                                         }
-                                    } else if let crate::ast::Expression::BinaryOp(left, op, right) = expr {
+                                    } else if let Some(crate::ast::Expression::BinaryOp(left, op, right)) = expr {
                                         // 简单的二元操作
                                         let left_val = if let crate::ast::Expression::Variable(var) = &**left {
                                             method_env.get(var).cloned().unwrap_or(Value::None)
@@ -518,7 +583,11 @@ impl<'a> FunctionCallHandler for Interpreter<'a> {
                                             }
                                         }
                                     }
-                                    return self.evaluate_expression(expr);
+                                    if let Some(expr) = expr {
+                                        return self.evaluate_expression(expr);
+                                    } else {
+                                        return Value::None;
+                                    }
                                 }
                             }
                             return Value::None;
@@ -664,7 +733,11 @@ impl<'a> Interpreter<'a> {
         for statement in &function.body {
             match statement {
                 crate::ast::Statement::Return(expr) => {
-                    result = self.evaluate_expression(expr);
+                    if let Some(expr) = expr {
+                        result = self.evaluate_expression(expr);
+                    } else {
+                        result = Value::None;
+                    }
                     break; // 遇到return立即退出
                 },
                 crate::ast::Statement::VariableDeclaration(name, _var_type, init_expr) => {
@@ -687,7 +760,11 @@ impl<'a> Interpreter<'a> {
                         for stmt in if_body {
                             match stmt {
                                 crate::ast::Statement::Return(expr) => {
-                                    result = self.evaluate_expression(expr);
+                                    if let Some(expr) = expr {
+                                        result = self.evaluate_expression(expr);
+                                    } else {
+                                        result = Value::None;
+                                    }
                                     // 恢复环境并返回
                                     self.local_env = saved_local_env;
                                     return result;
@@ -719,7 +796,11 @@ impl<'a> Interpreter<'a> {
                                 for stmt in else_body {
                                     match stmt {
                                         crate::ast::Statement::Return(expr) => {
-                                            result = self.evaluate_expression(expr);
+                                            if let Some(expr) = expr {
+                                                result = self.evaluate_expression(expr);
+                                            } else {
+                                                result = Value::None;
+                                            }
                                             // 恢复环境并返回
                                             self.local_env = saved_local_env;
                                             return result;
@@ -806,7 +887,11 @@ impl<'a> Interpreter<'a> {
             // 执行Lambda体
             let result = match body.as_ref() {
                 crate::ast::Statement::Return(expr) => {
-                    self.evaluate_expression(expr)
+                    if let Some(expr) = expr {
+                        self.evaluate_expression(expr)
+                    } else {
+                        Value::None
+                    }
                 },
                 crate::ast::Statement::FunctionCallStatement(expr) => {
                     self.evaluate_expression(expr)
