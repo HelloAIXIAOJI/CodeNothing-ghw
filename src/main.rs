@@ -189,6 +189,7 @@ fn main() {
         println!("  --cn-return     显示程序执行结果");
         println!("  --cn-query-jit  显示JIT编译统计信息");
         println!("  --cn-time       显示程序执行时间");
+        println!("  --cn-rwlock     🚀 v0.6.2 显示读写锁性能统计");
         println!("");
         println!("示例:");
         println!("  {} hello.cn", args[0]);
@@ -204,6 +205,7 @@ fn main() {
     let show_return = args.iter().any(|arg| arg == "--cn-return");
     let query_jit = args.iter().any(|arg| arg == "--cn-query-jit");
     let show_time = args.iter().any(|arg| arg == "--cn-time");
+    let show_rwlock = args.iter().any(|arg| arg == "--cn-rwlock");
     
     // 如果是调试模式，先调试io库中的函数
     if debug_mode {
@@ -294,6 +296,11 @@ fn main() {
                     }
                     if query_jit && jit::was_jit_used() {
                         print!("{}", jit::jit_stats());
+                    }
+
+                    // 🚀 v0.6.2 显示读写锁性能统计（如果启用了--cn-rwlock参数）
+                    if show_rwlock {
+                        interpreter::memory_manager::print_rwlock_performance_stats();
                     }
 
                     // 显示执行时间（如果启用了时间显示）
