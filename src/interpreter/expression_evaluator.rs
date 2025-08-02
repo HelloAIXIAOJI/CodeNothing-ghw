@@ -37,6 +37,87 @@ impl<'a> Interpreter<'a> {
         Value::None
     }
 
+    /// 检查是否应该尝试JIT优化
+    fn should_try_jit_optimization(&self, expr: &Expression) -> bool {
+        // 只对包含变量的算术表达式进行JIT优化
+        match expr {
+            Expression::BinaryOp(_, _, _) => self.contains_variables(expr),
+            Expression::PreIncrement(_) | Expression::PreDecrement(_) |
+            Expression::PostIncrement(_) | Expression::PostDecrement(_) => true,
+            _ => false
+        }
+    }
+
+    /// 检查表达式是否包含变量
+    fn contains_variables(&self, expr: &Expression) -> bool {
+        match expr {
+            Expression::Variable(_) => true,
+            Expression::BinaryOp(left, _, right) => {
+                self.contains_variables(left) || self.contains_variables(right)
+            },
+            Expression::PreIncrement(_) | Expression::PreDecrement(_) |
+            Expression::PostIncrement(_) | Expression::PostDecrement(_) => true,
+            _ => false
+        }
+    }
+
+    /// 尝试使用JIT编译执行表达式
+    fn try_jit_expression(&self, expr: &Expression) -> Option<Value> {
+        // 收集当前环境中的整数变量
+        let mut variables = HashMap::new();
+        self.collect_int_variables(expr, &mut variables);
+
+        // 如果所有变量都是整数，尝试JIT编译
+        if !variables.is_empty() {
+            if let Some(result) = jit::jit_compile_and_execute_expression(expr, &variables) {
+                return Some(result);
+            }
+        }
+
+        None
+    }
+
+    /// 收集表达式中的整数变量及其值
+    fn collect_int_variables(&self, expr: &Expression, variables: &mut HashMap<String, i64>) {
+        match expr {
+            Expression::Variable(name) => {
+                if let Some(value) = self.get_variable_value_as_int(name) {
+                    variables.insert(name.clone(), value);
+                }
+            },
+            Expression::BinaryOp(left, _, right) => {
+                self.collect_int_variables(left, variables);
+                self.collect_int_variables(right, variables);
+            },
+            Expression::PreIncrement(name) | Expression::PreDecrement(name) |
+            Expression::PostIncrement(name) | Expression::PostDecrement(name) => {
+                if let Some(value) = self.get_variable_value_as_int(name) {
+                    variables.insert(name.clone(), value);
+                }
+            },
+            _ => {}
+        }
+    }
+
+    /// 获取变量的整数值
+    fn get_variable_value_as_int(&self, name: &str) -> Option<i64> {
+        let value = if let Some(v) = self.constants.get(name) {
+            v
+        } else if let Some(v) = self.local_env.get(name) {
+            v
+        } else if let Some(v) = self.global_env.get(name) {
+            v
+        } else {
+            return None;
+        };
+
+        match value {
+            Value::Int(i) => Some(*i as i64),
+            Value::Long(l) => Some(*l),
+            _ => None
+        }
+    }
+
     /// 检查是否为纯常量表达式（可以在编译时求值）
     fn is_pure_constant_expression(&self, expr: &Expression) -> bool {
         match expr {
@@ -197,6 +278,13 @@ impl<'a> ExpressionEvaluator for Interpreter<'a> {
                 Value::None
             },
             Expression::BinaryOp(left, op, right) => {
+                // 尝试JIT编译优化
+                if self.should_try_jit_optimization(expr) {
+                    if let Some(result) = self.try_jit_expression(expr) {
+                        return result;
+                    }
+                }
+
                 let left_val = self.evaluate_expression(left);
                 let right_val = self.evaluate_expression(right);
 
