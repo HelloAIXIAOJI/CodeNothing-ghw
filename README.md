@@ -1,6 +1,27 @@
 # CodeNothing
 
-CodeNothing是世界上最好的语言。
+CodeNothing是世界上最好的语言，现在配备了**JIT（Just-In-Time）编译器**！
+
+## 🚀 v0.6.4 重大更新 - JIT编译器
+
+### ⚡ JIT算术表达式编译
+- **热点检测**: 自动识别频繁执行的算术表达式（100次阈值）
+- **即时编译**: 使用Cranelift将热点代码编译为本地机器码
+- **智能缓存**: 编译结果缓存，避免重复编译
+- **性能飞跃**: 算术密集型程序可获得数倍加速
+
+### 🔧 JIT调试系统
+```bash
+./CodeNothing program.cn                    # 正常运行
+./CodeNothing program.cn --cn-jit-debug     # JIT调试模式
+./CodeNothing program.cn --cn-jit-stats     # JIT性能统计
+./CodeNothing program.cn --cn-jit-debug --cn-jit-stats  # 完整模式
+```
+
+### 📊 JIT性能监控
+- **实时统计**: 热点检测、编译成功率、执行效率
+- **详细报告**: 格式化的性能分析报告
+- **开发友好**: 不干扰正常用户体验的调试系统
 
 ## 🚀 核心功能
 
@@ -32,6 +53,40 @@ fn add(a : int, b : int) : int {
 };
 
 result : int = add(1, 2);
+```
+
+### 🚀 JIT编译示例（v0.6.4新功能）
+
+```codenothing
+using lib <io>;
+using ns std;
+
+fn main() : int {
+    // JIT编译器会自动优化这个循环中的算术表达式
+    i : int = 0;
+    sum : int = 0;
+
+    while (i < 150) {  // 超过JIT阈值(100次)
+        temp : int = i * 2 + 1;  // 🚀 这个表达式会被JIT编译
+        sum = sum + temp;        // 🚀 这个表达式也会被JIT编译
+        i = i + 1;
+    };
+
+    std::println("计算结果: " + sum);
+    return 0;
+}
+```
+
+**运行JIT优化程序**:
+```bash
+# 正常运行（自动JIT优化）
+./CodeNothing jit_example.cn
+
+# 查看JIT编译活动
+./CodeNothing jit_example.cn --cn-jit-debug
+
+# 显示性能统计报告
+./CodeNothing jit_example.cn --cn-jit-stats
 ```
 
 ### 命名空间
