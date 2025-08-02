@@ -188,6 +188,8 @@ fn main() {
         println!("  --cn-debug      启用调试模式");
         println!("  --cn-return     显示程序执行结果");
         println!("  --cn-query-jit  显示JIT编译统计信息");
+        println!("  --cn-jit-debug  显示JIT编译调试信息");
+        println!("  --cn-jit-stats  显示JIT性能统计报告");
         println!("  --cn-time       显示程序执行时间");
         println!("  --cn-rwlock     🚀 v0.6.2 显示读写锁性能统计");
         println!("");
@@ -204,9 +206,14 @@ fn main() {
     let debug_mode = args.iter().any(|arg| arg == "--cn-debug");
     let show_return = args.iter().any(|arg| arg == "--cn-return");
     let query_jit = args.iter().any(|arg| arg == "--cn-query-jit");
+    let jit_debug = args.iter().any(|arg| arg == "--cn-jit-debug");
+    let jit_stats = args.iter().any(|arg| arg == "--cn-jit-stats");
     let show_time = args.iter().any(|arg| arg == "--cn-time");
     let show_rwlock = args.iter().any(|arg| arg == "--cn-rwlock");
     
+    // 初始化JIT编译器
+    interpreter::jit::init_jit(jit_debug);
+
     // 如果是调试模式，先调试io库中的函数
     if debug_mode {
         match interpreter::library_loader::debug_library_functions("io") {
@@ -289,13 +296,20 @@ fn main() {
 
                     // 执行程序
                     let result = interpreter::interpret(&program);
-                    
+
                     // 只有当结果不是None且启用了--cn-return参数时才打印
                     if show_return && !matches!(result, Value::None) {
                         println!("程序执行结果: {}", result);
                     }
+
+                    // JIT统计信息显示
                     if query_jit && jit::was_jit_used() {
                         print!("{}", jit::jit_stats());
+                    }
+
+                    // 显示JIT性能报告（通过命令行参数控制）
+                    if jit_stats {
+                        jit::print_jit_performance_report();
                     }
 
                     // 🚀 v0.6.2 显示读写锁性能统计（如果启用了--cn-rwlock参数）
