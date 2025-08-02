@@ -106,7 +106,7 @@ sys     0m3.807s
 
 ### v0.6.2
 - 读写锁
-#### Pre1 第一次
+#### rwlock-stats ON 第一次
 ```
 执行时间: 9280.549 ms [9.3 s]
 
@@ -114,7 +114,7 @@ real    0m9.287s
 user    0m4.485s
 sys     0m3.960s
 ```
-#### Pre1 第二次
+#### rwlock-stats ON 第二次
 ```
 执行时间: 9335.054 ms [9.3 s]
 
@@ -122,7 +122,7 @@ real    0m9.342s
 user    0m4.589s
 sys     0m3.941s
 ```
-#### Pre1 第三次
+#### rwlock-stats ON 第三次
 ```
 执行时间: 8890.093 ms [8.9 s]
 
@@ -130,7 +130,7 @@ real    0m8.897s
 user    0m4.502s
 sys     0m3.979s
 ```
-#### Pre2 第一次
+#### rwlock-stats OFF 第一次
 ```
 执行时间: 8866.183 ms [8.9 s]
 
@@ -138,7 +138,7 @@ real    0m8.873s
 user    0m4.473s
 sys     0m3.971s
 ```
-#### Pre2 第二次
+#### rwlock-stats OFF 第二次    
 ```
 执行时间: 8808.369 ms [8.8 s]
 
@@ -146,7 +146,7 @@ real    0m8.817s
 user    0m4.477s
 sys     0m4.209s
 ```
-#### Pre2 第三次
+#### rwlock-stats OFF 第三次
 ```
 执行时间: 9195.593 ms [9.2 s]
 
