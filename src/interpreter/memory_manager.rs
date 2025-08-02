@@ -1,7 +1,47 @@
 use std::collections::{HashMap, HashSet};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, RwLock};
 use std::time::{SystemTime, UNIX_EPOCH};
+use std::sync::atomic::{AtomicU64, Ordering};
 use super::value::Value;
+
+// 🚀 v0.6.2 读写锁性能监控（条件编译）
+#[cfg(feature = "rwlock-stats")]
+static READ_OPERATIONS: AtomicU64 = AtomicU64::new(0);
+#[cfg(feature = "rwlock-stats")]
+static WRITE_OPERATIONS: AtomicU64 = AtomicU64::new(0);
+#[cfg(feature = "rwlock-stats")]
+static READ_LOCK_TIME: AtomicU64 = AtomicU64::new(0);
+#[cfg(feature = "rwlock-stats")]
+static WRITE_LOCK_TIME: AtomicU64 = AtomicU64::new(0);
+
+// 🚀 v0.6.2 性能监控宏（零开销抽象）
+#[cfg(feature = "rwlock-stats")]
+macro_rules! track_read_operation {
+    ($start_time:expr) => {
+        let lock_time = $start_time.elapsed().unwrap().as_nanos() as u64;
+        READ_LOCK_TIME.fetch_add(lock_time, Ordering::Relaxed);
+        READ_OPERATIONS.fetch_add(1, Ordering::Relaxed);
+    };
+}
+
+#[cfg(not(feature = "rwlock-stats"))]
+macro_rules! track_read_operation {
+    ($start_time:expr) => {};
+}
+
+#[cfg(feature = "rwlock-stats")]
+macro_rules! track_write_operation {
+    ($start_time:expr) => {
+        let lock_time = $start_time.elapsed().unwrap().as_nanos() as u64;
+        WRITE_LOCK_TIME.fetch_add(lock_time, Ordering::Relaxed);
+        WRITE_OPERATIONS.fetch_add(1, Ordering::Relaxed);
+    };
+}
+
+#[cfg(not(feature = "rwlock-stats"))]
+macro_rules! track_write_operation {
+    ($start_time:expr) => {};
+}
 
 /// 内存块信息
 #[derive(Debug, Clone)]
@@ -183,6 +223,31 @@ impl MemoryManager {
 
             // 更新最后访问时间
             block.last_access_time = Self::current_time_ms();
+            Ok(block.value.clone())
+        } else {
+            Err("无效的内存地址".to_string())
+        }
+    }
+
+    /// 🚀 v0.6.2 只读内存访问（不更新访问时间，支持并发读取）
+    pub fn read_only(&self, address: usize, tag_id: Option<u64>) -> Result<Value, String> {
+        // 验证指针标记
+        if let Some(tag_id) = tag_id {
+            if let Some(tag) = self.pointer_tags.get(&tag_id) {
+                if !tag.is_valid || tag.address != address {
+                    return Err("指针标记无效或地址不匹配".to_string());
+                }
+            } else {
+                return Err("指针标记不存在".to_string());
+            }
+        }
+
+        if let Some(block) = self.memory_blocks.get(&address) {
+            if !block.is_allocated {
+                return Err("尝试访问已释放的内存".to_string());
+            }
+
+            // 注意：只读访问不更新last_access_time，以支持并发读取
             Ok(block.value.clone())
         } else {
             Err("无效的内存地址".to_string())
@@ -465,107 +530,285 @@ pub struct MemoryStats {
     pub max_memory: usize,
 }
 
-/// 全局内存管理器实例
+/// 🚀 v0.6.2 全局内存管理器实例 - 使用RwLock优化并发性能
 lazy_static::lazy_static! {
-    pub static ref MEMORY_MANAGER: Arc<Mutex<MemoryManager>> = Arc::new(Mutex::new(MemoryManager::new()));
+    pub static ref MEMORY_MANAGER: Arc<RwLock<MemoryManager>> = Arc::new(RwLock::new(MemoryManager::new()));
 }
 
-/// 快速内存操作：减少锁竞争的批量操作
+/// 🚀 v0.6.2 快速内存操作：支持读写锁的批量操作
 pub fn batch_memory_operations<F, R>(f: F) -> R
 where
     F: FnOnce(&mut MemoryManager) -> R,
 {
-    let mut manager = MEMORY_MANAGER.lock().unwrap();
+    #[cfg(feature = "rwlock-stats")]
+    #[cfg(feature = "rwlock-stats")]
+    let start_time = SystemTime::now();
+    let mut manager = MEMORY_MANAGER.write().unwrap();
+    #[cfg(feature = "rwlock-stats")]
+    #[cfg(feature = "rwlock-stats")]
+    track_write_operation!(start_time);
     f(&mut manager)
 }
 
-/// 便捷函数：分配内存（优化版）
+/// 🚀 v0.6.2 新增：只读内存操作，支持并发读取
+pub fn batch_memory_read_operations<F, R>(f: F) -> R
+where
+    F: FnOnce(&MemoryManager) -> R,
+{
+    #[cfg(feature = "rwlock-stats")]
+    #[cfg(feature = "rwlock-stats")]
+    let start_time = SystemTime::now();
+    let manager = MEMORY_MANAGER.read().unwrap();
+    #[cfg(feature = "rwlock-stats")]
+    #[cfg(feature = "rwlock-stats")]
+    track_read_operation!(start_time);
+    f(&manager)
+}
+
+/// 🚀 v0.6.2 便捷函数：分配内存（读写锁优化版）
 pub fn allocate_memory(value: Value) -> Result<(usize, u64), String> {
-    // 对于简单值类型，使用快速路径
-    match &value {
-        Value::Int(_) | Value::Float(_) | Value::Bool(_) | Value::Long(_) => {
-            // 简单类型直接分配，减少复杂性
-            let mut manager = MEMORY_MANAGER.lock().unwrap();
-            manager.allocate(value)
-        },
-        _ => {
-            // 复杂类型使用完整的内存管理
-            MEMORY_MANAGER.lock().unwrap().allocate(value)
-        }
+    #[cfg(feature = "rwlock-stats")]
+    #[cfg(feature = "rwlock-stats")]
+    let start_time = SystemTime::now();
+    let mut manager = MEMORY_MANAGER.write().unwrap();
+    #[cfg(feature = "rwlock-stats")]
+    #[cfg(feature = "rwlock-stats")]
+    track_write_operation!(start_time);
+    manager.allocate(value)
+}
+
+/// 🚀 v0.6.2 便捷函数：释放内存（写锁）
+pub fn deallocate_memory(address: usize) -> Result<(), String> {
+    #[cfg(feature = "rwlock-stats")]
+    #[cfg(feature = "rwlock-stats")]
+    let start_time = SystemTime::now();
+    let mut manager = MEMORY_MANAGER.write().unwrap();
+    #[cfg(feature = "rwlock-stats")]
+    #[cfg(feature = "rwlock-stats")]
+    track_write_operation!(start_time);
+    manager.deallocate(address)
+}
+
+/// 🚀 v0.6.2 便捷函数：读取内存（读锁优化版）
+pub fn read_memory(address: usize) -> Result<Value, String> {
+    #[cfg(feature = "rwlock-stats")]
+    #[cfg(feature = "rwlock-stats")]
+    let start_time = SystemTime::now();
+    let manager = MEMORY_MANAGER.read().unwrap();
+    #[cfg(feature = "rwlock-stats")]
+    #[cfg(feature = "rwlock-stats")]
+    track_read_operation!(start_time);
+    manager.read_only(address, None)
+}
+
+/// 🚀 v0.6.2 便捷函数：安全读取内存（读锁优化版）
+pub fn read_memory_safe(address: usize, tag_id: u64) -> Result<Value, String> {
+    #[cfg(feature = "rwlock-stats")]
+    #[cfg(feature = "rwlock-stats")]
+    let start_time = SystemTime::now();
+    let manager = MEMORY_MANAGER.read().unwrap();
+    #[cfg(feature = "rwlock-stats")]
+    #[cfg(feature = "rwlock-stats")]
+    track_read_operation!(start_time);
+    manager.read_only(address, Some(tag_id))
+}
+
+/// 🚀 v0.6.2 便捷函数：写入内存（写锁）
+pub fn write_memory(address: usize, value: Value) -> Result<(), String> {
+    #[cfg(feature = "rwlock-stats")]
+    let start_time = SystemTime::now();
+    let mut manager = MEMORY_MANAGER.write().unwrap();
+    #[cfg(feature = "rwlock-stats")]
+    track_write_operation!(start_time);
+    manager.write(address, value, None)
+}
+
+/// 🚀 v0.6.2 便捷函数：安全写入内存（写锁）
+pub fn write_memory_safe(address: usize, value: Value, tag_id: u64) -> Result<(), String> {
+    #[cfg(feature = "rwlock-stats")]
+    let start_time = SystemTime::now();
+    let mut manager = MEMORY_MANAGER.write().unwrap();
+    #[cfg(feature = "rwlock-stats")]
+    track_write_operation!(start_time);
+    manager.write(address, value, Some(tag_id))
+}
+
+/// 🚀 v0.6.2 便捷函数：检查地址有效性（读锁）
+pub fn is_valid_address(address: usize) -> bool {
+    #[cfg(feature = "rwlock-stats")]
+    let start_time = SystemTime::now();
+    let manager = MEMORY_MANAGER.read().unwrap();
+    #[cfg(feature = "rwlock-stats")]
+    track_read_operation!(start_time);
+    manager.is_valid_address(address)
+}
+
+/// 🚀 v0.6.2 便捷函数：检查空指针（读锁）
+pub fn is_null_pointer(address: usize) -> bool {
+    #[cfg(feature = "rwlock-stats")]
+    let start_time = SystemTime::now();
+    let manager = MEMORY_MANAGER.read().unwrap();
+    #[cfg(feature = "rwlock-stats")]
+    track_read_operation!(start_time);
+    manager.is_null_pointer(address)
+}
+
+/// 🚀 v0.6.2 便捷函数：检查悬空指针（读锁）
+pub fn is_dangling_pointer(tag_id: u64) -> bool {
+    #[cfg(feature = "rwlock-stats")]
+    let start_time = SystemTime::now();
+    let manager = MEMORY_MANAGER.read().unwrap();
+    #[cfg(feature = "rwlock-stats")]
+    track_read_operation!(start_time);
+    manager.is_dangling_pointer(tag_id)
+}
+
+/// 🚀 v0.6.2 便捷函数：检查悬空指针（读锁）
+pub fn is_dangling_pointer_by_address(address: usize) -> bool {
+    #[cfg(feature = "rwlock-stats")]
+    let start_time = SystemTime::now();
+    let manager = MEMORY_MANAGER.read().unwrap();
+    #[cfg(feature = "rwlock-stats")]
+    track_read_operation!(start_time);
+    manager.is_dangling_pointer_by_address(address)
+}
+
+/// 🚀 v0.6.2 便捷函数：验证指针（读锁）
+pub fn validate_pointer(address: usize) -> Result<(), String> {
+    #[cfg(feature = "rwlock-stats")]
+    let start_time = SystemTime::now();
+    let manager = MEMORY_MANAGER.read().unwrap();
+    #[cfg(feature = "rwlock-stats")]
+    track_read_operation!(start_time);
+    manager.validate_pointer(address, None)
+}
+
+/// 🚀 v0.6.2 便捷函数：安全验证指针（读锁）
+pub fn validate_pointer_safe(address: usize, tag_id: u64) -> Result<(), String> {
+    #[cfg(feature = "rwlock-stats")]
+    let start_time = SystemTime::now();
+    let manager = MEMORY_MANAGER.read().unwrap();
+    #[cfg(feature = "rwlock-stats")]
+    track_read_operation!(start_time);
+    manager.validate_pointer(address, Some(tag_id))
+}
+
+/// 🚀 v0.6.2 便捷函数：安全指针算术（读锁）
+pub fn safe_pointer_arithmetic(address: usize, offset: isize, element_size: usize, tag_id: Option<u64>) -> Result<usize, String> {
+    #[cfg(feature = "rwlock-stats")]
+    let start_time = SystemTime::now();
+    let manager = MEMORY_MANAGER.read().unwrap();
+    #[cfg(feature = "rwlock-stats")]
+    track_read_operation!(start_time);
+    manager.safe_pointer_arithmetic(address, offset, element_size, tag_id)
+}
+
+/// 🚀 v0.6.2 便捷函数：检查边界（读锁）
+pub fn check_memory_bounds(address: usize, offset: usize) -> Result<(), String> {
+    #[cfg(feature = "rwlock-stats")]
+    let start_time = SystemTime::now();
+    let manager = MEMORY_MANAGER.read().unwrap();
+    #[cfg(feature = "rwlock-stats")]
+    track_read_operation!(start_time);
+    manager.check_bounds(address, offset)
+}
+
+/// 🚀 v0.6.2 便捷函数：检测内存泄漏（读锁）
+pub fn detect_memory_leaks() -> Vec<usize> {
+    #[cfg(feature = "rwlock-stats")]
+    let start_time = SystemTime::now();
+    let manager = MEMORY_MANAGER.read().unwrap();
+    #[cfg(feature = "rwlock-stats")]
+    track_read_operation!(start_time);
+    manager.detect_memory_leaks()
+}
+
+/// 🚀 v0.6.2 便捷函数：垃圾回收（写锁）
+pub fn garbage_collect() -> usize {
+    #[cfg(feature = "rwlock-stats")]
+    let start_time = SystemTime::now();
+    let mut manager = MEMORY_MANAGER.write().unwrap();
+    #[cfg(feature = "rwlock-stats")]
+    track_write_operation!(start_time);
+    manager.garbage_collect()
+}
+
+/// 🚀 v0.6.2 新增：读写锁性能统计
+#[derive(Debug, Clone)]
+pub struct RwLockStats {
+    pub read_operations: u64,
+    pub write_operations: u64,
+    pub avg_read_lock_time_ns: u64,
+    pub avg_write_lock_time_ns: u64,
+    pub total_read_lock_time_ns: u64,
+    pub total_write_lock_time_ns: u64,
+}
+
+/// 🚀 v0.6.2 获取读写锁性能统计
+#[cfg(feature = "rwlock-stats")]
+pub fn get_rwlock_performance_stats() -> RwLockStats {
+    let read_ops = READ_OPERATIONS.load(Ordering::Relaxed);
+    let write_ops = WRITE_OPERATIONS.load(Ordering::Relaxed);
+    let total_read_time = READ_LOCK_TIME.load(Ordering::Relaxed);
+    let total_write_time = WRITE_LOCK_TIME.load(Ordering::Relaxed);
+
+    RwLockStats {
+        read_operations: read_ops,
+        write_operations: write_ops,
+        avg_read_lock_time_ns: if read_ops > 0 { total_read_time / read_ops } else { 0 },
+        avg_write_lock_time_ns: if write_ops > 0 { total_write_time / write_ops } else { 0 },
+        total_read_lock_time_ns: total_read_time,
+        total_write_lock_time_ns: total_write_time,
     }
 }
 
-/// 便捷函数：释放内存
-pub fn deallocate_memory(address: usize) -> Result<(), String> {
-    MEMORY_MANAGER.lock().unwrap().deallocate(address)
+#[cfg(not(feature = "rwlock-stats"))]
+pub fn get_rwlock_performance_stats() -> RwLockStats {
+    RwLockStats {
+        read_operations: 0,
+        write_operations: 0,
+        avg_read_lock_time_ns: 0,
+        avg_write_lock_time_ns: 0,
+        total_read_lock_time_ns: 0,
+        total_write_lock_time_ns: 0,
+    }
 }
 
-/// 便捷函数：读取内存（优化版）
-pub fn read_memory(address: usize) -> Result<Value, String> {
-    MEMORY_MANAGER.lock().unwrap().read(address, None)
+/// 🚀 v0.6.2 打印读写锁性能统计
+pub fn print_rwlock_performance_stats() {
+    #[cfg(feature = "rwlock-stats")]
+    {
+        let stats = get_rwlock_performance_stats();
+        println!("🚀 v0.6.2 读写锁性能统计:");
+        println!("  📖 读操作: {} 次", stats.read_operations);
+        println!("  ✏️  写操作: {} 次", stats.write_operations);
+        println!("  ⏱️  平均读锁时间: {} ns", stats.avg_read_lock_time_ns);
+        println!("  ⏱️  平均写锁时间: {} ns", stats.avg_write_lock_time_ns);
+        println!("  📊 总读锁时间: {} ns", stats.total_read_lock_time_ns);
+        println!("  📊 总写锁时间: {} ns", stats.total_write_lock_time_ns);
+
+        let total_ops = stats.read_operations + stats.write_operations;
+        if total_ops > 0 {
+            let read_ratio = (stats.read_operations as f64 / total_ops as f64) * 100.0;
+            let write_ratio = (stats.write_operations as f64 / total_ops as f64) * 100.0;
+            println!("  📈 读写比例: {:.1}% 读 / {:.1}% 写", read_ratio, write_ratio);
+        }
+    }
+
+    #[cfg(not(feature = "rwlock-stats"))]
+    {
+        println!("🚀 v0.6.2 读写锁性能统计: 已禁用（编译时优化）");
+        println!("  💡 使用 --features rwlock-stats 重新编译以启用统计");
+    }
 }
 
-/// 便捷函数：安全读取内存（带标记验证）
-pub fn read_memory_safe(address: usize, tag_id: u64) -> Result<Value, String> {
-    MEMORY_MANAGER.lock().unwrap().read(address, Some(tag_id))
-}
-
-/// 便捷函数：写入内存
-pub fn write_memory(address: usize, value: Value) -> Result<(), String> {
-    MEMORY_MANAGER.lock().unwrap().write(address, value, None)
-}
-
-/// 便捷函数：安全写入内存（带标记验证）
-pub fn write_memory_safe(address: usize, value: Value, tag_id: u64) -> Result<(), String> {
-    MEMORY_MANAGER.lock().unwrap().write(address, value, Some(tag_id))
-}
-
-/// 便捷函数：检查地址有效性
-pub fn is_valid_address(address: usize) -> bool {
-    MEMORY_MANAGER.lock().unwrap().is_valid_address(address)
-}
-
-/// 便捷函数：检查空指针
-pub fn is_null_pointer(address: usize) -> bool {
-    MEMORY_MANAGER.lock().unwrap().is_null_pointer(address)
-}
-
-/// 便捷函数：检查悬空指针（使用标记）
-pub fn is_dangling_pointer(tag_id: u64) -> bool {
-    MEMORY_MANAGER.lock().unwrap().is_dangling_pointer(tag_id)
-}
-
-/// 便捷函数：检查悬空指针（传统方式）
-pub fn is_dangling_pointer_by_address(address: usize) -> bool {
-    MEMORY_MANAGER.lock().unwrap().is_dangling_pointer_by_address(address)
-}
-
-/// 便捷函数：验证指针
-pub fn validate_pointer(address: usize) -> Result<(), String> {
-    MEMORY_MANAGER.lock().unwrap().validate_pointer(address, None)
-}
-
-/// 便捷函数：安全验证指针（带标记）
-pub fn validate_pointer_safe(address: usize, tag_id: u64) -> Result<(), String> {
-    MEMORY_MANAGER.lock().unwrap().validate_pointer(address, Some(tag_id))
-}
-
-/// 便捷函数：安全指针算术
-pub fn safe_pointer_arithmetic(address: usize, offset: isize, element_size: usize, tag_id: Option<u64>) -> Result<usize, String> {
-    MEMORY_MANAGER.lock().unwrap().safe_pointer_arithmetic(address, offset, element_size, tag_id)
-}
-
-/// 便捷函数：检查边界
-pub fn check_memory_bounds(address: usize, offset: usize) -> Result<(), String> {
-    MEMORY_MANAGER.lock().unwrap().check_bounds(address, offset)
-}
-
-/// 便捷函数：检测内存泄漏
-pub fn detect_memory_leaks() -> Vec<usize> {
-    MEMORY_MANAGER.lock().unwrap().detect_memory_leaks()
-}
-
-/// 便捷函数：垃圾回收
-pub fn garbage_collect() -> usize {
-    MEMORY_MANAGER.lock().unwrap().garbage_collect()
+/// 🚀 v0.6.2 清除读写锁性能统计
+pub fn clear_rwlock_performance_stats() {
+    #[cfg(feature = "rwlock-stats")]
+    {
+        READ_OPERATIONS.store(0, Ordering::Relaxed);
+        WRITE_OPERATIONS.store(0, Ordering::Relaxed);
+        READ_LOCK_TIME.store(0, Ordering::Relaxed);
+        WRITE_LOCK_TIME.store(0, Ordering::Relaxed);
+    }
 }
