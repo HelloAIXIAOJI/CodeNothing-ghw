@@ -1,6 +1,6 @@
 use crate::ast::{Expression, BinaryOperator, CompareOperator, LogicalOperator, SwitchCase, CasePattern};
 use super::value::{Value, ObjectInstance, EnumInstance, PointerInstance, PointerType, FunctionPointerInstance, LambdaFunctionPointerInstance, PointerError};
-use super::memory_manager::{allocate_memory, read_memory, write_memory, is_valid_address, is_null_pointer, validate_pointer, is_dangling_pointer, read_memory_safe, validate_pointer_safe, is_dangling_pointer_by_address, safe_pointer_arithmetic};
+use super::memory_manager::{allocate_memory_smart, read_memory, write_memory, is_valid_address, is_null_pointer, validate_pointer, is_dangling_pointer, read_memory_safe, validate_pointer_safe, is_dangling_pointer_by_address, safe_pointer_arithmetic};
 use super::interpreter_core::{Interpreter, debug_println, VariableLocation};
 use std::collections::HashMap;
 use super::function_calls::FunctionCallHandler;
@@ -1762,7 +1762,7 @@ impl<'a> Interpreter<'a> {
     }
 
     fn allocate_and_create_pointer(&mut self, target_value: Value) -> Value {
-        match allocate_memory(target_value.clone()) {
+        match allocate_memory_smart(target_value.clone()) {
             Ok((address, tag_id)) => {
                 let target_type = self.value_to_pointer_type(&target_value);
                 let pointer = PointerInstance {
@@ -1819,7 +1819,7 @@ impl<'a> Interpreter<'a> {
     }
 
     fn allocate_and_create_pointer_safe(&mut self, target_value: Value) -> Result<Value, PointerError> {
-        match allocate_memory(target_value.clone()) {
+        match allocate_memory_smart(target_value.clone()) {
             Ok((address, tag_id)) => {
                 let target_type = self.value_to_pointer_type(&target_value);
                 let pointer = PointerInstance {
