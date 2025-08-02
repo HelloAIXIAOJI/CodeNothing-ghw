@@ -100,12 +100,12 @@ while (i < 50000) {
 
 ##### IO密集型测试
 ```codenothing
-// 测试输出性能
-while (i < 30000) {
-    value : int = i * 2;       // 快速路径分配
-    std::println("数字: " + value);
-    i = i + 1;
-}
+    while (i < 30000) {
+        // 每次循环都会创建临时变量进行输出
+        value : int = i * 2;
+        std::println("数字: " + value);
+        i = i + 1;
+    };
 ```
 
 **结果**: 6.2秒，比Python快42%
