@@ -126,13 +126,9 @@ pub fn parse_program(parser: &mut ParserBase) -> Result<Program, String> {
                 // 期望 ";" 符号
                 parser.expect(";")?;
 
-                // 🔧 修复：根据命名空间名称判断类型
-                // std是内置命名空间，不是外部库
-                let namespace_type = if path.len() == 1 && (path[0] == "io" || path[0] == "time" || path[0] == "math" || path[0] == "fs" || path[0] == "os" || path[0] == "http" || path[0] == "json") {
-                    crate::ast::NamespaceType::Library // 库命名空间
-                } else {
-                    crate::ast::NamespaceType::Code // 代码命名空间（包括std）
-                };
+                // � v0.6.2 修复：所有 using ns 都应该是代码命名空间
+                // 库的命名空间由各自的库文件（library_等）自行声明
+                let namespace_type = crate::ast::NamespaceType::Code;
 
                 // 添加到命名空间导入列表
                 imported_namespaces.push((namespace_type, path));
