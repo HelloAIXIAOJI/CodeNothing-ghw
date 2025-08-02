@@ -565,6 +565,85 @@ where
     f(&manager)
 }
 
+/// 🚀 v0.6.3 简单类型快速分配函数 - 跳过复杂安全检查
+fn allocate_simple_type_fast(value: Value) -> Result<(usize, u64), String> {
+    let mut manager = MEMORY_MANAGER.write().unwrap();
+
+    // 计算简单类型大小（内联计算，避免函数调用开销）
+    let size = match &value {
+        Value::Int(_) => std::mem::size_of::<i32>(),
+        Value::Long(_) => std::mem::size_of::<i64>(),
+        Value::Float(_) => std::mem::size_of::<f64>(),
+        Value::Bool(_) => std::mem::size_of::<bool>(),
+        _ => unreachable!("allocate_simple_type_fast只应用于简单类型"),
+    };
+
+    // 快速内存限制检查
+    if manager.total_allocated + size > manager.max_memory {
+        return Err("内存不足".to_string());
+    }
+
+    // 直接分配地址，跳过隔离区清理
+    let address = manager.next_address;
+    manager.next_address += size.max(8); // 8字节对齐
+
+    // 简化的地址范围检查
+    if address >= 0x1000 + 1024 * 1024 * 100 {
+        return Err("地址超出有效范围".to_string());
+    }
+
+    let current_time = MemoryManager::current_time_ms();
+
+    // 创建简化的内存块（跳过一些字段的初始化）
+    let block = MemoryBlock {
+        address,
+        size,
+        value,
+        is_allocated: true,
+        ref_count: 1,
+        allocation_time: current_time,
+        last_access_time: current_time,
+    };
+
+    // 简化的标记创建
+    let tag_id = manager.next_tag_id;
+    manager.next_tag_id += 1;
+
+    let tag = PointerTag {
+        tag_id,
+        address,
+        is_valid: true,
+        creation_time: current_time,
+    };
+
+    manager.memory_blocks.insert(address, block);
+    manager.pointer_tags.insert(tag_id, tag);
+    manager.total_allocated += size;
+
+    Ok((address, tag_id))
+}
+
+/// 🚀 v0.6.3 智能内存分配 - 根据类型选择快速或安全路径
+pub fn allocate_memory_smart(value: Value) -> Result<(usize, u64), String> {
+    match &value {
+        Value::Int(_) | Value::Float(_) | Value::Bool(_) | Value::Long(_) => {
+            // 简单类型使用快速路径
+            allocate_simple_type_fast(value)
+        },
+        _ => {
+            // 复杂类型使用完整的安全路径
+            #[cfg(feature = "rwlock-stats")]
+            #[cfg(feature = "rwlock-stats")]
+            let start_time = SystemTime::now();
+            let mut manager = MEMORY_MANAGER.write().unwrap();
+            #[cfg(feature = "rwlock-stats")]
+            #[cfg(feature = "rwlock-stats")]
+            track_write_operation!(start_time);
+            manager.allocate(value)
+        }
+    }
+}
+
 /// 🚀 v0.6.2 便捷函数：分配内存（读写锁优化版）
 pub fn allocate_memory(value: Value) -> Result<(usize, u64), String> {
     #[cfg(feature = "rwlock-stats")]
