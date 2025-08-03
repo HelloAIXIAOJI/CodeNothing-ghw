@@ -44,6 +44,8 @@ pub struct JitCompiler {
     math_expression_threshold: u32,
     /// 字符串操作热点阈值
     string_operation_threshold: u32,
+    /// 数组操作热点阈值
+    array_operation_threshold: u32,
 }
 
 /// 编译后的函数
