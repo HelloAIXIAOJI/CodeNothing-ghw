@@ -20,6 +20,8 @@ pub struct JitCompiler {
     math_expression_counters: HashMap<String, u32>,
     /// 字符串操作热点检测计数器
     string_operation_counters: HashMap<String, u32>,
+    /// 数组操作热点检测计数器
+    array_operation_counters: HashMap<String, u32>,
     /// 编译缓存
     compiled_functions: HashMap<String, CompiledFunction>,
     /// 编译的循环缓存
@@ -30,6 +32,8 @@ pub struct JitCompiler {
     compiled_math_expressions: HashMap<String, CompiledMathExpression>,
     /// 编译的字符串操作缓存
     compiled_string_operations: HashMap<String, CompiledStringOperation>,
+    /// 编译的数组操作缓存
+    compiled_array_operations: HashMap<String, CompiledArrayOperation>,
     /// 表达式热点阈值
     hotspot_threshold: u32,
     /// 循环热点阈值
