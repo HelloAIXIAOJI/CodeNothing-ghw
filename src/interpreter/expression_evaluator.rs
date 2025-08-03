@@ -966,6 +966,14 @@ impl<'a> Interpreter<'a> {
                 self.handle_string_method(&s, method_name, &evaluated_args)
             },
             Value::Array(arr) => {
+                // 🧮 数组方法调用JIT编译检查
+                let method_key = format!("array_method_{}_{:p}", method_name, expr as *const _);
+                if jit::should_compile_array_operation(&method_key) {
+                    if let Ok(_compiled) = jit::compile_array_operation(expr, method_key.clone(), false) {
+                        println!("✅ 数组方法{}JIT编译成功: {}", method_name, method_key);
+                    }
+                }
+
                 // 数组方法调用
                 self.handle_array_method(&arr, method_name, &evaluated_args)
             },
