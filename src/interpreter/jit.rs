@@ -461,6 +461,13 @@ impl JitCompiler {
         *counter >= self.math_expression_threshold
     }
 
+    /// 检查字符串操作是否应该JIT编译
+    pub fn should_compile_string_operation(&mut self, operation_key: &str) -> bool {
+        let counter = self.string_operation_counters.entry(operation_key.to_string()).or_insert(0);
+        *counter += 1;
+        *counter >= self.string_operation_threshold
+    }
+
     /// 生成函数调用的唯一键
     pub fn generate_function_call_key(&self, function_name: &str, call_site: &str) -> String {
         format!("call_{}_{}", function_name, call_site)
