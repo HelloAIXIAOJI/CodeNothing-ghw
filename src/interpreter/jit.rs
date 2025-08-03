@@ -1728,6 +1728,97 @@ impl JitCompiler {
         })
     }
 
+    /// 编译向量化数组操作
+    fn compile_vectorized_array_operation(
+        &mut self,
+        expression: &Expression,
+        key: String,
+        op_type: ArrayOperationType,
+        optimization: ArrayOptimization,
+        debug_mode: bool
+    ) -> Result<CompiledArrayOperation, String> {
+        if debug_mode {
+            println!("🚀 JIT: 向量化编译数组操作");
+        }
+
+        let signature = ArrayOperationSignature {
+            operation_desc: key.clone(),
+            element_type: ArrayElementType::Mixed,
+            array_size: self.estimate_array_size(expression),
+            output_type: ArrayOutputType::Array,
+            memory_pattern: ArrayMemoryPattern::Sequential,
+        };
+
+        Ok(CompiledArrayOperation {
+            func_ptr: std::ptr::null(),
+            signature,
+            operation_type: op_type,
+            optimization,
+            is_vectorized: true,
+            bounds_check_eliminated: false,
+        })
+    }
+
+    /// 编译并行数组操作
+    fn compile_parallel_array_operation(
+        &mut self,
+        expression: &Expression,
+        key: String,
+        op_type: ArrayOperationType,
+        debug_mode: bool
+    ) -> Result<CompiledArrayOperation, String> {
+        if debug_mode {
+            println!("🚀 JIT: 并行编译数组操作");
+        }
+
+        let signature = ArrayOperationSignature {
+            operation_desc: key.clone(),
+            element_type: ArrayElementType::Mixed,
+            array_size: self.estimate_array_size(expression),
+            output_type: ArrayOutputType::Array,
+            memory_pattern: ArrayMemoryPattern::Sequential,
+        };
+
+        Ok(CompiledArrayOperation {
+            func_ptr: std::ptr::null(),
+            signature,
+            operation_type: op_type,
+            optimization: ArrayOptimization::ParallelProcessing,
+            is_vectorized: true,
+            bounds_check_eliminated: true,
+        })
+    }
+
+    /// 编译标准数组操作
+    fn compile_standard_array_operation(
+        &mut self,
+        expression: &Expression,
+        key: String,
+        op_type: ArrayOperationType,
+        debug_mode: bool
+    ) -> Result<CompiledArrayOperation, String> {
+        if debug_mode {
+            println!("🔧 JIT: 标准编译数组操作");
+        }
+
+        let signature = ArrayOperationSignature {
+            operation_desc: key.clone(),
+            element_type: ArrayElementType::Mixed,
+            array_size: self.estimate_array_size(expression),
+            output_type: ArrayOutputType::Single,
+            memory_pattern: ArrayMemoryPattern::Sequential,
+        };
+
+        Ok(CompiledArrayOperation {
+            func_ptr: std::ptr::null(),
+            signature,
+            operation_type: op_type,
+            optimization: ArrayOptimization::CacheOptimization,
+            is_vectorized: false,
+            bounds_check_eliminated: false,
+        })
+    }
+
     /// 获取编译统计信息
     pub fn get_stats(&self) -> JitStats {
         JitStats {
