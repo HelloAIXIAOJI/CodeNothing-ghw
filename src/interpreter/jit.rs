@@ -295,8 +295,6 @@ impl JitCompiler {
 
             // 支持break和continue控制流语句
             Statement::Break | Statement::Continue => true,
-            // 暂不支持嵌套控制流，但支持break/continue
-            Statement::Break | Statement::Continue => true,
             _ => false,
         }
     }
