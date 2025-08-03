@@ -241,6 +241,14 @@ impl<'a> ExpressionEvaluator for Interpreter<'a> {
                 Value::Array(values)
             },
             Expression::ArrayAccess(array_expr, index_expr) => {
+                // 🧮 数组访问JIT编译检查
+                let array_key = format!("array_access_{:p}", expr as *const _);
+                if jit::should_compile_array_operation(&array_key) {
+                    if let Ok(_compiled) = jit::compile_array_operation(expr, array_key.clone(), false) {
+                        println!("✅ 数组访问JIT编译成功: {}", array_key);
+                    }
+                }
+
                 let array_value = self.evaluate_expression(array_expr);
                 let index_value = self.evaluate_expression(index_expr);
 
