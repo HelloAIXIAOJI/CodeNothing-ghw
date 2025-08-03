@@ -85,10 +85,15 @@ impl<'a> Interpreter<'a> {
         let jit = jit::get_jit();
         if jit.should_compile_math_expression(&key) {
             // 尝试编译数学表达式
-            if let Ok(_compiled) = jit.compile_math_expression(expr, key.clone(), false) {
-                // 编译成功，将编译结果缓存
-                // 注意：这里我们暂时返回None，因为实际执行需要更复杂的实现
-                // 但是编译过程已经被记录在统计中
+            match jit.compile_math_expression(expr, key.clone(), false) {
+                Ok(_compiled) => {
+                    // 编译成功，记录在统计中
+                    // 注意：这里我们暂时返回None，因为实际执行需要更复杂的实现
+                    // 但是编译过程已经被记录在统计中
+                },
+                Err(_) => {
+                    // 编译失败，继续使用解释执行
+                }
             }
         }
 
