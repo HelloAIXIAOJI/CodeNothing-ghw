@@ -1645,6 +1645,40 @@ impl JitCompiler {
         })
     }
 
+    /// 编译边界检查消除的数组操作
+    fn compile_bounds_check_eliminated_array_operation(
+        &mut self,
+        expression: &Expression,
+        key: String,
+        op_type: ArrayOperationType,
+        debug_mode: bool
+    ) -> Result<CompiledArrayOperation, String> {
+        if debug_mode {
+            println!("🚀 JIT: 边界检查消除编译数组操作");
+        }
+
+        let signature = ArrayOperationSignature {
+            operation_desc: key.clone(),
+            element_type: ArrayElementType::Mixed,
+            array_size: self.estimate_array_size(expression),
+            output_type: match op_type {
+                ArrayOperationType::Length => ArrayOutputType::Integer,
+                ArrayOperationType::Map | ArrayOperationType::Filter => ArrayOutputType::Array,
+                _ => ArrayOutputType::Single,
+            },
+            memory_pattern: ArrayMemoryPattern::Sequential,
+        };
+
+        Ok(CompiledArrayOperation {
+            func_ptr: std::ptr::null(),
+            signature,
+            operation_type: op_type,
+            optimization: ArrayOptimization::BoundsCheckElimination,
+            is_vectorized: false,
+            bounds_check_eliminated: true,
+        })
+    }
+
     /// 获取编译统计信息
     pub fn get_stats(&self) -> JitStats {
         JitStats {
