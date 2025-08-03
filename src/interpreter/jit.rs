@@ -1578,6 +1578,9 @@ impl JitCompiler {
             math_expression_hotspot_count: self.math_expression_counters.len(),
             compiled_math_expression_count: self.compiled_math_expressions.len(),
             total_math_expression_executions: self.math_expression_counters.values().sum(),
+            string_operation_hotspot_count: self.string_operation_counters.len(),
+            compiled_string_operation_count: self.compiled_string_operations.len(),
+            total_string_operation_executions: self.string_operation_counters.values().sum(),
         }
     }
 
