@@ -263,6 +263,103 @@ pub enum StringMemoryStrategy {
     View,        // 字符串视图（零拷贝）
 }
 
+/// 数组操作类型
+#[derive(Debug, Clone, PartialEq)]
+pub enum ArrayOperationType {
+    Access,          // 数组访问 array[index]
+    Iteration,       // 数组遍历 for item in array
+    Map,            // 数组映射 array.map(fn)
+    Filter,         // 数组过滤 array.filter(fn)
+    Reduce,         // 数组归约 array.reduce(fn, init)
+    ForEach,        // 数组遍历 array.forEach(fn)
+    Sort,           // 数组排序 array.sort()
+    Search,         // 数组搜索 array.find(fn)
+    Slice,          // 数组切片 array.slice(start, end)
+    Concat,         // 数组连接 array.concat(other)
+    Push,           // 数组添加 array.push(item)
+    Pop,            // 数组弹出 array.pop()
+    Length,         // 数组长度 array.length
+    BoundsCheck,    // 边界检查优化
+}
+
+/// 数组优化策略
+#[derive(Debug, Clone, PartialEq)]
+pub enum ArrayOptimization {
+    BoundsCheckElimination,  // 边界检查消除
+    Vectorization,          // 向量化操作
+    MemoryPrefetch,         // 内存预取
+    CacheOptimization,      // 缓存优化
+    LoopUnrolling,          // 循环展开
+    SIMDOperations,         // SIMD操作
+    InPlaceOperations,      // 原地操作
+    ParallelProcessing,     // 并行处理
+    MemoryCoalescing,       // 内存合并访问
+    BranchPrediction,       // 分支预测优化
+}
+
+/// 数组元素类型
+#[derive(Debug, Clone, PartialEq)]
+pub enum ArrayElementType {
+    Integer,     // 整数
+    Float,       // 浮点数
+    String,      // 字符串
+    Boolean,     // 布尔值
+    Object,      // 对象
+    Mixed,       // 混合类型
+}
+
+/// 数组输出类型
+#[derive(Debug, Clone, PartialEq)]
+pub enum ArrayOutputType {
+    Array,       // 数组
+    Single,      // 单个值
+    Boolean,     // 布尔值
+    Integer,     // 整数
+    Iterator,    // 迭代器
+}
+
+/// 数组内存访问模式
+#[derive(Debug, Clone, PartialEq)]
+pub enum ArrayMemoryPattern {
+    Sequential,    // 顺序访问
+    Random,        // 随机访问
+    Strided,       // 跨步访问
+    Reverse,       // 反向访问
+    Sparse,        // 稀疏访问
+}
+
+/// 数组操作签名
+#[derive(Debug, Clone)]
+pub struct ArrayOperationSignature {
+    /// 操作描述
+    operation_desc: String,
+    /// 数组元素类型
+    element_type: ArrayElementType,
+    /// 数组大小（如果已知）
+    array_size: Option<usize>,
+    /// 输出类型
+    output_type: ArrayOutputType,
+    /// 内存访问模式
+    memory_pattern: ArrayMemoryPattern,
+}
+
+/// 编译后的数组操作
+#[derive(Clone)]
+pub struct CompiledArrayOperation {
+    /// 函数指针
+    func_ptr: *const u8,
+    /// 数组操作签名
+    signature: ArrayOperationSignature,
+    /// 操作类型
+    operation_type: ArrayOperationType,
+    /// 优化策略
+    optimization: ArrayOptimization,
+    /// 是否向量化
+    is_vectorized: bool,
+    /// 是否消除边界检查
+    bounds_check_eliminated: bool,
+}
+
 /// 循环类型
 #[derive(Debug, Clone, PartialEq)]
 pub enum LoopType {
@@ -3205,4 +3302,18 @@ pub fn jit_compile_and_execute_expression(expr: &Expression, variables: &HashMap
         },
         Err(_) => None
     }
+}
+
+/// 全局函数：检查数组操作是否应该JIT编译
+pub fn should_compile_array_operation(operation_key: &str) -> bool {
+    JIT_COMPILER.write().unwrap().should_compile_array_operation(operation_key)
+}
+
+/// 全局函数：编译数组操作
+pub fn compile_array_operation(
+    expression: &Expression,
+    key: String,
+    debug_mode: bool
+) -> Result<CompiledArrayOperation, String> {
+    JIT_COMPILER.write().unwrap().compile_array_operation(expression, key, debug_mode)
 }
