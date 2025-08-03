@@ -1404,6 +1404,165 @@ impl JitCompiler {
         })
     }
 
+    /// 编译字符串操作
+    pub fn compile_string_operation(
+        &mut self,
+        operation: &str,
+        operands: &[String],
+        key: String,
+        debug_mode: bool
+    ) -> Result<CompiledStringOperation, String> {
+        if debug_mode {
+            println!("📝 JIT: 尝试编译字符串操作 {} (操作: {})", key, operation);
+        }
+
+        // 识别操作类型和选择优化策略
+        let op_type = self.identify_string_operation_type(operation);
+        let avg_length = operands.iter().map(|s| s.len()).sum::<usize>() / operands.len().max(1);
+        let optimization = self.select_string_optimization(&op_type, avg_length);
+
+        if debug_mode {
+            println!("🔍 JIT: 操作类型: {:?}, 优化策略: {:?}", op_type, optimization);
+        }
+
+        // 根据优化策略选择编译方法
+        match optimization {
+            StringOptimization::ZeroCopy => {
+                self.compile_zero_copy_string_operation(operation, operands, key, op_type, debug_mode)
+            },
+            StringOptimization::SmallStringOptimization => {
+                self.compile_small_string_operation(operation, operands, key, op_type, debug_mode)
+            },
+            StringOptimization::BoyerMoore | StringOptimization::KMP => {
+                self.compile_search_optimized_string_operation(operation, operands, key, op_type, optimization, debug_mode)
+            },
+            _ => {
+                self.compile_standard_string_operation(operation, operands, key, op_type, debug_mode)
+            }
+        }
+    }
+
+    /// 编译零拷贝字符串操作
+    fn compile_zero_copy_string_operation(
+        &mut self,
+        operation: &str,
+        operands: &[String],
+        key: String,
+        op_type: StringOperationType,
+        debug_mode: bool
+    ) -> Result<CompiledStringOperation, String> {
+        if debug_mode {
+            println!("🚀 JIT: 零拷贝编译字符串操作");
+        }
+
+        let signature = StringOperationSignature {
+            operation_desc: key.clone(),
+            input_count: operands.len(),
+            output_type: match op_type {
+                StringOperationType::Comparison => StringOutputType::Boolean,
+                StringOperationType::Search => StringOutputType::Integer,
+                _ => StringOutputType::String,
+            },
+            memory_strategy: StringMemoryStrategy::View,
+        };
+
+        Ok(CompiledStringOperation {
+            func_ptr: std::ptr::null(),
+            signature,
+            operation_type: op_type,
+            optimization: StringOptimization::ZeroCopy,
+            is_zero_copy: true,
+        })
+    }
+
+    /// 编译小字符串优化操作
+    fn compile_small_string_operation(
+        &mut self,
+        operation: &str,
+        operands: &[String],
+        key: String,
+        op_type: StringOperationType,
+        debug_mode: bool
+    ) -> Result<CompiledStringOperation, String> {
+        if debug_mode {
+            println!("⚡ JIT: 小字符串优化编译");
+        }
+
+        let signature = StringOperationSignature {
+            operation_desc: key.clone(),
+            input_count: operands.len(),
+            output_type: StringOutputType::String,
+            memory_strategy: StringMemoryStrategy::InPlace,
+        };
+
+        Ok(CompiledStringOperation {
+            func_ptr: std::ptr::null(),
+            signature,
+            operation_type: op_type,
+            optimization: StringOptimization::SmallStringOptimization,
+            is_zero_copy: false,
+        })
+    }
+
+    /// 编译搜索优化字符串操作
+    fn compile_search_optimized_string_operation(
+        &mut self,
+        operation: &str,
+        operands: &[String],
+        key: String,
+        op_type: StringOperationType,
+        optimization: StringOptimization,
+        debug_mode: bool
+    ) -> Result<CompiledStringOperation, String> {
+        if debug_mode {
+            println!("🔍 JIT: 搜索优化编译字符串操作 ({:?})", optimization);
+        }
+
+        let signature = StringOperationSignature {
+            operation_desc: key.clone(),
+            input_count: operands.len(),
+            output_type: StringOutputType::Integer,
+            memory_strategy: StringMemoryStrategy::View,
+        };
+
+        Ok(CompiledStringOperation {
+            func_ptr: std::ptr::null(),
+            signature,
+            operation_type: op_type,
+            optimization,
+            is_zero_copy: true,
+        })
+    }
+
+    /// 编译标准字符串操作
+    fn compile_standard_string_operation(
+        &mut self,
+        operation: &str,
+        operands: &[String],
+        key: String,
+        op_type: StringOperationType,
+        debug_mode: bool
+    ) -> Result<CompiledStringOperation, String> {
+        if debug_mode {
+            println!("🔧 JIT: 标准编译字符串操作");
+        }
+
+        let signature = StringOperationSignature {
+            operation_desc: key.clone(),
+            input_count: operands.len(),
+            output_type: StringOutputType::String,
+            memory_strategy: StringMemoryStrategy::Allocate,
+        };
+
+        Ok(CompiledStringOperation {
+            func_ptr: std::ptr::null(),
+            signature,
+            operation_type: op_type,
+            optimization: StringOptimization::BufferReuse,
+            is_zero_copy: false,
+        })
+    }
+
     /// 获取编译统计信息
     pub fn get_stats(&self) -> JitStats {
         JitStats {
