@@ -16,18 +16,24 @@ pub struct JitCompiler {
     loop_counters: HashMap<String, u32>,
     /// 函数调用热点检测计数器
     function_call_counters: HashMap<String, u32>,
+    /// 数学表达式热点检测计数器
+    math_expression_counters: HashMap<String, u32>,
     /// 编译缓存
     compiled_functions: HashMap<String, CompiledFunction>,
     /// 编译的循环缓存
     compiled_loops: HashMap<String, CompiledLoop>,
     /// 编译的函数调用缓存
     compiled_function_calls: HashMap<String, CompiledFunctionCall>,
+    /// 编译的数学表达式缓存
+    compiled_math_expressions: HashMap<String, CompiledMathExpression>,
     /// 表达式热点阈值
     hotspot_threshold: u32,
     /// 循环热点阈值
     loop_threshold: u32,
     /// 函数调用热点阈值
     function_call_threshold: u32,
+    /// 数学表达式热点阈值
+    math_expression_threshold: u32,
 }
 
 /// 编译后的函数
@@ -117,6 +123,66 @@ pub enum RecursiveOptimization {
     Memoization,          // 记忆化
     IterativeConversion,  // 转换为迭代
     StackOptimization,    // 栈优化
+}
+
+/// 数学表达式类型
+#[derive(Debug, Clone, PartialEq)]
+pub enum MathExpressionType {
+    BasicArithmetic,      // 基础算术运算 (+, -, *, /, %)
+    PowerOperation,       // 幂运算
+    TrigonometricFunction, // 三角函数 (sin, cos, tan)
+    LogarithmicFunction,  // 对数函数 (log, ln)
+    ExponentialFunction,  // 指数函数 (exp, pow)
+    SquareRootFunction,   // 平方根函数 (sqrt)
+    ComplexExpression,    // 复杂数学表达式
+}
+
+/// 数学函数优化策略
+#[derive(Debug, Clone, PartialEq)]
+pub enum MathOptimization {
+    SIMDVectorization,    // SIMD向量化
+    LookupTable,          // 查表法
+    TaylorSeries,         // 泰勒级数展开
+    NewtonRaphson,        // 牛顿-拉夫逊法
+    FastApproximation,    // 快速近似算法
+    ConstantFolding,      // 常量折叠
+}
+
+/// 编译后的数学表达式
+#[derive(Clone)]
+pub struct CompiledMathExpression {
+    /// 函数指针
+    func_ptr: *const u8,
+    /// 数学表达式签名
+    signature: MathExpressionSignature,
+    /// 表达式类型
+    expression_type: MathExpressionType,
+    /// 优化策略
+    optimization: MathOptimization,
+    /// 是否使用SIMD
+    uses_simd: bool,
+}
+
+/// 数学表达式签名
+#[derive(Debug, Clone)]
+pub struct MathExpressionSignature {
+    /// 表达式描述
+    expression_desc: String,
+    /// 输入类型
+    input_types: Vec<JitType>,
+    /// 输出类型
+    output_type: JitType,
+    /// 精度要求
+    precision: MathPrecision,
+}
+
+/// 数学精度要求
+#[derive(Debug, Clone, PartialEq)]
+pub enum MathPrecision {
+    Fast,        // 快速但精度较低
+    Standard,    // 标准精度
+    High,        // 高精度
+    Extended,    // 扩展精度
 }
 
 /// 循环类型
@@ -273,12 +339,15 @@ impl JitCompiler {
             hotspot_counters: HashMap::new(),
             loop_counters: HashMap::new(),
             function_call_counters: HashMap::new(),
+            math_expression_counters: HashMap::new(),
             compiled_functions: HashMap::new(),
             compiled_loops: HashMap::new(),
             compiled_function_calls: HashMap::new(),
+            compiled_math_expressions: HashMap::new(),
             hotspot_threshold: 100, // 表达式执行100次后触发JIT编译
             loop_threshold: 100,    // 循环执行100次后触发JIT编译
             function_call_threshold: 50, // 函数调用50次后触发JIT编译
+            math_expression_threshold: 30, // 数学表达式30次后触发JIT编译
         }
     }
 
@@ -304,6 +373,13 @@ impl JitCompiler {
         *counter >= self.function_call_threshold
     }
 
+    /// 检查数学表达式是否应该JIT编译
+    pub fn should_compile_math_expression(&mut self, expression_key: &str) -> bool {
+        let counter = self.math_expression_counters.entry(expression_key.to_string()).or_insert(0);
+        *counter += 1;
+        *counter >= self.math_expression_threshold
+    }
+
     /// 生成函数调用的唯一键
     pub fn generate_function_call_key(&self, function_name: &str, call_site: &str) -> String {
         format!("call_{}_{}", function_name, call_site)
@@ -312,6 +388,100 @@ impl JitCompiler {
     /// 生成循环的唯一键
     pub fn generate_loop_key(&self, loop_type: &str, location: &str) -> String {
         format!("loop_{}_{}", loop_type, location)
+    }
+
+    /// 生成数学表达式的唯一键
+    pub fn generate_math_expression_key(&self, expression: &Expression) -> String {
+        match expression {
+            Expression::BinaryOp(left, op, right) => {
+                let left_key = self.generate_math_expression_key(left);
+                let right_key = self.generate_math_expression_key(right);
+                let op_str = match op {
+                    BinaryOperator::Add => "add",
+                    BinaryOperator::Subtract => "sub",
+                    BinaryOperator::Multiply => "mul",
+                    BinaryOperator::Divide => "div",
+                    BinaryOperator::Modulo => "mod",
+                };
+                format!("math_{}_{}__{}", op_str, left_key, right_key)
+            },
+            Expression::IntLiteral(n) => format!("int_{}", n),
+            Expression::FloatLiteral(f) => format!("float_{}", f.to_bits()),
+            Expression::Variable(name) => format!("var_{}", name),
+            Expression::FunctionCall(name, args) => {
+                let args_key = args.iter()
+                    .map(|arg| self.generate_math_expression_key(arg))
+                    .collect::<Vec<_>>()
+                    .join("_");
+                format!("func_{}_{}", name, args_key)
+            },
+            _ => "complex_expr".to_string(),
+        }
+    }
+
+    /// 识别数学表达式类型
+    pub fn identify_math_expression_type(&self, expression: &Expression) -> MathExpressionType {
+        match expression {
+            Expression::BinaryOp(_, op, _) => {
+                match op {
+                    BinaryOperator::Add | BinaryOperator::Subtract |
+                    BinaryOperator::Multiply | BinaryOperator::Divide |
+                    BinaryOperator::Modulo => MathExpressionType::BasicArithmetic,
+                }
+            },
+            Expression::FunctionCall(name, _) => {
+                match name.as_str() {
+                    "sin" | "cos" | "tan" | "asin" | "acos" | "atan" => {
+                        MathExpressionType::TrigonometricFunction
+                    },
+                    "log" | "ln" | "log10" | "log2" => {
+                        MathExpressionType::LogarithmicFunction
+                    },
+                    "exp" | "pow" => {
+                        MathExpressionType::ExponentialFunction
+                    },
+                    "sqrt" | "cbrt" => {
+                        MathExpressionType::SquareRootFunction
+                    },
+                    "power" | "**" => {
+                        MathExpressionType::PowerOperation
+                    },
+                    _ => MathExpressionType::ComplexExpression,
+                }
+            },
+            _ => MathExpressionType::ComplexExpression,
+        }
+    }
+
+    /// 选择数学表达式的优化策略
+    pub fn select_math_optimization(&self, expr_type: &MathExpressionType, complexity: u32) -> MathOptimization {
+        match expr_type {
+            MathExpressionType::BasicArithmetic => {
+                if complexity <= 3 {
+                    MathOptimization::SIMDVectorization
+                } else {
+                    MathOptimization::ConstantFolding
+                }
+            },
+            MathExpressionType::TrigonometricFunction => {
+                MathOptimization::LookupTable
+            },
+            MathExpressionType::LogarithmicFunction => {
+                MathOptimization::TaylorSeries
+            },
+            MathExpressionType::ExponentialFunction => {
+                MathOptimization::FastApproximation
+            },
+            MathExpressionType::SquareRootFunction => {
+                MathOptimization::NewtonRaphson
+            },
+            MathExpressionType::PowerOperation => {
+                MathOptimization::FastApproximation
+            },
+            MathExpressionType::ComplexExpression => {
+                MathOptimization::SIMDVectorization
+            },
+        }
     }
 
     /// 检查表达式是否适合JIT编译
@@ -923,6 +1093,170 @@ impl JitCompiler {
         })
     }
 
+    /// 编译数学表达式
+    pub fn compile_math_expression(
+        &mut self,
+        expression: &Expression,
+        key: String,
+        debug_mode: bool
+    ) -> Result<CompiledMathExpression, String> {
+        if debug_mode {
+            println!("🧮 JIT: 尝试编译数学表达式 {}", key);
+        }
+
+        // 识别表达式类型和选择优化策略
+        let expr_type = self.identify_math_expression_type(expression);
+        let complexity = self.calculate_expression_complexity(expression);
+        let optimization = self.select_math_optimization(&expr_type, complexity);
+
+        if debug_mode {
+            println!("🔍 JIT: 表达式类型: {:?}, 优化策略: {:?}", expr_type, optimization);
+        }
+
+        // 根据优化策略选择编译方法
+        match optimization {
+            MathOptimization::SIMDVectorization => {
+                self.compile_simd_math_expression(expression, key, expr_type, debug_mode)
+            },
+            MathOptimization::LookupTable => {
+                self.compile_lookup_table_math(expression, key, expr_type, debug_mode)
+            },
+            MathOptimization::FastApproximation => {
+                self.compile_fast_approximation_math(expression, key, expr_type, debug_mode)
+            },
+            _ => {
+                self.compile_standard_math_expression(expression, key, expr_type, debug_mode)
+            }
+        }
+    }
+
+    /// 计算表达式复杂度
+    fn calculate_expression_complexity(&self, expression: &Expression) -> u32 {
+        match expression {
+            Expression::IntLiteral(_) | Expression::FloatLiteral(_) | Expression::Variable(_) => 1,
+            Expression::BinaryOp(left, _, right) => {
+                1 + self.calculate_expression_complexity(left) + self.calculate_expression_complexity(right)
+            },
+            Expression::FunctionCall(_, args) => {
+                2 + args.iter().map(|arg| self.calculate_expression_complexity(arg)).sum::<u32>()
+            },
+            _ => 3,
+        }
+    }
+
+    /// 编译SIMD优化的数学表达式
+    fn compile_simd_math_expression(
+        &mut self,
+        expression: &Expression,
+        key: String,
+        expr_type: MathExpressionType,
+        debug_mode: bool
+    ) -> Result<CompiledMathExpression, String> {
+        if debug_mode {
+            println!("🚀 JIT: SIMD编译数学表达式");
+        }
+
+        // 简化实现：创建占位符编译结果
+        let signature = MathExpressionSignature {
+            expression_desc: key.clone(),
+            input_types: vec![JitType::Float64],
+            output_type: JitType::Float64,
+            precision: MathPrecision::Standard,
+        };
+
+        Ok(CompiledMathExpression {
+            func_ptr: std::ptr::null(),
+            signature,
+            expression_type: expr_type,
+            optimization: MathOptimization::SIMDVectorization,
+            uses_simd: true,
+        })
+    }
+
+    /// 编译查表法数学表达式
+    fn compile_lookup_table_math(
+        &mut self,
+        expression: &Expression,
+        key: String,
+        expr_type: MathExpressionType,
+        debug_mode: bool
+    ) -> Result<CompiledMathExpression, String> {
+        if debug_mode {
+            println!("📊 JIT: 查表法编译数学表达式");
+        }
+
+        let signature = MathExpressionSignature {
+            expression_desc: key.clone(),
+            input_types: vec![JitType::Float64],
+            output_type: JitType::Float64,
+            precision: MathPrecision::Fast,
+        };
+
+        Ok(CompiledMathExpression {
+            func_ptr: std::ptr::null(),
+            signature,
+            expression_type: expr_type,
+            optimization: MathOptimization::LookupTable,
+            uses_simd: false,
+        })
+    }
+
+    /// 编译快速近似数学表达式
+    fn compile_fast_approximation_math(
+        &mut self,
+        expression: &Expression,
+        key: String,
+        expr_type: MathExpressionType,
+        debug_mode: bool
+    ) -> Result<CompiledMathExpression, String> {
+        if debug_mode {
+            println!("⚡ JIT: 快速近似编译数学表达式");
+        }
+
+        let signature = MathExpressionSignature {
+            expression_desc: key.clone(),
+            input_types: vec![JitType::Float64],
+            output_type: JitType::Float64,
+            precision: MathPrecision::Fast,
+        };
+
+        Ok(CompiledMathExpression {
+            func_ptr: std::ptr::null(),
+            signature,
+            expression_type: expr_type,
+            optimization: MathOptimization::FastApproximation,
+            uses_simd: false,
+        })
+    }
+
+    /// 编译标准数学表达式
+    fn compile_standard_math_expression(
+        &mut self,
+        expression: &Expression,
+        key: String,
+        expr_type: MathExpressionType,
+        debug_mode: bool
+    ) -> Result<CompiledMathExpression, String> {
+        if debug_mode {
+            println!("🔧 JIT: 标准编译数学表达式");
+        }
+
+        let signature = MathExpressionSignature {
+            expression_desc: key.clone(),
+            input_types: vec![JitType::Float64],
+            output_type: JitType::Float64,
+            precision: MathPrecision::Standard,
+        };
+
+        Ok(CompiledMathExpression {
+            func_ptr: std::ptr::null(),
+            signature,
+            expression_type: expr_type,
+            optimization: MathOptimization::ConstantFolding,
+            uses_simd: false,
+        })
+    }
+
     /// 获取编译统计信息
     pub fn get_stats(&self) -> JitStats {
         JitStats {
@@ -935,6 +1269,9 @@ impl JitCompiler {
             function_call_hotspot_count: self.function_call_counters.len(),
             compiled_function_call_count: self.compiled_function_calls.len(),
             total_function_call_executions: self.function_call_counters.values().sum(),
+            math_expression_hotspot_count: self.math_expression_counters.len(),
+            compiled_math_expression_count: self.compiled_math_expressions.len(),
+            total_math_expression_executions: self.math_expression_counters.values().sum(),
         }
     }
 
@@ -2088,6 +2425,9 @@ pub struct JitStats {
     pub function_call_hotspot_count: usize,
     pub compiled_function_call_count: usize,
     pub total_function_call_executions: u32,
+    pub math_expression_hotspot_count: usize,
+    pub compiled_math_expression_count: usize,
+    pub total_math_expression_executions: u32,
 }
 
 /// 全局JIT编译器实例
