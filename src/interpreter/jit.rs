@@ -663,6 +663,81 @@ impl JitCompiler {
         }
     }
 
+    /// 识别数组操作类型
+    pub fn identify_array_operation_type(&self, expression: &Expression) -> ArrayOperationType {
+        match expression {
+            Expression::ArrayAccess(_, _) => ArrayOperationType::Access,
+            Expression::ArrayMap(_, _) => ArrayOperationType::Map,
+            Expression::ArrayFilter(_, _) => ArrayOperationType::Filter,
+            Expression::ArrayReduce(_, _, _) => ArrayOperationType::Reduce,
+            Expression::ArrayForEach(_, _) => ArrayOperationType::ForEach,
+            Expression::MethodCall(_, method_name, _) => {
+                match method_name.as_str() {
+                    "sort" => ArrayOperationType::Sort,
+                    "find" | "search" => ArrayOperationType::Search,
+                    "slice" => ArrayOperationType::Slice,
+                    "concat" => ArrayOperationType::Concat,
+                    "push" => ArrayOperationType::Push,
+                    "pop" => ArrayOperationType::Pop,
+                    "length" => ArrayOperationType::Length,
+                    _ => ArrayOperationType::Access,
+                }
+            },
+            _ => ArrayOperationType::Access,
+        }
+    }
+
+    /// 选择数组操作的优化策略
+    pub fn select_array_optimization(&self, op_type: &ArrayOperationType, array_size: Option<usize>) -> ArrayOptimization {
+        match op_type {
+            ArrayOperationType::Access => {
+                if array_size.unwrap_or(0) > 1000 {
+                    ArrayOptimization::BoundsCheckElimination
+                } else {
+                    ArrayOptimization::CacheOptimization
+                }
+            },
+            ArrayOperationType::Iteration => {
+                ArrayOptimization::MemoryCoalescing
+            },
+            ArrayOperationType::Map | ArrayOperationType::Filter => {
+                if array_size.unwrap_or(0) > 10000 {
+                    ArrayOptimization::ParallelProcessing
+                } else {
+                    ArrayOptimization::Vectorization
+                }
+            },
+            ArrayOperationType::Reduce => {
+                ArrayOptimization::LoopUnrolling
+            },
+            ArrayOperationType::Sort => {
+                ArrayOptimization::BranchPrediction
+            },
+            ArrayOperationType::Search => {
+                ArrayOptimization::SIMDOperations
+            },
+            ArrayOperationType::Slice => {
+                ArrayOptimization::MemoryPrefetch
+            },
+            ArrayOperationType::Concat => {
+                ArrayOptimization::InPlaceOperations
+            },
+            _ => ArrayOptimization::CacheOptimization,
+        }
+    }
+
+    /// 估算数组大小
+    fn estimate_array_size(&self, expression: &Expression) -> Option<usize> {
+        match expression {
+            Expression::ArrayLiteral(elements) => Some(elements.len()),
+            Expression::ArrayAccess(array_expr, _) => {
+                // 尝试从数组表达式推断大小
+                self.estimate_array_size(array_expr)
+            },
+            _ => None, // 无法确定大小
+        }
+    }
+
     /// 识别数学表达式类型
     pub fn identify_math_expression_type(&self, expression: &Expression) -> MathExpressionType {
         match expression {
