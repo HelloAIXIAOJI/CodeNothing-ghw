@@ -26,8 +26,8 @@ fn main() : int {
         result2 : string = str3 + str4;
         concat_result = concat_result + 1;
         
-        // 字符串与数字拼接
-        result3 : string = "Number: " + i;
+        // 字符串与字符串拼接
+        result3 : string = "Number: " + "Value";
         concat_result = concat_result + 1;
     };
     std::println("字符串拼接结果: " + concat_result);
@@ -128,7 +128,7 @@ fn main() : int {
         
         // 循环中的字符串表达式
         temp : string = "Temp";
-        expr3 : string = temp + i;
+        expr3 : string = temp + "Value";
         expression_result = expression_result + 1;
     };
     std::println("字符串表达式结果: " + expression_result);
