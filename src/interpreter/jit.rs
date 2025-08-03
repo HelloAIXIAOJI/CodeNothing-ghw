@@ -1588,6 +1588,9 @@ impl JitCompiler {
             string_operation_hotspot_count: self.string_operation_counters.len(),
             compiled_string_operation_count: self.compiled_string_operations.len(),
             total_string_operation_executions: self.string_operation_counters.values().sum(),
+            array_operation_hotspot_count: self.array_operation_counters.len(),
+            compiled_array_operation_count: self.compiled_array_operations.len(),
+            total_array_operation_executions: self.array_operation_counters.values().sum(),
         }
     }
 
