@@ -32,6 +32,8 @@ pub struct JitCompiler {
     compiled_math_expressions: HashMap<String, CompiledMathExpression>,
     /// 编译的字符串操作缓存
     compiled_string_operations: HashMap<String, CompiledStringOperation>,
+    /// 编译的数组操作缓存
+    compiled_array_operations: HashMap<String, CompiledArrayOperation>,
     /// 表达式热点阈值
     hotspot_threshold: u32,
     /// 循环热点阈值
