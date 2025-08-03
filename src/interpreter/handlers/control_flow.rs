@@ -4,6 +4,7 @@ use crate::interpreter::executor::ExecutionResult;
 use crate::interpreter::interpreter_core::Interpreter;
 use crate::interpreter::expression_evaluator::ExpressionEvaluator;
 use crate::interpreter::statement_executor::StatementExecutor;
+use crate::interpreter::jit;
 
 pub fn handle_if_else(interpreter: &mut Interpreter, condition: Expression, if_block: Vec<Statement>, else_blocks: Vec<(Option<Expression>, Vec<Statement>)>) -> ExecutionResult {
     // 修复借用问题：不直接传递self，而是分别计算条件和执行语句块
@@ -67,12 +68,79 @@ pub fn handle_if_else(interpreter: &mut Interpreter, condition: Expression, if_b
 }
 
 pub fn handle_for_loop(interpreter: &mut Interpreter, variable_name: String, range_start: Expression, range_end: Expression, loop_body: Vec<Statement>) -> ExecutionResult {
+    // 生成循环的唯一键用于热点检测
+    let loop_key = format!("for_loop_{}_{:p}_{:p}", variable_name, &range_start as *const _, &range_end as *const _);
+
     // 优化：预计算范围值，避免重复求值
     let (start, end) = evaluate_for_loop_range(interpreter, &range_start, &range_end);
 
     // 优化：检查范围有效性，避免无效循环
     if start > end {
         return ExecutionResult::None; // 空范围，直接返回
+    }
+
+    // JIT热点检测和编译
+    let jit_compiler = jit::get_jit();
+    if jit_compiler.should_compile_loop(&loop_key) {
+        // 检查循环是否适合JIT编译
+        let for_stmt = Statement::ForLoop(variable_name.clone(), range_start.clone(), range_end.clone(), loop_body.clone());
+        if jit_compiler.can_compile_loop(&for_stmt) {
+            // 尝试JIT编译For循环
+            let debug_mode = unsafe { jit::JIT_DEBUG_MODE };
+            match jit_compiler.compile_for_loop(&variable_name, &range_start, &range_end, &loop_body, loop_key.clone(), debug_mode) {
+                Ok(compiled_loop) => {
+                    if debug_mode {
+                        println!("🚀 JIT: 成功编译For循环");
+                    }
+
+                    // 收集变量值
+                    let mut var_values = Vec::new();
+                    let mut var_names = Vec::new();
+                    var_names.push(variable_name.clone()); // 循环变量
+                    jit_compiler.collect_variables(&range_start, &mut var_names);
+                    jit_compiler.collect_variables(&range_end, &mut var_names);
+                    for stmt in &loop_body {
+                        jit_compiler.collect_statement_variables(stmt, &mut var_names);
+                    }
+
+                    // 获取其他变量的当前值（跳过循环变量，它由start_expr确定）
+                    for var_name in &var_names[1..] {
+                        if let Some(value) = interpreter.local_env.get(var_name).or_else(|| interpreter.global_env.get(var_name)) {
+                            match value {
+                                Value::Int(i) => var_values.push(*i as i64),
+                                Value::Long(l) => var_values.push(*l),
+                                _ => var_values.push(0), // 不支持的类型默认为0
+                            }
+                        } else {
+                            var_values.push(0); // 未找到的变量默认为0
+                        }
+                    }
+
+                    // 执行编译后的For循环
+                    let result_values = compiled_loop.call(&var_values);
+
+                    // 更新所有变量的最终值
+                    if result_values.len() == var_names.len() {
+                        for (i, var_name) in var_names.iter().enumerate() {
+                            let final_value = result_values[i];
+                            if final_value <= i32::MAX as i64 && final_value >= i32::MIN as i64 {
+                                interpreter.local_env.insert(var_name.clone(), Value::Int(final_value as i32));
+                            } else {
+                                interpreter.local_env.insert(var_name.clone(), Value::Long(final_value));
+                            }
+                        }
+                    }
+
+                    return ExecutionResult::None;
+                },
+                Err(e) => {
+                    if debug_mode {
+                        println!("⚠️ JIT: For循环编译失败: {}", e);
+                    }
+                    // 编译失败，回退到解释执行
+                }
+            }
+        }
     }
 
     // 优化：预分配循环变量，避免重复字符串操作
@@ -208,11 +276,73 @@ fn update_loop_variable_optimized(interpreter: &mut Interpreter, var_name: &str,
 
 
 pub fn handle_while_loop(interpreter: &mut Interpreter, condition: Expression, loop_body: Vec<Statement>) -> ExecutionResult {
+    // 生成循环的唯一键用于热点检测
+    let loop_key = format!("while_loop_{:p}", &condition as *const _);
+
     // 优化：预检查条件类型，避免每次循环都检查
     let is_simple_condition = is_simple_boolean_condition(&condition);
 
     // 循环执行，直到条件为假
     loop {
+        // JIT热点检测和编译
+        let jit_compiler = jit::get_jit();
+        if jit_compiler.should_compile_loop(&loop_key) {
+            // 检查循环是否适合JIT编译
+            let while_stmt = Statement::WhileLoop(condition.clone(), loop_body.clone());
+            if jit_compiler.can_compile_loop(&while_stmt) {
+                // 尝试JIT编译循环
+                let debug_mode = unsafe { jit::JIT_DEBUG_MODE };
+                match jit_compiler.compile_while_loop(&condition, &loop_body, loop_key.clone(), debug_mode) {
+                    Ok(compiled_loop) => {
+                        if debug_mode {
+                            println!("🚀 JIT: 成功编译While循环");
+                        }
+
+                        // 收集变量值
+                        let mut var_values = Vec::new();
+                        let mut var_names = Vec::new();
+                        jit_compiler.collect_variables(&condition, &mut var_names);
+                        for stmt in &loop_body {
+                            jit_compiler.collect_statement_variables(stmt, &mut var_names);
+                        }
+
+                        // 获取变量的当前值
+                        for var_name in &var_names {
+                            if let Some(value) = interpreter.local_env.get(var_name).or_else(|| interpreter.global_env.get(var_name)) {
+                                match value {
+                                    Value::Int(i) => var_values.push(*i as i64),
+                                    Value::Long(l) => var_values.push(*l),
+                                    _ => var_values.push(0), // 不支持的类型默认为0
+                                }
+                            } else {
+                                var_values.push(0); // 未找到的变量默认为0
+                            }
+                        }
+
+                        // 执行编译后的循环
+                        let result_values = compiled_loop.call(&var_values);
+
+                        // 更新变量值
+                        if !result_values.is_empty() && !var_names.is_empty() {
+                            let result_value = result_values[0];
+                            if result_value <= i32::MAX as i64 && result_value >= i32::MIN as i64 {
+                                interpreter.local_env.insert(var_names[0].clone(), Value::Int(result_value as i32));
+                            } else {
+                                interpreter.local_env.insert(var_names[0].clone(), Value::Long(result_value));
+                            }
+                        }
+
+                        return ExecutionResult::None;
+                    },
+                    Err(e) => {
+                        if debug_mode {
+                            println!("⚠️ JIT: While循环编译失败: {}", e);
+                        }
+                        // 编译失败，回退到解释执行
+                    }
+                }
+            }
+        }
         // 优化的条件求值
         let is_true = if is_simple_condition {
             evaluate_simple_condition(interpreter, &condition)
