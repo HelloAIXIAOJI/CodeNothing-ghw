@@ -573,6 +573,74 @@ impl JitCompiler {
         }
     }
 
+    /// 生成数组操作的唯一键
+    pub fn generate_array_operation_key(&self, operation: &str, array_info: &str) -> String {
+        format!("array_{}_{}", operation, array_info)
+    }
+
+    /// 识别数组操作类型
+    pub fn identify_array_operation_type(&self, expression: &Expression) -> ArrayOperationType {
+        match expression {
+            Expression::ArrayAccess(_, _) => ArrayOperationType::Access,
+            Expression::ArrayMap(_, _) => ArrayOperationType::Map,
+            Expression::ArrayFilter(_, _) => ArrayOperationType::Filter,
+            Expression::ArrayReduce(_, _, _) => ArrayOperationType::Reduce,
+            Expression::ArrayForEach(_, _) => ArrayOperationType::ForEach,
+            Expression::MethodCall(_, method_name, _) => {
+                match method_name.as_str() {
+                    "sort" => ArrayOperationType::Sort,
+                    "find" | "search" => ArrayOperationType::Search,
+                    "slice" => ArrayOperationType::Slice,
+                    "concat" => ArrayOperationType::Concat,
+                    "push" => ArrayOperationType::Push,
+                    "pop" => ArrayOperationType::Pop,
+                    "length" => ArrayOperationType::Length,
+                    _ => ArrayOperationType::Access,
+                }
+            },
+            _ => ArrayOperationType::Access,
+        }
+    }
+
+    /// 选择数组操作的优化策略
+    pub fn select_array_optimization(&self, op_type: &ArrayOperationType, array_size: Option<usize>) -> ArrayOptimization {
+        match op_type {
+            ArrayOperationType::Access => {
+                if array_size.unwrap_or(0) > 1000 {
+                    ArrayOptimization::BoundsCheckElimination
+                } else {
+                    ArrayOptimization::CacheOptimization
+                }
+            },
+            ArrayOperationType::Iteration => {
+                ArrayOptimization::MemoryCoalescing
+            },
+            ArrayOperationType::Map | ArrayOperationType::Filter => {
+                if array_size.unwrap_or(0) > 10000 {
+                    ArrayOptimization::ParallelProcessing
+                } else {
+                    ArrayOptimization::Vectorization
+                }
+            },
+            ArrayOperationType::Reduce => {
+                ArrayOptimization::LoopUnrolling
+            },
+            ArrayOperationType::Sort => {
+                ArrayOptimization::BranchPrediction
+            },
+            ArrayOperationType::Search => {
+                ArrayOptimization::SIMDOperations
+            },
+            ArrayOperationType::Slice => {
+                ArrayOptimization::MemoryPrefetch
+            },
+            ArrayOperationType::Concat => {
+                ArrayOptimization::InPlaceOperations
+            },
+            _ => ArrayOptimization::CacheOptimization,
+        }
+    }
+
     /// 识别数学表达式类型
     pub fn identify_math_expression_type(&self, expression: &Expression) -> MathExpressionType {
         match expression {
