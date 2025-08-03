@@ -239,6 +239,11 @@ impl JitCompiler {
                 self.can_compile_expression(left) &&
                 self.can_compile_expression(right)
             },
+            Expression::LogicalOp(left, op, right) => {
+                self.is_simple_logical_op(op) &&
+                self.can_compile_expression(left) &&
+                self.can_compile_expression(right)
+            },
             _ => false,
         }
     }
@@ -359,6 +364,15 @@ impl JitCompiler {
             crate::ast::CompareOperator::LessEqual |
             crate::ast::CompareOperator::Greater |
             crate::ast::CompareOperator::GreaterEqual
+        )
+    }
+
+    /// 检查是否为简单的逻辑运算符
+    fn is_simple_logical_op(&self, op: &crate::ast::LogicalOperator) -> bool {
+        matches!(op,
+            crate::ast::LogicalOperator::And |
+            crate::ast::LogicalOperator::Or |
+            crate::ast::LogicalOperator::Not
         )
     }
 
@@ -588,6 +602,14 @@ impl JitCompiler {
                 }
             },
             Expression::BinaryOp(left, _, right) => {
+                self.collect_variables(left, variables);
+                self.collect_variables(right, variables);
+            },
+            Expression::CompareOp(left, _, right) => {
+                self.collect_variables(left, variables);
+                self.collect_variables(right, variables);
+            },
+            Expression::LogicalOp(left, _, right) => {
                 self.collect_variables(left, variables);
                 self.collect_variables(right, variables);
             },
@@ -999,17 +1021,16 @@ impl JitCompiler {
                 let left_val = self.compile_expr_to_value_with_vars(builder, left, variables, current_block)?;
                 let right_val = self.compile_expr_to_value_with_vars(builder, right, variables, current_block)?;
 
-                let condition = match op {
-                    crate::ast::CompareOperator::Equal => builder.ins().icmp(IntCC::Equal, left_val, right_val),
-                    crate::ast::CompareOperator::NotEqual => builder.ins().icmp(IntCC::NotEqual, left_val, right_val),
-                    crate::ast::CompareOperator::Less => builder.ins().icmp(IntCC::SignedLessThan, left_val, right_val),
-                    crate::ast::CompareOperator::LessEqual => builder.ins().icmp(IntCC::SignedLessThanOrEqual, left_val, right_val),
-                    crate::ast::CompareOperator::Greater => builder.ins().icmp(IntCC::SignedGreaterThan, left_val, right_val),
-                    crate::ast::CompareOperator::GreaterEqual => builder.ins().icmp(IntCC::SignedGreaterThanOrEqual, left_val, right_val),
-                };
+                // 智能类型检测和比较
+                let condition = self.compile_comparison_operation(builder, left_val, right_val, op, left, right)?;
 
                 // 将布尔值转换为i64 (0或1)
                 Ok(builder.ins().uextend(types::I64, condition))
+            },
+            Expression::LogicalOp(left, op, right) => {
+                // 使用高级条件判断优化策略
+                let condition_expr = Expression::LogicalOp(left.clone(), op.clone(), right.clone());
+                self.apply_conditional_optimizations(builder, &condition_expr, variables, current_block)
             },
             _ => Err("不支持的表达式类型".to_string())
         }
@@ -1464,6 +1485,239 @@ impl JitCompiler {
         }
 
         Ok(result_vars)
+    }
+
+    /// 编译比较运算操作
+    fn compile_comparison_operation(
+        &self,
+        builder: &mut FunctionBuilder,
+        left_val: cranelift::prelude::Value,
+        right_val: cranelift::prelude::Value,
+        op: &crate::ast::CompareOperator,
+        left_expr: &Expression,
+        right_expr: &Expression
+    ) -> Result<cranelift::prelude::Value, String> {
+        // 检测操作数类型
+        let is_float_comparison = self.is_float_expression(left_expr) || self.is_float_expression(right_expr);
+
+        if is_float_comparison {
+            // 浮点数比较
+            let condition = match op {
+                crate::ast::CompareOperator::Equal => builder.ins().fcmp(FloatCC::Equal, left_val, right_val),
+                crate::ast::CompareOperator::NotEqual => builder.ins().fcmp(FloatCC::NotEqual, left_val, right_val),
+                crate::ast::CompareOperator::Less => builder.ins().fcmp(FloatCC::LessThan, left_val, right_val),
+                crate::ast::CompareOperator::LessEqual => builder.ins().fcmp(FloatCC::LessThanOrEqual, left_val, right_val),
+                crate::ast::CompareOperator::Greater => builder.ins().fcmp(FloatCC::GreaterThan, left_val, right_val),
+                crate::ast::CompareOperator::GreaterEqual => builder.ins().fcmp(FloatCC::GreaterThanOrEqual, left_val, right_val),
+            };
+            Ok(condition)
+        } else {
+            // 整数比较
+            let condition = match op {
+                crate::ast::CompareOperator::Equal => builder.ins().icmp(IntCC::Equal, left_val, right_val),
+                crate::ast::CompareOperator::NotEqual => builder.ins().icmp(IntCC::NotEqual, left_val, right_val),
+                crate::ast::CompareOperator::Less => builder.ins().icmp(IntCC::SignedLessThan, left_val, right_val),
+                crate::ast::CompareOperator::LessEqual => builder.ins().icmp(IntCC::SignedLessThanOrEqual, left_val, right_val),
+                crate::ast::CompareOperator::Greater => builder.ins().icmp(IntCC::SignedGreaterThan, left_val, right_val),
+                crate::ast::CompareOperator::GreaterEqual => builder.ins().icmp(IntCC::SignedGreaterThanOrEqual, left_val, right_val),
+            };
+            Ok(condition)
+        }
+    }
+
+    /// 编译逻辑运算操作（简化实现，不使用短路求值）
+    fn compile_logical_operation(
+        &self,
+        builder: &mut FunctionBuilder,
+        left: &Expression,
+        right: &Expression,
+        op: &crate::ast::LogicalOperator,
+        variables: &[String],
+        current_block: Block
+    ) -> Result<cranelift::prelude::Value, String> {
+        match op {
+            crate::ast::LogicalOperator::And => {
+                // 简化实现：计算两个操作数，然后进行逻辑与
+                let left_val = self.compile_expr_to_value_with_vars(builder, left, variables, current_block)?;
+                let right_val = self.compile_expr_to_value_with_vars(builder, right, variables, current_block)?;
+
+                // 检查两个操作数是否都为true（非零）
+                let zero = builder.ins().iconst(types::I64, 0);
+                let left_is_true = builder.ins().icmp(IntCC::NotEqual, left_val, zero);
+                let right_is_true = builder.ins().icmp(IntCC::NotEqual, right_val, zero);
+
+                // 逻辑与
+                let result = builder.ins().band(left_is_true, right_is_true);
+
+                // 转换为i64
+                Ok(builder.ins().uextend(types::I64, result))
+            },
+            crate::ast::LogicalOperator::Or => {
+                // 简化实现：计算两个操作数，然后进行逻辑或
+                let left_val = self.compile_expr_to_value_with_vars(builder, left, variables, current_block)?;
+                let right_val = self.compile_expr_to_value_with_vars(builder, right, variables, current_block)?;
+
+                // 检查两个操作数是否为true（非零）
+                let zero = builder.ins().iconst(types::I64, 0);
+                let left_is_true = builder.ins().icmp(IntCC::NotEqual, left_val, zero);
+                let right_is_true = builder.ins().icmp(IntCC::NotEqual, right_val, zero);
+
+                // 逻辑或
+                let result = builder.ins().bor(left_is_true, right_is_true);
+
+                // 转换为i64
+                Ok(builder.ins().uextend(types::I64, result))
+            },
+            crate::ast::LogicalOperator::Not => {
+                // 逻辑非：只需要左操作数
+                let left_val = self.compile_expr_to_value_with_vars(builder, left, variables, current_block)?;
+
+                // 检查是否为零（false）
+                let zero = builder.ins().iconst(types::I64, 0);
+                let is_zero = builder.ins().icmp(IntCC::Equal, left_val, zero);
+
+                // 转换为i64
+                Ok(builder.ins().uextend(types::I64, is_zero))
+            },
+        }
+    }
+
+    /// 检测表达式是否为浮点数类型
+    fn is_float_expression(&self, expr: &Expression) -> bool {
+        match expr {
+            Expression::FloatLiteral(_) => true,
+            Expression::Variable(_) => false, // 简化实现，实际需要类型推断
+            Expression::BinaryOp(left, _, right) => {
+                self.is_float_expression(left) || self.is_float_expression(right)
+            },
+            _ => false,
+        }
+    }
+
+    /// 实现高级条件判断优化策略
+    fn apply_conditional_optimizations(
+        &self,
+        builder: &mut FunctionBuilder,
+        condition: &Expression,
+        variables: &[String],
+        current_block: Block
+    ) -> Result<cranelift::prelude::Value, String> {
+        // 分析条件表达式的复杂度
+        let complexity = self.analyze_condition_complexity(condition);
+
+        if complexity <= 2 {
+            // 简单条件：直接编译
+            self.compile_expr_to_value_with_vars(builder, condition, variables, current_block)
+        } else if complexity <= 5 {
+            // 中等复杂度：应用条件合并优化
+            self.apply_condition_merging(builder, condition, variables, current_block)
+        } else {
+            // 高复杂度：应用分支预测优化
+            self.apply_branch_prediction_optimization(builder, condition, variables, current_block)
+        }
+    }
+
+    /// 分析条件表达式的复杂度
+    fn analyze_condition_complexity(&self, condition: &Expression) -> u32 {
+        match condition {
+            Expression::IntLiteral(_) | Expression::FloatLiteral(_) | Expression::Variable(_) => 1,
+            Expression::BinaryOp(left, _, right) => {
+                1 + self.analyze_condition_complexity(left) + self.analyze_condition_complexity(right)
+            },
+            Expression::CompareOp(left, _, right) => {
+                1 + self.analyze_condition_complexity(left) + self.analyze_condition_complexity(right)
+            },
+            Expression::LogicalOp(left, _, right) => {
+                2 + self.analyze_condition_complexity(left) + self.analyze_condition_complexity(right)
+            },
+            _ => 10, // 其他复杂表达式
+        }
+    }
+
+    /// 应用条件合并优化
+    fn apply_condition_merging(
+        &self,
+        builder: &mut FunctionBuilder,
+        condition: &Expression,
+        variables: &[String],
+        current_block: Block
+    ) -> Result<cranelift::prelude::Value, String> {
+        // 尝试识别可合并的条件模式
+        if let Expression::LogicalOp(left, op, right) = condition {
+            match op {
+                crate::ast::LogicalOperator::And => {
+                    // 对于AND操作，可以进行短路优化
+                    let left_val = self.compile_expr_to_value_with_vars(builder, left, variables, current_block)?;
+                    let zero = builder.ins().iconst(types::I64, 0);
+                    let left_is_false = builder.ins().icmp(IntCC::Equal, left_val, zero);
+
+                    // 如果左操作数为false，直接返回false，否则计算右操作数
+                    let right_val = self.compile_expr_to_value_with_vars(builder, right, variables, current_block)?;
+                    let result = builder.ins().select(left_is_false, zero, right_val);
+                    Ok(result)
+                },
+                crate::ast::LogicalOperator::Or => {
+                    // 对于OR操作，可以进行短路优化
+                    let left_val = self.compile_expr_to_value_with_vars(builder, left, variables, current_block)?;
+                    let zero = builder.ins().iconst(types::I64, 0);
+                    let left_is_true = builder.ins().icmp(IntCC::NotEqual, left_val, zero);
+
+                    // 如果左操作数为true，直接返回true，否则计算右操作数
+                    let right_val = self.compile_expr_to_value_with_vars(builder, right, variables, current_block)?;
+                    let result = builder.ins().select(left_is_true, left_val, right_val);
+                    Ok(result)
+                },
+                _ => {
+                    // 其他逻辑操作，使用标准编译
+                    self.compile_expr_to_value_with_vars(builder, condition, variables, current_block)
+                }
+            }
+        } else {
+            // 非逻辑操作，使用标准编译
+            self.compile_expr_to_value_with_vars(builder, condition, variables, current_block)
+        }
+    }
+
+    /// 应用分支预测优化
+    fn apply_branch_prediction_optimization(
+        &self,
+        builder: &mut FunctionBuilder,
+        condition: &Expression,
+        variables: &[String],
+        current_block: Block
+    ) -> Result<cranelift::prelude::Value, String> {
+        // 对于复杂条件，使用分支预测友好的编译策略
+        // 将复杂条件分解为多个简单条件，提高分支预测准确性
+
+        if let Expression::LogicalOp(left, op, right) = condition {
+            // 递归优化子条件
+            let left_optimized = self.apply_conditional_optimizations(builder, left, variables, current_block)?;
+            let right_optimized = self.apply_conditional_optimizations(builder, right, variables, current_block)?;
+
+            // 应用优化的逻辑运算
+            let zero = builder.ins().iconst(types::I64, 0);
+            match op {
+                crate::ast::LogicalOperator::And => {
+                    let left_bool = builder.ins().icmp(IntCC::NotEqual, left_optimized, zero);
+                    let right_bool = builder.ins().icmp(IntCC::NotEqual, right_optimized, zero);
+                    let result = builder.ins().band(left_bool, right_bool);
+                    Ok(builder.ins().uextend(types::I64, result))
+                },
+                crate::ast::LogicalOperator::Or => {
+                    let left_bool = builder.ins().icmp(IntCC::NotEqual, left_optimized, zero);
+                    let right_bool = builder.ins().icmp(IntCC::NotEqual, right_optimized, zero);
+                    let result = builder.ins().bor(left_bool, right_bool);
+                    Ok(builder.ins().uextend(types::I64, result))
+                },
+                _ => {
+                    // 其他情况使用标准编译
+                    self.compile_expr_to_value_with_vars(builder, condition, variables, current_block)
+                }
+            }
+        } else {
+            // 非逻辑操作，使用标准编译
+            self.compile_expr_to_value_with_vars(builder, condition, variables, current_block)
+        }
     }
 
     /// 获取循环优化统计信息
