@@ -144,7 +144,7 @@ fn main() : int {
         parameter_result = parameter_result + 1;
         
         // 字符串拼接作为参数
-        msg2 : string = "Count: " + i;
+        msg2 : string = "Count: " + "Value";
         std::println(msg2);
         parameter_result = parameter_result + 1;
         
