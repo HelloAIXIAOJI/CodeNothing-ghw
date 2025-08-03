@@ -698,7 +698,7 @@ impl JitCompiler {
                 // },
                 Statement::Break => {
                     // break语句：跳转到循环退出块
-                    builder.ins().jump(control_context.break_block, &current_vars);
+                    builder.ins().jump(control_context.break_block, current_vars.as_slice());
                     // 创建一个新的不可达块，因为break后的代码不会执行
                     let unreachable_block = builder.create_block();
                     builder.switch_to_block(unreachable_block);
@@ -706,7 +706,7 @@ impl JitCompiler {
                 },
                 Statement::Continue => {
                     // continue语句：跳转到循环继续块
-                    builder.ins().jump(control_context.continue_block, &current_vars);
+                    builder.ins().jump(control_context.continue_block, current_vars.as_slice());
                     // 创建一个新的不可达块，因为continue后的代码不会执行
                     let unreachable_block = builder.create_block();
                     builder.switch_to_block(unreachable_block);
@@ -820,7 +820,7 @@ impl JitCompiler {
                 // },
                 Statement::Break => {
                     // break语句：跳转到循环退出块
-                    builder.ins().jump(control_context.break_block, &current_vars);
+                    builder.ins().jump(control_context.break_block, current_vars.as_slice());
                     // 创建一个新的不可达块，因为break后的代码不会执行
                     let unreachable_block = builder.create_block();
                     builder.switch_to_block(unreachable_block);
@@ -828,7 +828,7 @@ impl JitCompiler {
                 },
                 Statement::Continue => {
                     // continue语句：跳转到循环继续块
-                    builder.ins().jump(control_context.continue_block, &current_vars);
+                    builder.ins().jump(control_context.continue_block, current_vars.as_slice());
                     // 创建一个新的不可达块，因为continue后的代码不会执行
                     let unreachable_block = builder.create_block();
                     builder.switch_to_block(unreachable_block);
@@ -1173,6 +1173,16 @@ impl JitCompiler {
         has_branches: bool,
         has_control_flow: bool
     ) -> LoopOptimization {
+        // 有控制流的循环：限制优化策略
+        if has_control_flow {
+            // break/continue会影响控制流，限制某些优化
+            if complexity_score <= 10 {
+                return LoopOptimization::MemoryOptimize;
+            } else {
+                return LoopOptimization::None; // 复杂控制流暂不优化
+            }
+        }
+
         // 简单循环且迭代次数较少：循环展开
         if let Some(count) = iteration_count {
             if count <= 16 && complexity_score <= 10 && !has_branches {
@@ -1190,6 +1200,16 @@ impl JitCompiler {
             return LoopOptimization::MemoryOptimize;
         }
 
+        // 高复杂度循环：循环不变量提升
+        if complexity_score > 20 && !has_branches {
+            return LoopOptimization::LoopInvariantHoisting;
+        }
+
+        // 算术密集型循环：强度削减
+        if complexity_score > 25 && !has_memory_access {
+            return LoopOptimization::StrengthReduction;
+        }
+
         // 中等复杂度循环：组合优化
         if complexity_score > 10 && complexity_score <= 20 {
             return LoopOptimization::Combined(vec![
@@ -1198,7 +1218,66 @@ impl JitCompiler {
             ]);
         }
 
+        // 高级组合优化
+        if complexity_score > 30 {
+            return LoopOptimization::Combined(vec![
+                LoopOptimization::LoopInvariantHoisting,
+                LoopOptimization::StrengthReduction,
+                LoopOptimization::MemoryOptimize,
+            ]);
+        }
+
         LoopOptimization::None
+    }
+
+    /// 应用循环优化策略
+    pub fn apply_loop_optimization(
+        &self,
+        builder: &mut FunctionBuilder,
+        optimization: &LoopOptimization,
+        loop_body: &[Statement],
+        variables: &[String],
+        current_block: Block,
+        current_vars: Vec<cranelift::prelude::Value>
+    ) -> Result<Vec<cranelift::prelude::Value>, String> {
+        match optimization {
+            LoopOptimization::None => {
+                // 标准编译，无优化
+                self.compile_statements_with_optimization(builder, loop_body, variables, current_block, current_vars, false)
+            },
+            LoopOptimization::Unroll(factor) => {
+                // 循环展开优化
+                self.apply_loop_unrolling(builder, loop_body, variables, current_block, current_vars, *factor)
+            },
+            LoopOptimization::Vectorize => {
+                // 向量化优化（简化实现）
+                self.apply_vectorization(builder, loop_body, variables, current_block, current_vars)
+            },
+            LoopOptimization::MemoryOptimize => {
+                // 内存访问优化
+                self.apply_memory_optimization(builder, loop_body, variables, current_block, current_vars)
+            },
+            LoopOptimization::LoopInvariantHoisting => {
+                // 循环不变量提升
+                self.apply_loop_invariant_hoisting(builder, loop_body, variables, current_block, current_vars)
+            },
+            LoopOptimization::StrengthReduction => {
+                // 强度削减
+                self.apply_strength_reduction(builder, loop_body, variables, current_block, current_vars)
+            },
+            LoopOptimization::LoopFusion => {
+                // 循环融合（简化实现）
+                self.apply_loop_fusion(builder, loop_body, variables, current_block, current_vars)
+            },
+            LoopOptimization::Combined(optimizations) => {
+                // 组合优化策略
+                let mut result_vars = current_vars;
+                for opt in optimizations {
+                    result_vars = self.apply_loop_optimization(builder, opt, loop_body, variables, current_block, result_vars)?;
+                }
+                Ok(result_vars)
+            },
+        }
     }
 
     /// 应用循环展开优化
@@ -1261,6 +1340,131 @@ impl JitCompiler {
         let mut result_vars = current_vars;
 
         // 优化内存访问模式
+        for stmt in loop_body {
+            result_vars = self.compile_simple_statement_with_vars(
+                builder, stmt, variables, current_block, result_vars
+            )?;
+        }
+
+        Ok(result_vars)
+    }
+
+    /// 应用循环不变量提升优化
+    fn apply_loop_invariant_hoisting(
+        &self,
+        builder: &mut FunctionBuilder,
+        loop_body: &[Statement],
+        variables: &[String],
+        current_block: Block,
+        current_vars: Vec<cranelift::prelude::Value>
+    ) -> Result<Vec<cranelift::prelude::Value>, String> {
+        // 循环不变量提升：将不依赖循环变量的计算移到循环外
+        let mut result_vars = current_vars;
+
+        // 简化实现：识别常量表达式并预计算
+        for stmt in loop_body {
+            match stmt {
+                Statement::VariableDeclaration(name, _, expr) => {
+                    // 检查表达式是否为循环不变量
+                    if self.is_loop_invariant(expr, variables) {
+                        // 预计算循环不变量
+                        if let Some(var_index) = variables.iter().position(|v| v == name) {
+                            let value = self.compile_expr_to_value_with_vars(builder, expr, variables, current_block)?;
+                            result_vars[var_index] = value;
+                        }
+                    } else {
+                        // 正常编译
+                        result_vars = self.compile_simple_statement_with_vars(
+                            builder, stmt, variables, current_block, result_vars
+                        )?;
+                    }
+                },
+                _ => {
+                    result_vars = self.compile_simple_statement_with_vars(
+                        builder, stmt, variables, current_block, result_vars
+                    )?;
+                }
+            }
+        }
+
+        Ok(result_vars)
+    }
+
+    /// 应用强度削减优化
+    fn apply_strength_reduction(
+        &self,
+        builder: &mut FunctionBuilder,
+        loop_body: &[Statement],
+        variables: &[String],
+        current_block: Block,
+        current_vars: Vec<cranelift::prelude::Value>
+    ) -> Result<Vec<cranelift::prelude::Value>, String> {
+        // 强度削减：将昂贵的运算替换为便宜的运算
+        let mut result_vars = current_vars;
+
+        // 简化实现：优化乘法为加法
+        for stmt in loop_body {
+            match stmt {
+                Statement::VariableAssignment(name, expr) => {
+                    if let Some(var_index) = variables.iter().position(|v| v == name) {
+                        // 尝试优化表达式
+                        let optimized_value = self.apply_strength_reduction_to_expr(
+                            builder, expr, variables, current_block
+                        )?;
+                        result_vars[var_index] = optimized_value;
+                    }
+                },
+                _ => {
+                    result_vars = self.compile_simple_statement_with_vars(
+                        builder, stmt, variables, current_block, result_vars
+                    )?;
+                }
+            }
+        }
+
+        Ok(result_vars)
+    }
+
+    /// 检查表达式是否为循环不变量
+    fn is_loop_invariant(&self, expr: &Expression, loop_variables: &[String]) -> bool {
+        match expr {
+            Expression::IntLiteral(_) | Expression::LongLiteral(_) |
+            Expression::FloatLiteral(_) | Expression::BoolLiteral(_) => true,
+            Expression::Variable(name) => !loop_variables.contains(name),
+            Expression::BinaryOp(left, _, right) => {
+                self.is_loop_invariant(left, loop_variables) &&
+                self.is_loop_invariant(right, loop_variables)
+            },
+            _ => false,
+        }
+    }
+
+    /// 对表达式应用强度削减
+    fn apply_strength_reduction_to_expr(
+        &self,
+        builder: &mut FunctionBuilder,
+        expr: &Expression,
+        variables: &[String],
+        current_block: Block
+    ) -> Result<cranelift::prelude::Value, String> {
+        // 简化实现：直接编译表达式
+        // 在实际应用中，这里会识别乘法模式并替换为加法
+        self.compile_expr_to_value_with_vars(builder, expr, variables, current_block)
+    }
+
+    /// 应用循环融合优化
+    fn apply_loop_fusion(
+        &self,
+        builder: &mut FunctionBuilder,
+        loop_body: &[Statement],
+        variables: &[String],
+        current_block: Block,
+        current_vars: Vec<cranelift::prelude::Value>
+    ) -> Result<Vec<cranelift::prelude::Value>, String> {
+        // 循环融合：将多个相邻的循环合并为一个循环
+        // 简化实现：正常编译循环体
+        let mut result_vars = current_vars;
+
         for stmt in loop_body {
             result_vars = self.compile_simple_statement_with_vars(
                 builder, stmt, variables, current_block, result_vars
