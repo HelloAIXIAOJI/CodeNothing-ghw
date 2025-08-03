@@ -967,9 +967,9 @@ impl<'a> Interpreter<'a> {
             },
             Value::Array(arr) => {
                 // 🧮 数组方法调用JIT编译检查
-                let method_key = format!("array_method_{}_{:p}", method_name, expr as *const _);
+                let method_key = format!("array_method_{}_{:p}", method_name, obj_expr as *const _);
                 if jit::should_compile_array_operation(&method_key) {
-                    if let Ok(_compiled) = jit::compile_array_operation(expr, method_key.clone(), false) {
+                    if let Ok(_compiled) = jit::compile_array_operation(obj_expr, method_key.clone(), false) {
                         println!("✅ 数组方法{}JIT编译成功: {}", method_name, method_key);
                     }
                 }
