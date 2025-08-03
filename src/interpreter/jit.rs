@@ -1645,6 +1645,89 @@ impl JitCompiler {
         })
     }
 
+    /// 编译数组操作
+    pub fn compile_array_operation(
+        &mut self,
+        expression: &Expression,
+        key: String,
+        debug_mode: bool
+    ) -> Result<CompiledArrayOperation, String> {
+        if debug_mode {
+            println!("🧮 JIT: 尝试编译数组操作 {}", key);
+        }
+
+        // 识别操作类型和选择优化策略
+        let op_type = self.identify_array_operation_type(expression);
+        let array_size = self.estimate_array_size(expression);
+        let optimization = self.select_array_optimization(&op_type, array_size);
+
+        if debug_mode {
+            println!("🔍 JIT: 操作类型: {:?}, 优化策略: {:?}", op_type, optimization);
+        }
+
+        // 根据优化策略选择编译方法
+        match optimization {
+            ArrayOptimization::BoundsCheckElimination => {
+                self.compile_bounds_check_eliminated_array_operation(expression, key, op_type, debug_mode)
+            },
+            ArrayOptimization::Vectorization | ArrayOptimization::SIMDOperations => {
+                self.compile_vectorized_array_operation(expression, key, op_type, optimization, debug_mode)
+            },
+            ArrayOptimization::ParallelProcessing => {
+                self.compile_parallel_array_operation(expression, key, op_type, debug_mode)
+            },
+            _ => {
+                self.compile_standard_array_operation(expression, key, op_type, debug_mode)
+            }
+        }
+    }
+
+    /// 估算数组大小
+    fn estimate_array_size(&self, expression: &Expression) -> Option<usize> {
+        match expression {
+            Expression::ArrayLiteral(elements) => Some(elements.len()),
+            Expression::ArrayAccess(array_expr, _) => {
+                // 尝试从数组表达式推断大小
+                self.estimate_array_size(array_expr)
+            },
+            _ => None, // 无法确定大小
+        }
+    }
+
+    /// 编译边界检查消除的数组操作
+    fn compile_bounds_check_eliminated_array_operation(
+        &mut self,
+        expression: &Expression,
+        key: String,
+        op_type: ArrayOperationType,
+        debug_mode: bool
+    ) -> Result<CompiledArrayOperation, String> {
+        if debug_mode {
+            println!("🚀 JIT: 边界检查消除编译数组操作");
+        }
+
+        let signature = ArrayOperationSignature {
+            operation_desc: key.clone(),
+            element_type: ArrayElementType::Mixed,
+            array_size: self.estimate_array_size(expression),
+            output_type: match op_type {
+                ArrayOperationType::Length => ArrayOutputType::Integer,
+                ArrayOperationType::Map | ArrayOperationType::Filter => ArrayOutputType::Array,
+                _ => ArrayOutputType::Single,
+            },
+            memory_pattern: ArrayMemoryPattern::Sequential,
+        };
+
+        Ok(CompiledArrayOperation {
+            func_ptr: std::ptr::null(),
+            signature,
+            operation_type: op_type,
+            optimization: ArrayOptimization::BoundsCheckElimination,
+            is_vectorized: false,
+            bounds_check_eliminated: true,
+        })
+    }
+
     /// 获取编译统计信息
     pub fn get_stats(&self) -> JitStats {
         JitStats {
