@@ -1261,20 +1261,27 @@ impl JitCompiler {
         }
 
         // 根据优化策略选择编译方法
-        match optimization {
+        let compiled_result = match optimization {
             MathOptimization::SIMDVectorization => {
-                self.compile_simd_math_expression(expression, key, expr_type, debug_mode)
+                self.compile_simd_math_expression(expression, key.clone(), expr_type, debug_mode)
             },
             MathOptimization::LookupTable => {
-                self.compile_lookup_table_math(expression, key, expr_type, debug_mode)
+                self.compile_lookup_table_math(expression, key.clone(), expr_type, debug_mode)
             },
             MathOptimization::FastApproximation => {
-                self.compile_fast_approximation_math(expression, key, expr_type, debug_mode)
+                self.compile_fast_approximation_math(expression, key.clone(), expr_type, debug_mode)
             },
             _ => {
-                self.compile_standard_math_expression(expression, key, expr_type, debug_mode)
+                self.compile_standard_math_expression(expression, key.clone(), expr_type, debug_mode)
             }
+        };
+
+        // 如果编译成功，缓存结果
+        if let Ok(ref compiled) = compiled_result {
+            self.compiled_math_expressions.insert(key, compiled.clone());
         }
+
+        compiled_result
     }
 
     /// 计算表达式复杂度
