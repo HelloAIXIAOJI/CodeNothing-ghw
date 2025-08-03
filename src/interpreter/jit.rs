@@ -2947,6 +2947,20 @@ pub fn print_jit_performance_report() {
             }
         }
 
+        // 数组操作统计
+        println!("\n🧮 数组操作JIT统计:");
+        println!("  🔥 数组操作热点数量: {}", stats.array_operation_hotspot_count);
+        println!("  ⚡ 成功编译的数组操作数: {}", stats.compiled_array_operation_count);
+        println!("  🔄 数组操作总执行次数: {}", stats.total_array_operation_executions);
+        if stats.compiled_array_operation_count > 0 && stats.array_operation_hotspot_count > 0 {
+            let array_compilation_rate = (stats.compiled_array_operation_count as f64 / stats.array_operation_hotspot_count as f64) * 100.0;
+            println!("  📈 数组操作编译成功率: {:.1}%", array_compilation_rate);
+            if stats.total_array_operation_executions > 0 {
+                let avg_array_executions = stats.total_array_operation_executions as f64 / stats.array_operation_hotspot_count as f64;
+                println!("  📊 数组操作平均执行次数: {:.1}", avg_array_executions);
+            }
+        }
+
         println!("=====================================");
 
         // 总体状态
