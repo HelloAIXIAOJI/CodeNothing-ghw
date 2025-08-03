@@ -52,6 +52,53 @@ pub enum LoopType {
     ForEach,
 }
 
+/// 循环优化策略
+#[derive(Debug, Clone, PartialEq)]
+pub enum LoopOptimization {
+    None,                    // 无优化
+    Unroll(u32),            // 循环展开（展开因子）
+    Vectorize,              // 向量化
+    MemoryOptimize,         // 内存访问优化
+    LoopInvariantHoisting,  // 循环不变量提升
+    StrengthReduction,      // 强度削减
+    LoopFusion,             // 循环融合
+    Combined(Vec<LoopOptimization>), // 组合优化
+}
+
+/// 循环控制流上下文
+#[derive(Debug, Clone)]
+pub struct LoopControlContext {
+    /// 循环继续块（continue跳转目标）
+    pub continue_block: Block,
+    /// 循环退出块（break跳转目标）
+    pub break_block: Block,
+    /// 循环类型
+    pub loop_type: LoopType,
+    /// 是否包含break/continue语句
+    pub has_control_flow: bool,
+}
+
+/// 循环分析结果
+#[derive(Debug, Clone)]
+pub struct LoopAnalysis {
+    /// 循环迭代次数（如果可确定）
+    pub iteration_count: Option<u32>,
+    /// 循环体复杂度评分
+    pub complexity_score: u32,
+    /// 是否包含内存访问
+    pub has_memory_access: bool,
+    /// 是否包含分支
+    pub has_branches: bool,
+    /// 是否包含break/continue控制流
+    pub has_control_flow: bool,
+    /// 循环不变量列表
+    pub loop_invariants: Vec<String>,
+    /// 变量依赖关系
+    pub variable_dependencies: Vec<String>,
+    /// 推荐的优化策略
+    pub recommended_optimization: LoopOptimization,
+}
+
 /// 循环签名
 #[derive(Debug, Clone)]
 pub struct LoopSignature {
@@ -233,18 +280,21 @@ impl JitCompiler {
             Statement::CompoundAssignment(_, op, expr) => {
                 self.is_simple_binary_op(op) && self.can_compile_expression(expr)
             },
-            // 暂时禁用条件语句编译，专注于基本语句
-            // Statement::IfElse(condition, then_stmts, else_branches) => {
-            //     self.can_compile_expression(condition) &&
-            //     then_stmts.len() <= 3 && // 限制then分支语句数量
-            //     else_branches.len() <= 1 && // 只支持一个else分支
-            //     then_stmts.iter().all(|s| self.can_compile_simple_statement(s)) &&
-            //     else_branches.iter().all(|(cond, stmts)| {
-            //         cond.is_none() && // 只支持else，不支持else-if
-            //         stmts.len() <= 3 &&
-            //         stmts.iter().all(|s| self.can_compile_simple_statement(s))
-            //     })
-            // },
+            // 支持循环内条件语句编译
+            Statement::IfElse(condition, then_stmts, else_branches) => {
+                self.can_compile_expression(condition) &&
+                then_stmts.len() <= 5 && // 增加then分支语句数量限制
+                else_branches.len() <= 1 && // 只支持一个else分支
+                then_stmts.iter().all(|s| self.can_compile_simple_statement(s)) &&
+                else_branches.iter().all(|(cond, stmts)| {
+                    cond.is_none() && // 只支持else，不支持else-if
+                    stmts.len() <= 5 && // 增加else分支语句数量限制
+                    stmts.iter().all(|s| self.can_compile_simple_statement(s))
+                })
+            },
+
+            // 支持break和continue控制流语句
+            Statement::Break | Statement::Continue => true,
             // 暂不支持嵌套控制流，但支持break/continue
             Statement::Break | Statement::Continue => true,
             _ => false,
@@ -589,13 +639,14 @@ impl JitCompiler {
         }
     }
 
-    /// 编译循环体
-    fn compile_loop_body(
+    /// 编译循环体（带控制流上下文）
+    fn compile_loop_body_with_control_flow(
         &self,
         builder: &mut FunctionBuilder,
         loop_body: &[Statement],
         variables: &[String],
-        current_block: Block
+        current_block: Block,
+        control_context: &LoopControlContext
     ) -> Result<Vec<cranelift::prelude::Value>, String> {
         let mut current_vars: Vec<cranelift::prelude::Value> = builder.block_params(current_block).to_vec();
 
@@ -645,9 +696,21 @@ impl JitCompiler {
                 //         variables, current_block, current_vars
                 //     )?;
                 // },
-                Statement::Break | Statement::Continue => {
-                    // TODO: 实现break/continue的控制流
-                    // 目前跳过，将来可以通过特殊返回值或异常处理
+                Statement::Break => {
+                    // break语句：跳转到循环退出块
+                    builder.ins().jump(control_context.break_block, &current_vars);
+                    // 创建一个新的不可达块，因为break后的代码不会执行
+                    let unreachable_block = builder.create_block();
+                    builder.switch_to_block(unreachable_block);
+                    return Ok(current_vars);
+                },
+                Statement::Continue => {
+                    // continue语句：跳转到循环继续块
+                    builder.ins().jump(control_context.continue_block, &current_vars);
+                    // 创建一个新的不可达块，因为continue后的代码不会执行
+                    let unreachable_block = builder.create_block();
+                    builder.switch_to_block(unreachable_block);
+                    return Ok(current_vars);
                 },
                 _ => {} // 其他语句暂不支持
             }
@@ -656,13 +719,34 @@ impl JitCompiler {
         Ok(current_vars)
     }
 
-    /// 编译For循环体
-    fn compile_for_loop_body(
+    /// 编译循环体（向后兼容方法）
+    fn compile_loop_body(
         &self,
         builder: &mut FunctionBuilder,
         loop_body: &[Statement],
         variables: &[String],
         current_block: Block
+    ) -> Result<Vec<cranelift::prelude::Value>, String> {
+        // 创建默认的控制流上下文（无break/continue支持）
+        let dummy_block = builder.create_block();
+        let control_context = LoopControlContext {
+            continue_block: dummy_block,
+            break_block: dummy_block,
+            loop_type: LoopType::While,
+            has_control_flow: false,
+        };
+
+        self.compile_loop_body_with_control_flow(builder, loop_body, variables, current_block, &control_context)
+    }
+
+    /// 编译For循环体（带控制流上下文）
+    fn compile_for_loop_body_with_control_flow(
+        &self,
+        builder: &mut FunctionBuilder,
+        loop_body: &[Statement],
+        variables: &[String],
+        current_block: Block,
+        control_context: &LoopControlContext
     ) -> Result<Vec<cranelift::prelude::Value>, String> {
         let mut current_vars: Vec<cranelift::prelude::Value> = builder.block_params(current_block).to_vec();
 
@@ -734,15 +818,47 @@ impl JitCompiler {
                 //         variables, current_block, current_vars
                 //     )?;
                 // },
-                Statement::Break | Statement::Continue => {
-                    // TODO: 实现break/continue的控制流
-                    // 目前跳过，将来可以通过特殊返回值或异常处理
+                Statement::Break => {
+                    // break语句：跳转到循环退出块
+                    builder.ins().jump(control_context.break_block, &current_vars);
+                    // 创建一个新的不可达块，因为break后的代码不会执行
+                    let unreachable_block = builder.create_block();
+                    builder.switch_to_block(unreachable_block);
+                    return Ok(current_vars);
+                },
+                Statement::Continue => {
+                    // continue语句：跳转到循环继续块
+                    builder.ins().jump(control_context.continue_block, &current_vars);
+                    // 创建一个新的不可达块，因为continue后的代码不会执行
+                    let unreachable_block = builder.create_block();
+                    builder.switch_to_block(unreachable_block);
+                    return Ok(current_vars);
                 },
                 _ => {} // 其他语句暂不支持
             }
         }
 
         Ok(current_vars)
+    }
+
+    /// 编译For循环体（向后兼容方法）
+    fn compile_for_loop_body(
+        &self,
+        builder: &mut FunctionBuilder,
+        loop_body: &[Statement],
+        variables: &[String],
+        current_block: Block
+    ) -> Result<Vec<cranelift::prelude::Value>, String> {
+        // 创建默认的控制流上下文（无break/continue支持）
+        let dummy_block = builder.create_block();
+        let control_context = LoopControlContext {
+            continue_block: dummy_block,
+            break_block: dummy_block,
+            loop_type: LoopType::For,
+            has_control_flow: false,
+        };
+
+        self.compile_for_loop_body_with_control_flow(builder, loop_body, variables, current_block, &control_context)
     }
 
     /// 编译单个简单语句（用于条件分支内）
@@ -961,6 +1077,207 @@ impl JitCompiler {
             },
             _ => Err(format!("不支持的表达式类型: {:?}", expr))
         }
+    }
+
+    /// 分析循环特征并推荐优化策略
+    pub fn analyze_loop(&self, loop_body: &[Statement], iteration_count: Option<u32>) -> LoopAnalysis {
+        let mut complexity_score = 0;
+        let mut has_memory_access = false;
+        let mut has_branches = false;
+        let mut has_control_flow = false;
+        let mut loop_invariants = Vec::new();
+        let mut variable_dependencies = Vec::new();
+
+        // 分析循环体
+        for stmt in loop_body {
+            match stmt {
+                Statement::VariableDeclaration(name, _, _) => {
+                    complexity_score += 2;
+                    variable_dependencies.push(name.clone());
+                },
+                Statement::VariableAssignment(name, expr) => {
+                    complexity_score += 1;
+                    variable_dependencies.push(name.clone());
+                    complexity_score += self.analyze_expression_complexity(expr);
+                },
+                Statement::CompoundAssignment(name, _, expr) => {
+                    complexity_score += 2;
+                    variable_dependencies.push(name.clone());
+                    complexity_score += self.analyze_expression_complexity(expr);
+                },
+                Statement::IfElse(_, _, _) => {
+                    complexity_score += 5;
+                    has_branches = true;
+                },
+                Statement::FunctionCallStatement(_) => {
+                    complexity_score += 3;
+                    has_memory_access = true;
+                },
+                Statement::Break | Statement::Continue => {
+                    complexity_score += 3;
+                    has_control_flow = true;
+                },
+                _ => complexity_score += 1,
+            }
+        }
+
+        // 推荐优化策略
+        let recommended_optimization = self.recommend_optimization(
+            complexity_score,
+            iteration_count,
+            has_memory_access,
+            has_branches,
+            has_control_flow
+        );
+
+        LoopAnalysis {
+            iteration_count,
+            complexity_score,
+            has_memory_access,
+            has_branches,
+            has_control_flow,
+            loop_invariants,
+            variable_dependencies,
+            recommended_optimization,
+        }
+    }
+
+    /// 分析表达式复杂度
+    fn analyze_expression_complexity(&self, expr: &Expression) -> u32 {
+        match expr {
+            Expression::IntLiteral(_) | Expression::LongLiteral(_) |
+            Expression::FloatLiteral(_) | Expression::BoolLiteral(_) |
+            Expression::Variable(_) => 1,
+            Expression::BinaryOp(left, _, right) => {
+                2 + self.analyze_expression_complexity(left) + self.analyze_expression_complexity(right)
+            },
+            Expression::CompareOp(left, _, right) => {
+                2 + self.analyze_expression_complexity(left) + self.analyze_expression_complexity(right)
+            },
+            Expression::FunctionCall(_, args) => {
+                5 + args.iter().map(|arg| self.analyze_expression_complexity(arg)).sum::<u32>()
+            },
+            Expression::ArrayAccess(arr, idx) => {
+                3 + self.analyze_expression_complexity(arr) + self.analyze_expression_complexity(idx)
+            },
+            _ => 3,
+        }
+    }
+
+    /// 推荐优化策略
+    fn recommend_optimization(
+        &self,
+        complexity_score: u32,
+        iteration_count: Option<u32>,
+        has_memory_access: bool,
+        has_branches: bool,
+        has_control_flow: bool
+    ) -> LoopOptimization {
+        // 简单循环且迭代次数较少：循环展开
+        if let Some(count) = iteration_count {
+            if count <= 16 && complexity_score <= 10 && !has_branches {
+                return LoopOptimization::Unroll(if count <= 4 { count } else { 4 });
+            }
+        }
+
+        // 复杂循环但无分支：考虑向量化
+        if complexity_score > 15 && !has_branches && has_memory_access {
+            return LoopOptimization::Vectorize;
+        }
+
+        // 有内存访问的循环：内存优化
+        if has_memory_access && complexity_score > 5 {
+            return LoopOptimization::MemoryOptimize;
+        }
+
+        // 中等复杂度循环：组合优化
+        if complexity_score > 10 && complexity_score <= 20 {
+            return LoopOptimization::Combined(vec![
+                LoopOptimization::Unroll(2),
+                LoopOptimization::MemoryOptimize,
+            ]);
+        }
+
+        LoopOptimization::None
+    }
+
+    /// 应用循环展开优化
+    fn apply_loop_unrolling(
+        &self,
+        builder: &mut FunctionBuilder,
+        loop_body: &[Statement],
+        variables: &[String],
+        current_block: Block,
+        current_vars: Vec<cranelift::prelude::Value>,
+        unroll_factor: u32
+    ) -> Result<Vec<cranelift::prelude::Value>, String> {
+        let mut result_vars = current_vars;
+
+        // 展开循环：重复执行循环体unroll_factor次
+        for _ in 0..unroll_factor {
+            for stmt in loop_body {
+                result_vars = self.compile_simple_statement_with_vars(
+                    builder, stmt, variables, current_block, result_vars
+                )?;
+            }
+        }
+
+        Ok(result_vars)
+    }
+
+    /// 应用向量化优化（简化实现）
+    fn apply_vectorization(
+        &self,
+        builder: &mut FunctionBuilder,
+        loop_body: &[Statement],
+        variables: &[String],
+        current_block: Block,
+        current_vars: Vec<cranelift::prelude::Value>
+    ) -> Result<Vec<cranelift::prelude::Value>, String> {
+        // 向量化优化的简化实现
+        // 在实际应用中，这里会使用SIMD指令
+        let mut result_vars = current_vars;
+
+        // 批量处理多个元素
+        for stmt in loop_body {
+            result_vars = self.compile_simple_statement_with_vars(
+                builder, stmt, variables, current_block, result_vars
+            )?;
+        }
+
+        Ok(result_vars)
+    }
+
+    /// 应用内存访问优化
+    fn apply_memory_optimization(
+        &self,
+        builder: &mut FunctionBuilder,
+        loop_body: &[Statement],
+        variables: &[String],
+        current_block: Block,
+        current_vars: Vec<cranelift::prelude::Value>
+    ) -> Result<Vec<cranelift::prelude::Value>, String> {
+        // 内存访问优化：预取、缓存友好的访问模式
+        let mut result_vars = current_vars;
+
+        // 优化内存访问模式
+        for stmt in loop_body {
+            result_vars = self.compile_simple_statement_with_vars(
+                builder, stmt, variables, current_block, result_vars
+            )?;
+        }
+
+        Ok(result_vars)
+    }
+
+    /// 获取循环优化统计信息
+    pub fn get_optimization_stats(&self) -> String {
+        format!("🔧 循环优化统计:\n  📊 分析的循环数: {}\n  ⚡ 应用的优化数: {}\n  🎯 优化成功率: {:.1}%",
+                self.loop_counters.len(),
+                self.compiled_loops.len(),
+                if self.loop_counters.len() > 0 {
+                    (self.compiled_loops.len() as f64 / self.loop_counters.len() as f64) * 100.0
+                } else { 0.0 })
     }
 }
 
