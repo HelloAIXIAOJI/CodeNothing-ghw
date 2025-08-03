@@ -576,6 +576,14 @@ impl<'a> ExpressionEvaluator for Interpreter<'a> {
                 self.array_reduce(array_value, lambda_value, initial_value)
             },
             Expression::ArrayForEach(array_expr, lambda_expr) => {
+                // 🧮 数组forEach操作JIT编译检查
+                let foreach_key = format!("array_foreach_{:p}", expr as *const _);
+                if jit::should_compile_array_operation(&foreach_key) {
+                    if let Ok(_compiled) = jit::compile_array_operation(expr, foreach_key.clone(), false) {
+                        println!("✅ 数组forEach操作JIT编译成功: {}", foreach_key);
+                    }
+                }
+
                 // array.forEach(lambda)
                 let array_value = self.evaluate_expression(array_expr);
                 let lambda_value = self.evaluate_expression(lambda_expr);
