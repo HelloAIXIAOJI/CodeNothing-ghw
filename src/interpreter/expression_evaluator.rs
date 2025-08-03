@@ -533,6 +533,14 @@ impl<'a> ExpressionEvaluator for Interpreter<'a> {
                 self.apply_function(func_value, arg_values)
             },
             Expression::ArrayMap(array_expr, lambda_expr) => {
+                // 🧮 数组map操作JIT编译检查
+                let map_key = format!("array_map_{:p}", expr as *const _);
+                if jit::should_compile_array_operation(&map_key) {
+                    if let Ok(_compiled) = jit::compile_array_operation(expr, map_key.clone(), false) {
+                        println!("✅ 数组map操作JIT编译成功: {}", map_key);
+                    }
+                }
+
                 // array.map(lambda)
                 let array_value = self.evaluate_expression(array_expr);
                 let lambda_value = self.evaluate_expression(lambda_expr);
