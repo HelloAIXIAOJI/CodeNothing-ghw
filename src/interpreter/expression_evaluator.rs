@@ -37,6 +37,21 @@ impl<'a> Interpreter<'a> {
         Value::None
     }
 
+    /// 检查是否应该尝试数学表达式JIT优化
+    fn should_try_math_jit_optimization(&self, expr: &Expression) -> bool {
+        match expr {
+            Expression::BinaryOp(_, op, _) => {
+                // 只对数学运算符进行JIT优化
+                matches!(op,
+                    BinaryOperator::Add | BinaryOperator::Subtract |
+                    BinaryOperator::Multiply | BinaryOperator::Divide |
+                    BinaryOperator::Modulo
+                )
+            },
+            _ => false
+        }
+    }
+
     /// 检查是否应该尝试JIT优化
     fn should_try_jit_optimization(&self, expr: &Expression) -> bool {
         // 只对包含变量的算术表达式进行JIT优化
