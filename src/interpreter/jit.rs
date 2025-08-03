@@ -534,6 +534,7 @@ impl JitCompiler {
             function_call_threshold: 50, // 函数调用50次后触发JIT编译
             math_expression_threshold: 30, // 数学表达式30次后触发JIT编译
             string_operation_threshold: 25, // 字符串操作25次后触发JIT编译
+            array_operation_threshold: 20, // 数组操作20次后触发JIT编译
         }
     }
 
