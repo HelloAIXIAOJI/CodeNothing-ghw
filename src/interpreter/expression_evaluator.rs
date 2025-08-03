@@ -76,6 +76,25 @@ impl<'a> Interpreter<'a> {
         }
     }
 
+    /// 尝试使用数学表达式JIT编译
+    fn try_math_jit_expression(&self, expr: &Expression) -> Option<Value> {
+        // 生成数学表达式的唯一键
+        let key = format!("math_expr_{:p}", expr as *const _);
+
+        // 获取JIT编译器并检查是否应该编译
+        let jit = jit::get_jit();
+        if jit.should_compile_math_expression(&key) {
+            // 尝试编译数学表达式
+            if let Ok(_compiled) = jit.compile_math_expression(expr, key.clone(), false) {
+                // 编译成功，将编译结果缓存
+                // 注意：这里我们暂时返回None，因为实际执行需要更复杂的实现
+                // 但是编译过程已经被记录在统计中
+            }
+        }
+
+        None
+    }
+
     /// 尝试使用JIT编译执行表达式
     fn try_jit_expression(&self, expr: &Expression) -> Option<Value> {
         // 收集当前环境中的整数变量
