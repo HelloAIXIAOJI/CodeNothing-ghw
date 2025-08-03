@@ -2734,6 +2734,9 @@ pub struct JitStats {
     pub math_expression_hotspot_count: usize,
     pub compiled_math_expression_count: usize,
     pub total_math_expression_executions: u32,
+    pub string_operation_hotspot_count: usize,
+    pub compiled_string_operation_count: usize,
+    pub total_string_operation_executions: u32,
 }
 
 /// 全局JIT编译器实例
