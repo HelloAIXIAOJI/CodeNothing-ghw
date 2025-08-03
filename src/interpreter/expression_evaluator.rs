@@ -547,12 +547,28 @@ impl<'a> ExpressionEvaluator for Interpreter<'a> {
                 self.array_map(array_value, lambda_value)
             },
             Expression::ArrayFilter(array_expr, lambda_expr) => {
+                // 🧮 数组filter操作JIT编译检查
+                let filter_key = format!("array_filter_{:p}", expr as *const _);
+                if jit::should_compile_array_operation(&filter_key) {
+                    if let Ok(_compiled) = jit::compile_array_operation(expr, filter_key.clone(), false) {
+                        println!("✅ 数组filter操作JIT编译成功: {}", filter_key);
+                    }
+                }
+
                 // array.filter(lambda)
                 let array_value = self.evaluate_expression(array_expr);
                 let lambda_value = self.evaluate_expression(lambda_expr);
                 self.array_filter(array_value, lambda_value)
             },
             Expression::ArrayReduce(array_expr, lambda_expr, initial_expr) => {
+                // 🧮 数组reduce操作JIT编译检查
+                let reduce_key = format!("array_reduce_{:p}", expr as *const _);
+                if jit::should_compile_array_operation(&reduce_key) {
+                    if let Ok(_compiled) = jit::compile_array_operation(expr, reduce_key.clone(), false) {
+                        println!("✅ 数组reduce操作JIT编译成功: {}", reduce_key);
+                    }
+                }
+
                 // array.reduce(lambda, initial)
                 let array_value = self.evaluate_expression(array_expr);
                 let lambda_value = self.evaluate_expression(lambda_expr);
