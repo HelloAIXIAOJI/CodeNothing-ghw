@@ -185,6 +185,78 @@ pub enum MathPrecision {
     Extended,    // 扩展精度
 }
 
+/// 字符串操作类型
+#[derive(Debug, Clone, PartialEq)]
+pub enum StringOperationType {
+    Concatenation,    // 字符串拼接
+    Search,          // 字符串搜索
+    Replace,         // 字符串替换
+    Substring,       // 子字符串提取
+    Split,           // 字符串分割
+    PatternMatch,    // 模式匹配
+    Comparison,      // 字符串比较
+    Formatting,      // 字符串格式化
+}
+
+/// 字符串优化策略
+#[derive(Debug, Clone, PartialEq)]
+pub enum StringOptimization {
+    ZeroCopy,           // 零拷贝优化
+    InPlaceModification, // 原地修改
+    BufferReuse,        // 缓冲区重用
+    BoyerMoore,         // Boyer-Moore搜索算法
+    KMP,                // KMP搜索算法
+    RabinKarp,          // Rabin-Karp搜索算法
+    SmallStringOptimization, // 小字符串优化
+    StringInterning,    // 字符串驻留
+}
+
+/// 编译后的字符串操作
+#[derive(Clone)]
+pub struct CompiledStringOperation {
+    /// 函数指针
+    func_ptr: *const u8,
+    /// 字符串操作签名
+    signature: StringOperationSignature,
+    /// 操作类型
+    operation_type: StringOperationType,
+    /// 优化策略
+    optimization: StringOptimization,
+    /// 是否零拷贝
+    is_zero_copy: bool,
+}
+
+/// 字符串操作签名
+#[derive(Debug, Clone)]
+pub struct StringOperationSignature {
+    /// 操作描述
+    operation_desc: String,
+    /// 输入字符串数量
+    input_count: usize,
+    /// 输出类型
+    output_type: StringOutputType,
+    /// 内存使用策略
+    memory_strategy: StringMemoryStrategy,
+}
+
+/// 字符串输出类型
+#[derive(Debug, Clone, PartialEq)]
+pub enum StringOutputType {
+    String,      // 字符串
+    Boolean,     // 布尔值（比较、搜索结果）
+    Integer,     // 整数（位置、长度等）
+    StringArray, // 字符串数组（分割结果）
+}
+
+/// 字符串内存策略
+#[derive(Debug, Clone, PartialEq)]
+pub enum StringMemoryStrategy {
+    Allocate,    // 分配新内存
+    Reuse,       // 重用现有内存
+    InPlace,     // 原地操作
+    View,        // 字符串视图（零拷贝）
+}
+
 /// 循环类型
 #[derive(Debug, Clone, PartialEq)]
 pub enum LoopType {
