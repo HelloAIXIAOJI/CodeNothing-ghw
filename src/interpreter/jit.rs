@@ -14,14 +14,20 @@ pub struct JitCompiler {
     hotspot_counters: HashMap<String, u32>,
     /// 循环热点检测计数器
     loop_counters: HashMap<String, u32>,
+    /// 函数调用热点检测计数器
+    function_call_counters: HashMap<String, u32>,
     /// 编译缓存
     compiled_functions: HashMap<String, CompiledFunction>,
     /// 编译的循环缓存
     compiled_loops: HashMap<String, CompiledLoop>,
+    /// 编译的函数调用缓存
+    compiled_function_calls: HashMap<String, CompiledFunctionCall>,
     /// 表达式热点阈值
     hotspot_threshold: u32,
     /// 循环热点阈值
     loop_threshold: u32,
+    /// 函数调用热点阈值
+    function_call_threshold: u32,
 }
 
 /// 编译后的函数
@@ -42,6 +48,75 @@ pub struct CompiledLoop {
     signature: LoopSignature,
     /// 循环类型
     loop_type: LoopType,
+}
+
+/// 编译后的函数调用
+#[derive(Clone)]
+pub struct CompiledFunctionCall {
+    /// 函数指针
+    func_ptr: *const u8,
+    /// 函数调用签名信息
+    signature: FunctionCallSignature,
+    /// 函数调用类型
+    call_type: FunctionCallType,
+    /// 是否内联
+    is_inlined: bool,
+}
+
+/// 函数调用类型
+#[derive(Debug, Clone, PartialEq)]
+pub enum FunctionCallType {
+    Simple,      // 简单函数调用
+    Recursive,   // 递归函数调用
+    Inline,      // 内联函数调用
+    TailCall,    // 尾调用优化
+}
+
+/// 函数调用签名
+#[derive(Debug, Clone)]
+pub struct FunctionCallSignature {
+    /// 函数名
+    function_name: String,
+    /// 参数类型
+    param_types: Vec<JitType>,
+    /// 返回类型
+    return_type: JitType,
+    /// 调用约定
+    calling_convention: CallingConvention,
+}
+
+/// 调用约定
+#[derive(Debug, Clone, PartialEq)]
+pub enum CallingConvention {
+    Standard,    // 标准调用约定
+    FastCall,    // 快速调用约定
+    Inline,      // 内联调用
+}
+
+/// 内联成本效益分析
+#[derive(Debug, Clone)]
+pub struct InlineCostBenefit {
+    /// 函数名
+    pub function_name: String,
+    /// 内联成本
+    pub inline_cost: u32,
+    /// 调用开销
+    pub call_overhead: u32,
+    /// 调用频率
+    pub call_frequency: u32,
+    /// 效益分数
+    pub benefit_score: f64,
+    /// 是否应该内联
+    pub should_inline: bool,
+}
+
+/// 递归函数优化策略
+#[derive(Debug, Clone, PartialEq)]
+pub enum RecursiveOptimization {
+    TailCallOptimization,  // 尾调用优化
+    Memoization,          // 记忆化
+    IterativeConversion,  // 转换为迭代
+    StackOptimization,    // 栈优化
 }
 
 /// 循环类型
@@ -197,10 +272,13 @@ impl JitCompiler {
         Self {
             hotspot_counters: HashMap::new(),
             loop_counters: HashMap::new(),
+            function_call_counters: HashMap::new(),
             compiled_functions: HashMap::new(),
             compiled_loops: HashMap::new(),
+            compiled_function_calls: HashMap::new(),
             hotspot_threshold: 100, // 表达式执行100次后触发JIT编译
             loop_threshold: 100,    // 循环执行100次后触发JIT编译
+            function_call_threshold: 50, // 函数调用50次后触发JIT编译
         }
     }
 
@@ -216,6 +294,19 @@ impl JitCompiler {
         let counter = self.loop_counters.entry(key.to_string()).or_insert(0);
         *counter += 1;
         *counter >= self.loop_threshold
+    }
+
+    /// 检查函数调用是否应该JIT编译
+    pub fn should_compile_function_call(&mut self, function_name: &str, call_site: &str) -> bool {
+        let key = format!("{}@{}", function_name, call_site);
+        let counter = self.function_call_counters.entry(key).or_insert(0);
+        *counter += 1;
+        *counter >= self.function_call_threshold
+    }
+
+    /// 生成函数调用的唯一键
+    pub fn generate_function_call_key(&self, function_name: &str, call_site: &str) -> String {
+        format!("call_{}_{}", function_name, call_site)
     }
 
     /// 生成循环的唯一键
@@ -268,6 +359,173 @@ impl JitCompiler {
             },
             _ => false,
         }
+    }
+
+    /// 检查函数调用是否适合JIT编译
+    pub fn can_compile_function_call(&self, function_name: &str, args: &[Expression]) -> bool {
+        // 检查函数名是否为简单函数
+        if !self.is_simple_function(function_name) {
+            return false;
+        }
+
+        // 检查参数是否都可以编译
+        args.iter().all(|arg| self.can_compile_expression(arg))
+    }
+
+    /// 检查是否为简单函数（适合JIT编译）
+    fn is_simple_function(&self, function_name: &str) -> bool {
+        // 简单的数学函数和用户定义的小函数
+        matches!(function_name,
+            "abs" | "max" | "min" | "sqrt" | "pow" |
+            "add" | "sub" | "mul" | "div" | "mod" |
+            "factorial" | "fibonacci" | "gcd" | "lcm"
+        ) || function_name.len() <= 20 // 简单启发式：短函数名通常是简单函数
+    }
+
+    /// 检查函数是否适合内联
+    pub fn should_inline_function(&self, function_name: &str, function_body_size: usize) -> bool {
+        // 内联条件：
+        // 1. 函数体很小（少于10行）
+        // 2. 不是递归函数
+        // 3. 参数数量少于5个
+        // 4. 是简单的数学运算函数
+        function_body_size <= 10 &&
+        !self.is_recursive_function(function_name) &&
+        self.is_inline_candidate(function_name)
+    }
+
+    /// 检查函数是否为内联候选
+    fn is_inline_candidate(&self, function_name: &str) -> bool {
+        // 优先内联的函数类型
+        matches!(function_name,
+            "double" | "triple" | "square" | "cube" |
+            "add" | "sub" | "mul" | "div" | "mod" |
+            "abs" | "max" | "min" | "clamp" |
+            "is_even" | "is_odd" | "sign"
+        ) ||
+        // 短函数名通常是简单函数
+        function_name.len() <= 8 ||
+        // 包含简单操作关键词的函数
+        function_name.contains("get") ||
+        function_name.contains("set") ||
+        function_name.contains("calc")
+    }
+
+    /// 检查是否为递归函数
+    fn is_recursive_function(&self, function_name: &str) -> bool {
+        // 简单启发式：检查函数名是否包含递归相关的关键词
+        matches!(function_name, "factorial" | "fibonacci" | "gcd") ||
+        function_name.contains("recursive") ||
+        function_name.contains("recur")
+    }
+
+    /// 计算内联成本效益分析
+    pub fn analyze_inline_cost_benefit(&self, function_name: &str, call_frequency: u32) -> InlineCostBenefit {
+        let inline_cost = self.calculate_inline_cost(function_name);
+        let call_overhead = self.calculate_call_overhead(function_name);
+        let benefit_score = (call_overhead as f64 * call_frequency as f64) - inline_cost as f64;
+
+        InlineCostBenefit {
+            function_name: function_name.to_string(),
+            inline_cost,
+            call_overhead,
+            call_frequency,
+            benefit_score,
+            should_inline: benefit_score > 0.0 && self.is_inline_candidate(function_name),
+        }
+    }
+
+    /// 计算内联成本
+    fn calculate_inline_cost(&self, function_name: &str) -> u32 {
+        // 基于函数复杂度的内联成本估算
+        match function_name {
+            "double" | "triple" => 1,  // 非常简单的函数
+            "add" | "sub" | "mul" => 2,  // 简单数学运算
+            "square" | "cube" => 3,  // 稍复杂的运算
+            "abs" | "max" | "min" => 4,  // 条件运算
+            _ => {
+                // 基于函数名长度的启发式估算
+                if function_name.len() <= 5 {
+                    3
+                } else if function_name.len() <= 10 {
+                    5
+                } else {
+                    8
+                }
+            }
+        }
+    }
+
+    /// 计算函数调用开销
+    fn calculate_call_overhead(&self, function_name: &str) -> u32 {
+        // 函数调用的固定开销
+        let base_overhead = 10; // 基础调用开销
+
+        // 根据函数类型调整开销
+        let type_overhead = if self.is_recursive_function(function_name) {
+            5 // 递归函数额外开销
+        } else if self.is_inline_candidate(function_name) {
+            2 // 简单函数较少开销
+        } else {
+            3 // 普通函数开销
+        };
+
+        base_overhead + type_overhead
+    }
+
+    /// 检查递归函数是否适合优化
+    pub fn should_optimize_recursive_function(&self, function_name: &str, recursion_depth: u32) -> bool {
+        // 递归优化条件：
+        // 1. 是递归函数
+        // 2. 递归深度不太深（避免栈溢出）
+        // 3. 是简单的递归模式
+        self.is_recursive_function(function_name) &&
+        recursion_depth <= 100 && // 最大递归深度限制
+        self.is_simple_recursive_pattern(function_name)
+    }
+
+    /// 检查是否为简单递归模式
+    fn is_simple_recursive_pattern(&self, function_name: &str) -> bool {
+        // 简单递归模式：尾递归、线性递归等
+        matches!(function_name,
+            "factorial" | "fibonacci" | "gcd" | "power" |
+            "sum_recursive" | "count_recursive" | "find_recursive"
+        ) || function_name.contains("tail_") || function_name.contains("linear_")
+    }
+
+    /// 分析递归函数的优化策略
+    pub fn analyze_recursive_optimization(&self, function_name: &str) -> RecursiveOptimization {
+        if self.is_tail_recursive(function_name) {
+            RecursiveOptimization::TailCallOptimization
+        } else if self.is_memoizable(function_name) {
+            RecursiveOptimization::Memoization
+        } else if self.can_convert_to_iterative(function_name) {
+            RecursiveOptimization::IterativeConversion
+        } else {
+            RecursiveOptimization::StackOptimization
+        }
+    }
+
+    /// 检查是否为尾递归
+    fn is_tail_recursive(&self, function_name: &str) -> bool {
+        // 简单启发式：检查函数名或已知的尾递归函数
+        function_name.contains("tail_") ||
+        matches!(function_name, "factorial_tail" | "sum_tail" | "gcd")
+    }
+
+    /// 检查是否可以记忆化
+    fn is_memoizable(&self, function_name: &str) -> bool {
+        // 适合记忆化的递归函数：fibonacci、动态规划等
+        matches!(function_name, "fibonacci" | "fib") ||
+        function_name.contains("dp_") ||
+        function_name.contains("memo_")
+    }
+
+    /// 检查是否可以转换为迭代
+    fn can_convert_to_iterative(&self, function_name: &str) -> bool {
+        // 可以转换为迭代的递归函数
+        matches!(function_name, "factorial" | "power" | "sum_recursive") ||
+        function_name.contains("linear_")
     }
 
     /// 检查简单语句是否适合JIT编译（用于循环体）
@@ -581,6 +839,90 @@ impl JitCompiler {
         Ok(compiled_loop)
     }
 
+    /// 编译函数调用
+    pub fn compile_function_call(
+        &mut self,
+        function_name: &str,
+        args: &[Expression],
+        key: String,
+        debug_mode: bool
+    ) -> Result<CompiledFunctionCall, String> {
+        if debug_mode {
+            println!("🔧 JIT: 尝试编译函数调用 {} (函数: {})", key, function_name);
+        }
+
+        // 检查是否适合内联
+        let should_inline = self.should_inline_function(function_name, 5); // 假设函数体大小为5
+
+        if should_inline {
+            self.compile_inline_function_call(function_name, args, key, debug_mode)
+        } else {
+            self.compile_standard_function_call(function_name, args, key, debug_mode)
+        }
+    }
+
+    /// 编译内联函数调用
+    fn compile_inline_function_call(
+        &mut self,
+        function_name: &str,
+        args: &[Expression],
+        key: String,
+        debug_mode: bool
+    ) -> Result<CompiledFunctionCall, String> {
+        if debug_mode {
+            println!("🚀 JIT: 内联编译函数 {}", function_name);
+        }
+
+        // 简化实现：创建一个占位符编译结果
+        let signature = FunctionCallSignature {
+            function_name: function_name.to_string(),
+            param_types: vec![JitType::Int64; args.len()],
+            return_type: JitType::Int64,
+            calling_convention: CallingConvention::Inline,
+        };
+
+        // 创建占位符函数指针
+        let func_ptr = std::ptr::null();
+
+        Ok(CompiledFunctionCall {
+            func_ptr,
+            signature,
+            call_type: FunctionCallType::Inline,
+            is_inlined: true,
+        })
+    }
+
+    /// 编译标准函数调用
+    fn compile_standard_function_call(
+        &mut self,
+        function_name: &str,
+        args: &[Expression],
+        key: String,
+        debug_mode: bool
+    ) -> Result<CompiledFunctionCall, String> {
+        if debug_mode {
+            println!("📞 JIT: 标准编译函数调用 {}", function_name);
+        }
+
+        // 简化实现：创建一个占位符编译结果
+        let signature = FunctionCallSignature {
+            function_name: function_name.to_string(),
+            param_types: vec![JitType::Int64; args.len()],
+            return_type: JitType::Int64,
+            calling_convention: CallingConvention::Standard,
+        };
+
+        // 创建占位符函数指针
+        let func_ptr = std::ptr::null();
+
+        Ok(CompiledFunctionCall {
+            func_ptr,
+            signature,
+            call_type: FunctionCallType::Simple,
+            is_inlined: false,
+        })
+    }
+
     /// 获取编译统计信息
     pub fn get_stats(&self) -> JitStats {
         JitStats {
@@ -590,6 +932,9 @@ impl JitCompiler {
             loop_hotspot_count: self.loop_counters.len(),
             compiled_loop_count: self.compiled_loops.len(),
             total_loop_executions: self.loop_counters.values().sum(),
+            function_call_hotspot_count: self.function_call_counters.len(),
+            compiled_function_call_count: self.compiled_function_calls.len(),
+            total_function_call_executions: self.function_call_counters.values().sum(),
         }
     }
 
@@ -1740,6 +2085,9 @@ pub struct JitStats {
     pub loop_hotspot_count: usize,
     pub compiled_loop_count: usize,
     pub total_loop_executions: u32,
+    pub function_call_hotspot_count: usize,
+    pub compiled_function_call_count: usize,
+    pub total_function_call_executions: u32,
 }
 
 /// 全局JIT编译器实例
