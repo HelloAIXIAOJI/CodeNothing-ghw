@@ -507,6 +507,65 @@ impl JitCompiler {
         }
     }
 
+    /// 生成字符串操作的唯一键
+    pub fn generate_string_operation_key(&self, operation: &str, operands: &[String]) -> String {
+        let operands_key = operands.join("_");
+        format!("string_{}_{}", operation, operands_key)
+    }
+
+    /// 识别字符串操作类型
+    pub fn identify_string_operation_type(&self, operation: &str) -> StringOperationType {
+        match operation {
+            "concat" | "+" => StringOperationType::Concatenation,
+            "contains" | "indexOf" | "search" => StringOperationType::Search,
+            "replace" | "replaceAll" => StringOperationType::Replace,
+            "substring" | "substr" | "slice" => StringOperationType::Substring,
+            "split" => StringOperationType::Split,
+            "match" | "regex" => StringOperationType::PatternMatch,
+            "equals" | "compare" | "==" | "!=" => StringOperationType::Comparison,
+            "format" | "sprintf" => StringOperationType::Formatting,
+            _ => StringOperationType::Concatenation, // 默认为拼接
+        }
+    }
+
+    /// 选择字符串操作的优化策略
+    pub fn select_string_optimization(&self, op_type: &StringOperationType, string_length: usize) -> StringOptimization {
+        match op_type {
+            StringOperationType::Concatenation => {
+                if string_length <= 64 {
+                    StringOptimization::SmallStringOptimization
+                } else {
+                    StringOptimization::ZeroCopy
+                }
+            },
+            StringOperationType::Search => {
+                if string_length > 1000 {
+                    StringOptimization::BoyerMoore
+                } else {
+                    StringOptimization::KMP
+                }
+            },
+            StringOperationType::Replace => {
+                StringOptimization::InPlaceModification
+            },
+            StringOperationType::Substring => {
+                StringOptimization::ZeroCopy
+            },
+            StringOperationType::Split => {
+                StringOptimization::BufferReuse
+            },
+            StringOperationType::PatternMatch => {
+                StringOptimization::RabinKarp
+            },
+            StringOperationType::Comparison => {
+                StringOptimization::ZeroCopy
+            },
+            StringOperationType::Formatting => {
+                StringOptimization::BufferReuse
+            },
+        }
+    }
+
     /// 识别数学表达式类型
     pub fn identify_math_expression_type(&self, expression: &Expression) -> MathExpressionType {
         match expression {
