@@ -695,19 +695,13 @@ impl JitCompiler {
                 //     )?;
                 // },
                 Statement::Break => {
-                    // break语句：跳转到循环退出块
-                    builder.ins().jump(control_context.break_block, current_vars.as_slice());
-                    // 创建一个新的不可达块，因为break后的代码不会执行
-                    let unreachable_block = builder.create_block();
-                    builder.switch_to_block(unreachable_block);
+                    // break语句：暂时跳过，将来实现控制流跳转
+                    // TODO: 实现真正的break控制流
                     return Ok(current_vars);
                 },
                 Statement::Continue => {
-                    // continue语句：跳转到循环继续块
-                    builder.ins().jump(control_context.continue_block, current_vars.as_slice());
-                    // 创建一个新的不可达块，因为continue后的代码不会执行
-                    let unreachable_block = builder.create_block();
-                    builder.switch_to_block(unreachable_block);
+                    // continue语句：暂时跳过，将来实现控制流跳转
+                    // TODO: 实现真正的continue控制流
                     return Ok(current_vars);
                 },
                 _ => {} // 其他语句暂不支持
@@ -817,19 +811,13 @@ impl JitCompiler {
                 //     )?;
                 // },
                 Statement::Break => {
-                    // break语句：跳转到循环退出块
-                    builder.ins().jump(control_context.break_block, current_vars.as_slice());
-                    // 创建一个新的不可达块，因为break后的代码不会执行
-                    let unreachable_block = builder.create_block();
-                    builder.switch_to_block(unreachable_block);
+                    // break语句：暂时跳过，将来实现控制流跳转
+                    // TODO: 实现真正的break控制流
                     return Ok(current_vars);
                 },
                 Statement::Continue => {
-                    // continue语句：跳转到循环继续块
-                    builder.ins().jump(control_context.continue_block, current_vars.as_slice());
-                    // 创建一个新的不可达块，因为continue后的代码不会执行
-                    let unreachable_block = builder.create_block();
-                    builder.switch_to_block(unreachable_block);
+                    // continue语句：暂时跳过，将来实现控制流跳转
+                    // TODO: 实现真正的continue控制流
                     return Ok(current_vars);
                 },
                 _ => {} // 其他语句暂不支持
@@ -1241,7 +1229,13 @@ impl JitCompiler {
         match optimization {
             LoopOptimization::None => {
                 // 标准编译，无优化
-                self.compile_statements_with_optimization(builder, loop_body, variables, current_block, current_vars, false)
+                let mut result_vars = current_vars;
+                for stmt in loop_body {
+                    result_vars = self.compile_simple_statement_with_vars(
+                        builder, stmt, variables, current_block, result_vars
+                    )?;
+                }
+                Ok(result_vars)
             },
             LoopOptimization::Unroll(factor) => {
                 // 循环展开优化
