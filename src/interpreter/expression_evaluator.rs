@@ -278,7 +278,14 @@ impl<'a> ExpressionEvaluator for Interpreter<'a> {
                 Value::None
             },
             Expression::BinaryOp(left, op, right) => {
-                // 尝试JIT编译优化
+                // 尝试数学表达式JIT编译优化
+                if self.should_try_math_jit_optimization(expr) {
+                    if let Some(result) = self.try_math_jit_expression(expr) {
+                        return result;
+                    }
+                }
+
+                // 尝试通用JIT编译优化
                 if self.should_try_jit_optimization(expr) {
                     if let Some(result) = self.try_jit_expression(expr) {
                         return result;
