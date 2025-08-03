@@ -3103,3 +3103,17 @@ pub fn jit_compile_and_execute_expression(expr: &Expression, variables: &HashMap
         Err(_) => None
     }
 }
+
+/// 全局函数：检查数组操作是否应该JIT编译
+pub fn should_compile_array_operation(operation_key: &str) -> bool {
+    get_jit().should_compile_array_operation(operation_key)
+}
+
+/// 全局函数：编译数组操作
+pub fn compile_array_operation(
+    expression: &Expression,
+    key: String,
+    debug_mode: bool
+) -> Result<CompiledArrayOperation, String> {
+    get_jit().compile_array_operation(expression, key, debug_mode)
+}
