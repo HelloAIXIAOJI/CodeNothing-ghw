@@ -20,6 +20,8 @@ pub struct JitCompiler {
     math_expression_counters: HashMap<String, u32>,
     /// 字符串操作热点检测计数器
     string_operation_counters: HashMap<String, u32>,
+    /// 数组操作热点检测计数器
+    array_operation_counters: HashMap<String, u32>,
     /// 编译缓存
     compiled_functions: HashMap<String, CompiledFunction>,
     /// 编译的循环缓存
@@ -1588,9 +1590,6 @@ impl JitCompiler {
             string_operation_hotspot_count: self.string_operation_counters.len(),
             compiled_string_operation_count: self.compiled_string_operations.len(),
             total_string_operation_executions: self.string_operation_counters.values().sum(),
-            array_operation_hotspot_count: self.array_operation_counters.len(),
-            compiled_array_operation_count: self.compiled_array_operations.len(),
-            total_array_operation_executions: self.array_operation_counters.values().sum(),
         }
     }
 
@@ -2750,9 +2749,6 @@ pub struct JitStats {
     pub string_operation_hotspot_count: usize,
     pub compiled_string_operation_count: usize,
     pub total_string_operation_executions: u32,
-    pub array_operation_hotspot_count: usize,
-    pub compiled_array_operation_count: usize,
-    pub total_array_operation_executions: u32,
 }
 
 /// 全局JIT编译器实例
@@ -2947,25 +2943,11 @@ pub fn print_jit_performance_report() {
             }
         }
 
-        // 数组操作统计
-        println!("\n🧮 数组操作JIT统计:");
-        println!("  🔥 数组操作热点数量: {}", stats.array_operation_hotspot_count);
-        println!("  ⚡ 成功编译的数组操作数: {}", stats.compiled_array_operation_count);
-        println!("  🔄 数组操作总执行次数: {}", stats.total_array_operation_executions);
-        if stats.compiled_array_operation_count > 0 && stats.array_operation_hotspot_count > 0 {
-            let array_compilation_rate = (stats.compiled_array_operation_count as f64 / stats.array_operation_hotspot_count as f64) * 100.0;
-            println!("  📈 数组操作编译成功率: {:.1}%", array_compilation_rate);
-            if stats.total_array_operation_executions > 0 {
-                let avg_array_executions = stats.total_array_operation_executions as f64 / stats.array_operation_hotspot_count as f64;
-                println!("  📊 数组操作平均执行次数: {:.1}", avg_array_executions);
-            }
-        }
-
         println!("=====================================");
 
         // 总体状态
-        let total_compiled = stats.compiled_count + stats.compiled_loop_count + stats.compiled_math_expression_count + stats.compiled_string_operation_count + stats.compiled_array_operation_count;
-        let total_hotspots = stats.hotspot_count + stats.loop_hotspot_count + stats.math_expression_hotspot_count + stats.string_operation_hotspot_count + stats.array_operation_hotspot_count;
+        let total_compiled = stats.compiled_count + stats.compiled_loop_count + stats.compiled_math_expression_count + stats.compiled_string_operation_count;
+        let total_hotspots = stats.hotspot_count + stats.loop_hotspot_count + stats.math_expression_hotspot_count + stats.string_operation_hotspot_count;
 
         if total_compiled > 0 {
             println!("✅ JIT编译器工作正常！");
