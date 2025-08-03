@@ -83,15 +83,19 @@ impl<'a> Interpreter<'a> {
 
         // 获取JIT编译器并检查是否应该编译
         let jit = jit::get_jit();
+
+        // 首先检查是否应该编译（这会增加热点计数器）
         if jit.should_compile_math_expression(&key) {
             // 尝试编译数学表达式
-            match jit.compile_math_expression(expr, key.clone(), false) {
+            match jit.compile_math_expression(expr, key.clone(), true) {
                 Ok(_compiled) => {
+                    println!("✅ 数学表达式JIT编译成功: {}", key);
                     // 编译成功，记录在统计中
                     // 注意：这里我们暂时返回None，因为实际执行需要更复杂的实现
                     // 但是编译过程已经被记录在统计中
                 },
-                Err(_) => {
+                Err(e) => {
+                    println!("❌ 数学表达式JIT编译失败: {} - {}", key, e);
                     // 编译失败，继续使用解释执行
                 }
             }
