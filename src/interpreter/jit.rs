@@ -2913,11 +2913,39 @@ pub fn print_jit_performance_report() {
             }
         }
 
+        // 数学表达式统计
+        println!("\n🧮 数学表达式JIT统计:");
+        println!("  🔥 数学表达式热点数量: {}", stats.math_expression_hotspot_count);
+        println!("  ⚡ 成功编译的数学表达式数: {}", stats.compiled_math_expression_count);
+        println!("  🔄 数学表达式总执行次数: {}", stats.total_math_expression_executions);
+        if stats.compiled_math_expression_count > 0 && stats.math_expression_hotspot_count > 0 {
+            let math_compilation_rate = (stats.compiled_math_expression_count as f64 / stats.math_expression_hotspot_count as f64) * 100.0;
+            println!("  📈 数学表达式编译成功率: {:.1}%", math_compilation_rate);
+            if stats.total_math_expression_executions > 0 {
+                let avg_math_executions = stats.total_math_expression_executions as f64 / stats.math_expression_hotspot_count as f64;
+                println!("  📊 数学表达式平均执行次数: {:.1}", avg_math_executions);
+            }
+        }
+
+        // 字符串操作统计
+        println!("\n📝 字符串操作JIT统计:");
+        println!("  🔥 字符串操作热点数量: {}", stats.string_operation_hotspot_count);
+        println!("  ⚡ 成功编译的字符串操作数: {}", stats.compiled_string_operation_count);
+        println!("  🔄 字符串操作总执行次数: {}", stats.total_string_operation_executions);
+        if stats.compiled_string_operation_count > 0 && stats.string_operation_hotspot_count > 0 {
+            let string_compilation_rate = (stats.compiled_string_operation_count as f64 / stats.string_operation_hotspot_count as f64) * 100.0;
+            println!("  📈 字符串操作编译成功率: {:.1}%", string_compilation_rate);
+            if stats.total_string_operation_executions > 0 {
+                let avg_string_executions = stats.total_string_operation_executions as f64 / stats.string_operation_hotspot_count as f64;
+                println!("  📊 字符串操作平均执行次数: {:.1}", avg_string_executions);
+            }
+        }
+
         println!("=====================================");
 
         // 总体状态
-        let total_compiled = stats.compiled_count + stats.compiled_loop_count;
-        let total_hotspots = stats.hotspot_count + stats.loop_hotspot_count;
+        let total_compiled = stats.compiled_count + stats.compiled_loop_count + stats.compiled_math_expression_count + stats.compiled_string_operation_count;
+        let total_hotspots = stats.hotspot_count + stats.loop_hotspot_count + stats.math_expression_hotspot_count + stats.string_operation_hotspot_count;
 
         if total_compiled > 0 {
             println!("✅ JIT编译器工作正常！");
