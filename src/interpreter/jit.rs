@@ -2964,8 +2964,8 @@ pub fn print_jit_performance_report() {
         println!("=====================================");
 
         // 总体状态
-        let total_compiled = stats.compiled_count + stats.compiled_loop_count + stats.compiled_math_expression_count + stats.compiled_string_operation_count;
-        let total_hotspots = stats.hotspot_count + stats.loop_hotspot_count + stats.math_expression_hotspot_count + stats.string_operation_hotspot_count;
+        let total_compiled = stats.compiled_count + stats.compiled_loop_count + stats.compiled_math_expression_count + stats.compiled_string_operation_count + stats.compiled_array_operation_count;
+        let total_hotspots = stats.hotspot_count + stats.loop_hotspot_count + stats.math_expression_hotspot_count + stats.string_operation_hotspot_count + stats.array_operation_hotspot_count;
 
         if total_compiled > 0 {
             println!("✅ JIT编译器工作正常！");
