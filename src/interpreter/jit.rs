@@ -1579,6 +1579,43 @@ impl JitCompiler {
         })
     }
 
+    /// 编译数组操作
+    pub fn compile_array_operation(
+        &mut self,
+        expression: &Expression,
+        key: String,
+        debug_mode: bool
+    ) -> Result<CompiledArrayOperation, String> {
+        if debug_mode {
+            println!("🧮 JIT: 尝试编译数组操作 {}", key);
+        }
+
+        // 识别操作类型和选择优化策略
+        let op_type = self.identify_array_operation_type(expression);
+        let array_size = self.estimate_array_size(expression);
+        let optimization = self.select_array_optimization(&op_type, array_size);
+
+        if debug_mode {
+            println!("🔍 JIT: 操作类型: {:?}, 优化策略: {:?}", op_type, optimization);
+        }
+
+        // 根据优化策略选择编译方法
+        match optimization {
+            ArrayOptimization::BoundsCheckElimination => {
+                self.compile_bounds_check_eliminated_array_operation(expression, key, op_type, debug_mode)
+            },
+            ArrayOptimization::Vectorization | ArrayOptimization::SIMDOperations => {
+                self.compile_vectorized_array_operation(expression, key, op_type, optimization, debug_mode)
+            },
+            ArrayOptimization::ParallelProcessing => {
+                self.compile_parallel_array_operation(expression, key, op_type, debug_mode)
+            },
+            _ => {
+                self.compile_standard_array_operation(expression, key, op_type, debug_mode)
+            }
+        }
+    }
+
     /// 获取编译统计信息
     pub fn get_stats(&self) -> JitStats {
         JitStats {
