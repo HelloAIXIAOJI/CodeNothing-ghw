@@ -117,7 +117,7 @@ pub fn allocate_memory_smart(value: Value) -> Result<(usize, u64), String> {
 
 ---
 
-### v0.6.10 - 批量内存操作
+### v0.6.10 - 批量内存操作 (已完成)
 **目标**: 4s → 2.5s（**37%提升**）  
 **发布**: 2025年8月15日  
 **风险**: 🟡 中等
