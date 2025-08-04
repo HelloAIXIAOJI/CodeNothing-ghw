@@ -1667,168 +1667,6 @@ impl JitCompiler {
         })
     }
 
-    /// 编译数组操作
-    pub fn compile_array_operation(
-        &mut self,
-        expression: &Expression,
-        key: String,
-        debug_mode: bool
-    ) -> Result<CompiledArrayOperation, String> {
-        if debug_mode {
-            println!("🧮 JIT: 尝试编译数组操作 {}", key);
-        }
-
-        // 识别操作类型和选择优化策略
-        let op_type = self.identify_array_operation_type(expression);
-        let array_size = self.estimate_array_size(expression);
-        let optimization = self.select_array_optimization(&op_type, array_size);
-
-        if debug_mode {
-            println!("🔍 JIT: 操作类型: {:?}, 优化策略: {:?}", op_type, optimization);
-        }
-
-        // 根据优化策略选择编译方法
-        match optimization {
-            ArrayOptimization::BoundsCheckElimination => {
-                self.compile_bounds_check_eliminated_array_operation(expression, key, op_type, debug_mode)
-            },
-            ArrayOptimization::Vectorization | ArrayOptimization::SIMDOperations => {
-                self.compile_vectorized_array_operation(expression, key, op_type, optimization, debug_mode)
-            },
-            ArrayOptimization::ParallelProcessing => {
-                self.compile_parallel_array_operation(expression, key, op_type, debug_mode)
-            },
-            _ => {
-                self.compile_standard_array_operation(expression, key, op_type, debug_mode)
-            }
-        }
-    }
-
-    /// 编译边界检查消除的数组操作
-    fn compile_bounds_check_eliminated_array_operation(
-        &mut self,
-        expression: &Expression,
-        key: String,
-        op_type: ArrayOperationType,
-        debug_mode: bool
-    ) -> Result<CompiledArrayOperation, String> {
-        if debug_mode {
-            println!("🚀 JIT: 边界检查消除编译数组操作");
-        }
-
-        let signature = ArrayOperationSignature {
-            operation_desc: key.clone(),
-            element_type: ArrayElementType::Mixed,
-            array_size: self.estimate_array_size(expression),
-            output_type: match op_type {
-                ArrayOperationType::Length => ArrayOutputType::Integer,
-                ArrayOperationType::Map | ArrayOperationType::Filter => ArrayOutputType::Array,
-                _ => ArrayOutputType::Single,
-            },
-            memory_pattern: ArrayMemoryPattern::Sequential,
-        };
-
-        Ok(CompiledArrayOperation {
-            func_ptr: std::ptr::null(),
-            signature,
-            operation_type: op_type,
-            optimization: ArrayOptimization::BoundsCheckElimination,
-            is_vectorized: false,
-            bounds_check_eliminated: true,
-        })
-    }
-
-    /// 编译向量化数组操作
-    fn compile_vectorized_array_operation(
-        &mut self,
-        expression: &Expression,
-        key: String,
-        op_type: ArrayOperationType,
-        optimization: ArrayOptimization,
-        debug_mode: bool
-    ) -> Result<CompiledArrayOperation, String> {
-        if debug_mode {
-            println!("🚀 JIT: 向量化编译数组操作");
-        }
-
-        let signature = ArrayOperationSignature {
-            operation_desc: key.clone(),
-            element_type: ArrayElementType::Mixed,
-            array_size: self.estimate_array_size(expression),
-            output_type: ArrayOutputType::Array,
-            memory_pattern: ArrayMemoryPattern::Sequential,
-        };
-
-        Ok(CompiledArrayOperation {
-            func_ptr: std::ptr::null(),
-            signature,
-            operation_type: op_type,
-            optimization,
-            is_vectorized: true,
-            bounds_check_eliminated: false,
-        })
-    }
-
-    /// 编译并行数组操作
-    fn compile_parallel_array_operation(
-        &mut self,
-        expression: &Expression,
-        key: String,
-        op_type: ArrayOperationType,
-        debug_mode: bool
-    ) -> Result<CompiledArrayOperation, String> {
-        if debug_mode {
-            println!("🚀 JIT: 并行编译数组操作");
-        }
-
-        let signature = ArrayOperationSignature {
-            operation_desc: key.clone(),
-            element_type: ArrayElementType::Mixed,
-            array_size: self.estimate_array_size(expression),
-            output_type: ArrayOutputType::Array,
-            memory_pattern: ArrayMemoryPattern::Sequential,
-        };
-
-        Ok(CompiledArrayOperation {
-            func_ptr: std::ptr::null(),
-            signature,
-            operation_type: op_type,
-            optimization: ArrayOptimization::ParallelProcessing,
-            is_vectorized: true,
-            bounds_check_eliminated: true,
-        })
-    }
-
-    /// 编译标准数组操作
-    fn compile_standard_array_operation(
-        &mut self,
-        expression: &Expression,
-        key: String,
-        op_type: ArrayOperationType,
-        debug_mode: bool
-    ) -> Result<CompiledArrayOperation, String> {
-        if debug_mode {
-            println!("🔧 JIT: 标准编译数组操作");
-        }
-
-        let signature = ArrayOperationSignature {
-            operation_desc: key.clone(),
-            element_type: ArrayElementType::Mixed,
-            array_size: self.estimate_array_size(expression),
-            output_type: ArrayOutputType::Single,
-            memory_pattern: ArrayMemoryPattern::Sequential,
-        };
-
-        Ok(CompiledArrayOperation {
-            func_ptr: std::ptr::null(),
-            signature,
-            operation_type: op_type,
-            optimization: ArrayOptimization::CacheOptimization,
-            is_vectorized: false,
-            bounds_check_eliminated: false,
-        })
-    }
-
     /// 获取编译统计信息
     pub fn get_stats(&self) -> JitStats {
         JitStats {
@@ -3264,4 +3102,42 @@ pub fn jit_compile_and_execute_expression(expr: &Expression, variables: &HashMap
         },
         Err(_) => None
     }
+}
+
+// 全局函数，用于外部模块调用
+
+/// 检查数组操作是否应该JIT编译
+pub fn should_compile_array_operation(operation_key: &str) -> bool {
+    // 简化实现：总是返回false，表示暂时不编译
+    // 在实际实现中，这里应该检查全局JIT编译器实例
+    false
+}
+
+/// 编译数组操作
+pub fn compile_array_operation(
+    expression: &Expression,
+    key: String,
+    debug_mode: bool
+) -> Result<CompiledArrayOperation, String> {
+    // 简化实现：创建一个占位符编译结果
+    if debug_mode {
+        println!("🧮 JIT: 全局编译数组操作 {}", key);
+    }
+
+    let signature = ArrayOperationSignature {
+        operation_desc: key.clone(),
+        element_type: ArrayElementType::Mixed,
+        array_size: None,
+        output_type: ArrayOutputType::Single,
+        memory_pattern: ArrayMemoryPattern::Sequential,
+    };
+
+    Ok(CompiledArrayOperation {
+        func_ptr: std::ptr::null(),
+        signature,
+        operation_type: ArrayOperationType::Access,
+        optimization: ArrayOptimization::CacheOptimization,
+        is_vectorized: false,
+        bounds_check_eliminated: false,
+    })
 }
