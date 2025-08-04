@@ -5,7 +5,7 @@ use crate::interpreter::interpreter_core::Interpreter;
 use crate::interpreter::expression_evaluator::ExpressionEvaluator;
 use crate::interpreter::statement_executor::StatementExecutor;
 use crate::interpreter::jit;
-use crate::interpreter::memory_manager::{batch_memory_operations, optimize_loop_memory_operations};
+use crate::interpreter::memory_manager::{batch_memory_operations};
 
 pub fn handle_if_else(interpreter: &mut Interpreter, condition: Expression, if_block: Vec<Statement>, else_blocks: Vec<(Option<Expression>, Vec<Statement>)>) -> ExecutionResult {
     // 修复借用问题：不直接传递self，而是分别计算条件和执行语句块
@@ -414,28 +414,25 @@ fn evaluate_simple_condition(interpreter: &mut Interpreter, condition: &Expressi
     }
 }
 
-/// 🚀 v0.6.10 优化的循环体执行 - 集成批量内存操作
+/// 🚀 v0.6.10 智能批量内存操作优化
 fn execute_loop_body_optimized(interpreter: &mut Interpreter, loop_body: &[Statement]) -> Option<ExecutionResult> {
-    // 🚨 临时禁用批量内存操作以诊断性能问题
-    // TODO: 重新启用批量操作优化
+    // 🧠 智能判断是否需要批量内存操作优化
+    let optimization_strategy = determine_memory_optimization_strategy(loop_body, interpreter);
 
-    // 直接使用标准优化路径，避免批量操作开销
-    execute_loop_body_standard(interpreter, loop_body)
-
-    /* 原始批量内存操作代码 - 暂时注释
-    optimize_loop_memory_operations(|| {
-        // 分析循环体中的内存操作，尝试批量处理
-        let memory_operations = collect_memory_operations(loop_body);
-
-        if !memory_operations.is_empty() {
-            // 如果有内存操作，使用批量处理
-            execute_loop_body_with_batch_memory(interpreter, loop_body, memory_operations)
-        } else {
-            // 没有内存操作，使用标准优化路径
+    match optimization_strategy {
+        MemoryOptimizationStrategy::None => {
+            // 简单循环，使用标准路径
             execute_loop_body_standard(interpreter, loop_body)
+        },
+        MemoryOptimizationStrategy::Lightweight => {
+            // 中等复杂度，使用轻量级优化
+            execute_loop_body_lightweight_optimized(interpreter, loop_body)
+        },
+        MemoryOptimizationStrategy::FullBatch => {
+            // 复杂循环，使用完整批量操作
+            execute_loop_body_with_smart_batch_memory(interpreter, loop_body)
         }
-    })
-    */
+    }
 }
 
 /// 标准的循环体执行（无内存操作优化）
@@ -545,4 +542,175 @@ fn execute_statement_no_clone(interpreter: &mut Interpreter, statement: &Stateme
         // 对于其他语句，回退到原有实现以确保正确性
         _ => interpreter.execute_statement_direct(statement.clone()),
     }
+}
+
+// 🚀 v0.6.10 智能内存优化策略
+#[derive(Debug, Clone, PartialEq)]
+enum MemoryOptimizationStrategy {
+    None,           // 无优化 - 简单循环
+    Lightweight,    // 轻量级优化 - 中等复杂度
+    FullBatch,      // 完整批量操作 - 复杂循环
+}
+
+/// 🧠 智能判断内存优化策略
+fn determine_memory_optimization_strategy(loop_body: &[Statement], interpreter: &Interpreter) -> MemoryOptimizationStrategy {
+    // 分析循环体复杂度
+    let complexity_score = analyze_loop_complexity(loop_body);
+
+    // 估算循环迭代次数（基于变量状态）
+    let estimated_iterations = estimate_loop_iterations(interpreter);
+
+    // 计算内存操作密度
+    let memory_operations = collect_memory_operations(loop_body);
+    let memory_density = memory_operations.len();
+
+    // 🎯 智能决策逻辑
+    if complexity_score <= 3 && estimated_iterations <= 10 && memory_density <= 2 {
+        // 简单循环：直接执行，避免优化开销
+        MemoryOptimizationStrategy::None
+    } else if complexity_score <= 10 && estimated_iterations <= 100 && memory_density <= 10 {
+        // 中等复杂度：轻量级优化
+        MemoryOptimizationStrategy::Lightweight
+    } else {
+        // 复杂循环：完整批量操作
+        MemoryOptimizationStrategy::FullBatch
+    }
+}
+
+/// 📊 分析循环体复杂度
+fn analyze_loop_complexity(loop_body: &[Statement]) -> usize {
+    let mut complexity = 0;
+
+    for stmt in loop_body {
+        complexity += match stmt {
+            Statement::VariableDeclaration(_, _, _) => 1,
+            Statement::VariableAssignment(_, _) => 1,
+            Statement::FunctionCallStatement(_) => 1,
+            Statement::IfElse(_, _, _) => 3,  // 条件分支增加复杂度
+            Statement::WhileLoop(_, _) => 5,  // 嵌套循环大幅增加复杂度
+            Statement::ForLoop(_, _, _, _) => 5,
+            _ => 1,
+        };
+    }
+
+    complexity
+}
+
+/// 🔢 估算循环迭代次数
+fn estimate_loop_iterations(interpreter: &Interpreter) -> usize {
+    // 基于当前变量状态的简单启发式估算
+    // 这里使用保守估计，避免过度优化小循环
+
+    // 检查是否有明显的循环计数器模式
+    // 例如：i <= 100, i < n 等
+
+    // 暂时返回保守估计
+    50  // 默认估计50次迭代
+}
+
+/// 🚀 轻量级优化执行
+fn execute_loop_body_lightweight_optimized(interpreter: &mut Interpreter, loop_body: &[Statement]) -> Option<ExecutionResult> {
+    // 轻量级优化：只对明显的内存操作进行简单批量处理
+    // 避免复杂的分析开销
+
+    // 检查是否有连续的变量声明
+    let consecutive_declarations = count_consecutive_declarations(loop_body);
+
+    if consecutive_declarations >= 3 {
+        // 有多个连续声明，使用轻量级批量分配
+        execute_with_lightweight_batch_allocation(interpreter, loop_body)
+    } else {
+        // 使用标准路径
+        execute_loop_body_standard(interpreter, loop_body)
+    }
+}
+
+/// 📝 计算连续变量声明数量
+fn count_consecutive_declarations(loop_body: &[Statement]) -> usize {
+    let mut count = 0;
+    let mut max_consecutive = 0;
+
+    for stmt in loop_body {
+        match stmt {
+            Statement::VariableDeclaration(_, _, _) => {
+                count += 1;
+                max_consecutive = max_consecutive.max(count);
+            },
+            _ => {
+                count = 0;
+            }
+        }
+    }
+
+    max_consecutive
+}
+
+/// 🔧 轻量级批量分配执行
+fn execute_with_lightweight_batch_allocation(interpreter: &mut Interpreter, loop_body: &[Statement]) -> Option<ExecutionResult> {
+    // 简单的批量分配优化：预分配变量空间
+    // 避免复杂的分析和批量操作
+
+    // 预分析需要分配的变量
+    let mut variables_to_allocate = Vec::new();
+
+    for stmt in loop_body {
+        if let Statement::VariableDeclaration(var_name, _, init_expr) = stmt {
+            // VariableDeclaration总是有初始化表达式
+            if is_simple_expression(init_expr) {
+                variables_to_allocate.push((var_name.clone(), init_expr.clone()));
+            }
+        }
+    }
+
+    // 如果有足够的简单变量声明，使用批量分配
+    if variables_to_allocate.len() >= 2 {
+        execute_with_batch_variable_allocation(interpreter, loop_body, variables_to_allocate)
+    } else {
+        execute_loop_body_standard(interpreter, loop_body)
+    }
+}
+
+/// 🔍 判断是否为简单表达式
+fn is_simple_expression(expr: &Expression) -> bool {
+    match expr {
+        Expression::IntLiteral(_) => true,
+        Expression::FloatLiteral(_) => true,
+        Expression::BoolLiteral(_) => true,
+        Expression::StringLiteral(_) => true,
+        Expression::Variable(_) => true,
+        Expression::BinaryOp(left, _, right) => {
+            is_simple_expression(left) && is_simple_expression(right)
+        },
+        _ => false,
+    }
+}
+
+/// 📦 批量变量分配执行
+fn execute_with_batch_variable_allocation(
+    interpreter: &mut Interpreter,
+    loop_body: &[Statement],
+    _variables: Vec<(String, Expression)>
+) -> Option<ExecutionResult> {
+    // 实现简单的批量变量分配
+    // 这里先使用标准路径，后续可以优化
+    execute_loop_body_standard(interpreter, loop_body)
+}
+
+/// 🚀 智能批量内存操作执行
+fn execute_loop_body_with_smart_batch_memory(interpreter: &mut Interpreter, loop_body: &[Statement]) -> Option<ExecutionResult> {
+    // 完整的智能批量内存操作
+    // 只在确实需要时才使用
+
+    batch_memory_operations(|_| {
+        // 缓存内存操作分析结果
+        let memory_operations = collect_memory_operations(loop_body);
+
+        if memory_operations.len() >= 5 {
+            // 足够多的内存操作，值得批量处理
+            execute_loop_body_with_batch_memory(interpreter, loop_body, memory_operations)
+        } else {
+            // 内存操作不多，使用轻量级优化
+            execute_loop_body_lightweight_optimized(interpreter, loop_body)
+        }
+    })
 }
