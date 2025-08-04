@@ -5,6 +5,7 @@ use crate::interpreter::interpreter_core::Interpreter;
 use crate::interpreter::expression_evaluator::ExpressionEvaluator;
 use crate::interpreter::statement_executor::StatementExecutor;
 use crate::interpreter::jit;
+use crate::interpreter::memory_manager::{batch_memory_operations, optimize_loop_memory_operations};
 
 pub fn handle_if_else(interpreter: &mut Interpreter, condition: Expression, if_block: Vec<Statement>, else_blocks: Vec<(Option<Expression>, Vec<Statement>)>) -> ExecutionResult {
     // 修复借用问题：不直接传递self，而是分别计算条件和执行语句块
@@ -413,8 +414,25 @@ fn evaluate_simple_condition(interpreter: &mut Interpreter, condition: &Expressi
     }
 }
 
-/// 优化的循环体执行
+/// 🚀 v0.6.10 优化的循环体执行 - 集成批量内存操作
 fn execute_loop_body_optimized(interpreter: &mut Interpreter, loop_body: &[Statement]) -> Option<ExecutionResult> {
+    // 🚀 v0.6.10 使用批量内存操作优化循环体执行
+    optimize_loop_memory_operations(|| {
+        // 分析循环体中的内存操作，尝试批量处理
+        let memory_operations = collect_memory_operations(loop_body);
+
+        if !memory_operations.is_empty() {
+            // 如果有内存操作，使用批量处理
+            execute_loop_body_with_batch_memory(interpreter, loop_body, memory_operations)
+        } else {
+            // 没有内存操作，使用标准优化路径
+            execute_loop_body_standard(interpreter, loop_body)
+        }
+    })
+}
+
+/// 标准的循环体执行（无内存操作优化）
+fn execute_loop_body_standard(interpreter: &mut Interpreter, loop_body: &[Statement]) -> Option<ExecutionResult> {
     for stmt in loop_body {
         // 避免克隆：直接引用语句
         match execute_statement_no_clone(interpreter, stmt) {
@@ -426,6 +444,88 @@ fn execute_loop_body_optimized(interpreter: &mut Interpreter, loop_body: &[State
         }
     }
     None
+}
+
+/// 🚀 v0.6.10 带批量内存操作的循环体执行
+fn execute_loop_body_with_batch_memory(
+    interpreter: &mut Interpreter,
+    loop_body: &[Statement],
+    _memory_operations: Vec<MemoryOperation>
+) -> Option<ExecutionResult> {
+    // 使用批量内存操作执行循环体
+    let result = batch_memory_operations(|_memory_manager| {
+        // 在单次锁获取内执行所有语句
+        for stmt in loop_body {
+            match execute_statement_no_clone(interpreter, stmt) {
+                ExecutionResult::None => {},
+                ExecutionResult::Return(value) => return Some(ExecutionResult::Return(value)),
+                ExecutionResult::Break => return Some(ExecutionResult::None),
+                ExecutionResult::Continue => break,
+                ExecutionResult::Throw(value) => return Some(ExecutionResult::Throw(value)),
+            }
+        }
+        None
+    });
+
+    result
+}
+
+/// 🚀 v0.6.10 内存操作类型
+#[derive(Debug, Clone)]
+enum MemoryOperation {
+    Allocate(String),      // 变量分配
+    Read(String),          // 变量读取
+    Write(String),         // 变量写入
+    Deallocate(String),    // 变量释放
+}
+
+/// 🚀 v0.6.10 收集循环体中的内存操作
+fn collect_memory_operations(loop_body: &[Statement]) -> Vec<MemoryOperation> {
+    let mut operations = Vec::new();
+
+    for stmt in loop_body {
+        match stmt {
+            Statement::VariableDeclaration(name, _, _) => {
+                operations.push(MemoryOperation::Allocate(name.clone()));
+            },
+            Statement::VariableAssignment(name, _) => {
+                operations.push(MemoryOperation::Write(name.clone()));
+            },
+            Statement::FunctionCallStatement(expr) => {
+                collect_expression_memory_operations(expr, &mut operations);
+            },
+            _ => {
+                // 其他语句类型暂不优化
+            }
+        }
+    }
+
+    operations
+}
+
+/// 收集表达式中的内存操作
+fn collect_expression_memory_operations(expr: &Expression, operations: &mut Vec<MemoryOperation>) {
+    match expr {
+        Expression::Variable(name) => {
+            operations.push(MemoryOperation::Read(name.clone()));
+        },
+        Expression::BinaryOp(left, _, right) => {
+            collect_expression_memory_operations(left, operations);
+            collect_expression_memory_operations(right, operations);
+        },
+        Expression::PreIncrement(name) | Expression::PreDecrement(name) => {
+            operations.push(MemoryOperation::Read(name.clone()));
+            operations.push(MemoryOperation::Write(name.clone()));
+        },
+        Expression::FunctionCall(_, args) => {
+            for arg in args {
+                collect_expression_memory_operations(arg, operations);
+            }
+        },
+        _ => {
+            // 其他表达式类型暂不分析
+        }
+    }
 }
 
 /// 执行语句但不克隆（优化版本）
