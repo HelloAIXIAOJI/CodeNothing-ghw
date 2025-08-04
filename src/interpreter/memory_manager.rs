@@ -891,3 +891,105 @@ pub fn clear_rwlock_performance_stats() {
         WRITE_LOCK_TIME.store(0, Ordering::Relaxed);
     }
 }
+
+/// 🚀 v0.6.10 批量内存操作扩展 - 循环优化专用
+impl MemoryManager {
+    /// 批量分配多个值，减少锁获取次数
+    pub fn batch_allocate(&mut self, values: Vec<Value>) -> Result<Vec<(usize, u64)>, String> {
+        let mut results = Vec::with_capacity(values.len());
+
+        for value in values {
+            match self.allocate(value) {
+                Ok(result) => results.push(result),
+                Err(e) => return Err(format!("批量分配失败: {}", e)),
+            }
+        }
+
+        Ok(results)
+    }
+
+    /// 批量读取多个地址的值
+    pub fn batch_read(&self, addresses: &[(usize, u64)]) -> Result<Vec<Value>, String> {
+        let mut results = Vec::with_capacity(addresses.len());
+
+        for &(address, tag) in addresses {
+            match self.read_only(address, Some(tag)) {
+                Ok(value) => results.push(value),
+                Err(e) => return Err(format!("批量读取失败 地址{}: {}", address, e)),
+            }
+        }
+
+        Ok(results)
+    }
+
+    /// 批量写入多个地址的值
+    pub fn batch_write(&mut self, operations: Vec<(usize, u64, Value)>) -> Result<(), String> {
+        for (address, tag, value) in operations {
+            if let Err(e) = self.write(address, value, Some(tag)) {
+                return Err(format!("批量写入失败 地址{}: {}", address, e));
+            }
+        }
+
+        Ok(())
+    }
+
+    /// 批量释放多个地址
+    pub fn batch_deallocate(&mut self, addresses: Vec<(usize, u64)>) -> Result<(), String> {
+        for (address, _tag) in addresses {
+            // deallocate方法不需要tag参数，只需要地址
+            if let Err(e) = self.deallocate(address) {
+                return Err(format!("批量释放失败 地址{}: {}", address, e));
+            }
+        }
+
+        Ok(())
+    }
+
+    /// 🚀 v0.6.10 循环专用批量操作 - 合并多次锁获取
+    pub fn batch_operations<F, R>(&mut self, f: F) -> R
+    where
+        F: FnOnce(&mut Self) -> R,
+    {
+        // 在单次锁获取内执行所有操作
+        f(self)
+    }
+}
+
+/// 🚀 v0.6.10 全局批量内存操作API - 循环优化专用
+/// 批量分配操作，减少锁获取次数
+pub fn batch_allocate_values(values: Vec<Value>) -> Result<Vec<(usize, u64)>, String> {
+    batch_memory_operations(|manager| {
+        manager.batch_allocate(values)
+    })
+}
+
+/// 批量读取操作，减少锁获取次数
+pub fn batch_read_values(addresses: Vec<(usize, u64)>) -> Result<Vec<Value>, String> {
+    batch_memory_read_operations(|manager| {
+        manager.batch_read(&addresses)
+    })
+}
+
+/// 批量写入操作，减少锁获取次数
+pub fn batch_write_values(operations: Vec<(usize, u64, Value)>) -> Result<(), String> {
+    batch_memory_operations(|manager| {
+        manager.batch_write(operations)
+    })
+}
+
+/// 批量释放操作，减少锁获取次数
+pub fn batch_deallocate_values(addresses: Vec<(usize, u64)>) -> Result<(), String> {
+    batch_memory_operations(|manager| {
+        manager.batch_deallocate(addresses)
+    })
+}
+
+/// 🚀 v0.6.10 循环优化专用：批量处理循环体内的内存操作
+pub fn optimize_loop_memory_operations<F, R>(operations: F) -> R
+where
+    F: FnOnce() -> R,
+{
+    // 为循环体提供优化的内存操作环境
+    // 这里可以添加循环特定的优化逻辑
+    operations()
+}
