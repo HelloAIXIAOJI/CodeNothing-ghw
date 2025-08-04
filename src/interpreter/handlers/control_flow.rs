@@ -416,7 +416,13 @@ fn evaluate_simple_condition(interpreter: &mut Interpreter, condition: &Expressi
 
 /// 🚀 v0.6.10 优化的循环体执行 - 集成批量内存操作
 fn execute_loop_body_optimized(interpreter: &mut Interpreter, loop_body: &[Statement]) -> Option<ExecutionResult> {
-    // 🚀 v0.6.10 使用批量内存操作优化循环体执行
+    // 🚨 临时禁用批量内存操作以诊断性能问题
+    // TODO: 重新启用批量操作优化
+
+    // 直接使用标准优化路径，避免批量操作开销
+    execute_loop_body_standard(interpreter, loop_body)
+
+    /* 原始批量内存操作代码 - 暂时注释
     optimize_loop_memory_operations(|| {
         // 分析循环体中的内存操作，尝试批量处理
         let memory_operations = collect_memory_operations(loop_body);
@@ -429,6 +435,7 @@ fn execute_loop_body_optimized(interpreter: &mut Interpreter, loop_body: &[State
             execute_loop_body_standard(interpreter, loop_body)
         }
     })
+    */
 }
 
 /// 标准的循环体执行（无内存操作优化）
