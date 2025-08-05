@@ -219,7 +219,8 @@ pub fn tokenize(source: &str, debug: bool) -> Vec<String> {
         // 检查多字符运算符
         if i + 1 < chars.len() {
             let two_char_op = format!("{}{}", chars[i], chars[i + 1]);
-            if ["==", "!=", ">=", "<=", "&&", "||", "::", "..", "++", "--", "+=", "-=", "*=", "/=", "%=", "=>", "->"].contains(&two_char_op.as_str()) {
+            // v0.7.2新增：添加位运算符 << 和 >>
+            if ["==", "!=", ">=", "<=", "&&", "||", "::", "..", "++", "--", "+=", "-=", "*=", "/=", "%=", "=>", "->", "<<", ">>"].contains(&two_char_op.as_str()) {
                 tokens.push(two_char_op);
                 i += 2;
                 continue;
