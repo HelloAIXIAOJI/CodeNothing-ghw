@@ -180,6 +180,9 @@ impl<'a> Interpreter<'a> {
             static_members: HashMap::new(),
             variable_types: HashMap::new(), // 初始化变量类型映射
             variable_cache: HashMap::new(), // 初始化变量缓存
+            // v0.7.4新增：初始化生命周期分析器
+            lifetime_analyzer: VariableLifetimeAnalyzer::new(),
+            lifetime_analysis_result: None,
         };
         
         // 初始化常量
