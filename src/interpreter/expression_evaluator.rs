@@ -1837,7 +1837,6 @@ impl<'a> Interpreter<'a> {
             },
             Expression::FieldAccess(obj_expr, field_name) => {
                 // 在方法上下文中处理FieldAccess
-                eprintln!("调试: 在方法上下文中处理FieldAccess: {}", field_name);
 
                 if let Expression::This = **obj_expr {
                     eprintln!("调试: 访问this.{}, 对象类型: {}", field_name, this_obj.class_name);
