@@ -1367,13 +1367,17 @@ impl<'a> Interpreter<'a> {
     
     fn execute_constructor_statement(&mut self, statement: &crate::ast::Statement, this_obj: &mut ObjectInstance, constructor_env: &HashMap<String, Value>) {
         use crate::ast::Statement;
-        
+
+        eprintln!("调试: 执行构造函数语句: {:?}", statement);
         match statement {
             Statement::FieldAssignment(obj_expr, field_name, value_expr) => {
                 // 检查是否是this.field = value
                 if let crate::ast::Expression::This = **obj_expr {
+                    eprintln!("调试: 构造函数字段赋值: this.{} = {:?}", field_name, value_expr);
                     let value = self.evaluate_expression_with_constructor_context(value_expr, this_obj, constructor_env);
+                    eprintln!("调试: 计算得到的值: {:?}", value);
                     this_obj.fields.insert(field_name.clone(), value);
+                    eprintln!("调试: 字段赋值完成，当前对象字段: {:?}", this_obj.fields);
                 }
             },
             _ => {
