@@ -126,13 +126,13 @@ impl DebugConfig {
     pub fn from_args(&self, args: &[String]) {
         for arg in args {
             match arg.as_str() {
-                "--debug-jit" => self.enable_jit_debug(),
-                "--debug-lifetime" => self.enable_lifetime_debug(),
-                "--debug-expression" => self.enable_expression_debug(),
-                "--debug-function" => self.enable_function_debug(),
-                "--debug-variable" => self.enable_variable_debug(),
-                "--debug-all" => self.enable_all_debug(),
-                "--no-debug" => self.disable_all_debug(),
+                "--cn-debug-jit" => self.enable_jit_debug(),
+                "--cn-debug-lifetime" => self.enable_lifetime_debug(),
+                "--cn-debug-expression" => self.enable_expression_debug(),
+                "--cn-debug-function" => self.enable_function_debug(),
+                "--cn-debug-variable" => self.enable_variable_debug(),
+                "--cn-debug-all" => self.enable_all_debug(),
+                "--cn-no-debug" => self.disable_all_debug(),
                 _ => {}
             }
         }
@@ -218,16 +218,16 @@ macro_rules! variable_debug_println {
 /// 打印调试帮助信息
 pub fn print_debug_help() {
     println!("CodeNothing v0.7.4 调试选项:");
-    println!("  --debug-jit        启用JIT编译调试输出");
-    println!("  --debug-lifetime   启用生命周期分析调试输出");
-    println!("  --debug-expression 启用表达式求值调试输出");
-    println!("  --debug-function   启用函数调用调试输出");
-    println!("  --debug-variable   启用变量访问调试输出");
-    println!("  --debug-all        启用所有调试输出");
-    println!("  --no-debug         禁用所有调试输出");
+    println!("  --cn-debug-jit        启用JIT编译调试输出");
+    println!("  --cn-debug-lifetime   启用生命周期分析调试输出");
+    println!("  --cn-debug-expression 启用表达式求值调试输出");
+    println!("  --cn-debug-function   启用函数调用调试输出");
+    println!("  --cn-debug-variable   启用变量访问调试输出");
+    println!("  --cn-debug-all        启用所有调试输出");
+    println!("  --cn-no-debug         禁用所有调试输出");
     println!();
     println!("示例:");
-    println!("  ./CodeNothing program.cn --debug-jit");
-    println!("  ./CodeNothing program.cn --debug-lifetime --debug-jit");
-    println!("  ./CodeNothing program.cn --debug-all");
+    println!("  ./CodeNothing program.cn --cn-debug-jit");
+    println!("  ./CodeNothing program.cn --cn-debug-lifetime --cn-debug-jit");
+    println!("  ./CodeNothing program.cn --cn-debug-all");
 }
