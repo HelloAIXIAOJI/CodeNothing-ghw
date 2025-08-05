@@ -93,9 +93,9 @@ impl VariableLifetimeAnalyzer {
             self.analyze_function(function);
         }
         
-        // 分析主程序语句
-        for statement in &program.statements {
-            self.analyze_statement(statement);
+        // 分析主程序常量
+        for (const_name, const_value) in &program.constants {
+            self.declare_variable(const_name, None, UsagePattern::SingleAssignment);
         }
         
         // 生成分析结果
