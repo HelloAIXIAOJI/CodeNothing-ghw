@@ -1,0 +1,170 @@
+using lib <io>;
+using ns std;
+
+// 🚀 CodeNothing v0.6.11 线程本地内存池性能测试
+
+fn main(): int {
+    std::println("🧮 线程本地内存池性能测试开始");
+
+    // 测试1: 基础线程本地内存分配
+    std::println("测试1: 基础线程本地内存分配");
+    test_basic_local_allocation();
+
+    // 测试2: 大量小对象分配
+    std::println("测试2: 大量小对象分配");
+    test_small_object_allocation();
+
+    // 测试3: 内存池扩展测试
+    std::println("测试3: 内存池扩展测试");
+    test_memory_pool_expansion();
+
+    // 测试4: 智能内存分配策略
+    std::println("测试4: 智能内存分配策略");
+    test_smart_allocation_strategy();
+
+    // 测试5: 性能基准测试
+    std::println("测试5: 性能基准测试");
+    test_performance_benchmark();
+
+    std::println("🎉 线程本地内存池测试完成！");
+
+    return 0;
+};
+
+fn test_basic_local_allocation(): int {
+    std::println("  - 基础分配测试");
+
+    // 分配一些基础类型
+    i : int = 1;
+    while (i <= 10) {
+        temp_int : int = i * 100;
+        temp_str : string = "test_object";
+        temp_bool : bool = (i % 2 == 0);
+
+        std::println("    分配对象完成");
+        i = i + 1;
+    };
+
+    std::println("  ✅ 基础分配测试完成");
+    return 0;
+};
+
+fn test_small_object_allocation(): int {
+    std::println("  - 小对象大量分配测试");
+
+    total_allocated : int = 0;
+    i : int = 1;
+    while (i <= 100) {
+        // 分配小对象
+        small_int : int = i;
+        small_float : float = 1.5;
+        small_string : string = "obj_test";
+
+        total_allocated = total_allocated + 3; // 每次分配3个对象
+
+        if (i % 20 == 0) {
+            std::println("    已分配小对象");
+        };
+
+        i = i + 1;
+    };
+
+    std::println("  ✅ 小对象分配测试完成");
+    return total_allocated;
+};
+
+fn test_memory_pool_expansion(): int {
+    std::println("  - 内存池扩展测试");
+
+    // 分配大量对象以触发池扩展
+    expansion_count : int = 0;
+    i : int = 1;
+    while (i <= 50) {
+        // 创建较大的字符串以快速消耗内存池
+        large_string : string = "large_object_with_extra_data_to_consume_memory_pool_space";
+        array_data : array<int> = [1, 2, 3, 4, 5];
+
+        expansion_count = expansion_count + 1;
+
+        if (i % 10 == 0) {
+            std::println("    扩展测试进度");
+        };
+
+        i = i + 1;
+    };
+
+    std::println("  ✅ 内存池扩展测试完成");
+    return expansion_count;
+};
+
+fn test_smart_allocation_strategy(): int {
+    std::println("  - 智能分配策略测试");
+
+    strategy_tests : int = 0;
+
+    // 测试不同类型的智能分配
+    i : int = 1;
+    while (i <= 20) {
+        // 小型临时值
+        small_temp : int = i;
+
+        // 中等大小字符串
+        medium_string : string = "medium_size_string_for_testing_allocation_strategy";
+
+        // 小数组
+        small_array : array<int> = [1, 2, 3];
+
+        strategy_tests = strategy_tests + 3;
+
+        if (i % 5 == 0) {
+            std::println("    智能分配测试进行中");
+        };
+
+        i = i + 1;
+    };
+
+    std::println("  ✅ 智能分配策略测试完成");
+    return strategy_tests;
+};
+
+fn test_performance_benchmark(): int {
+    std::println("  - 性能基准测试");
+
+    // 高频分配测试
+    benchmark_iterations : int = 200;
+    total_operations : int = 0;
+
+    std::println("    开始高频内存操作基准测试...");
+
+    i : int = 1;
+    while (i <= benchmark_iterations) {
+        // 模拟真实应用场景的内存操作
+        temp_calc : int = i * i;
+        temp_result : float = 3.14159;
+        temp_message : string = "benchmark_result";
+
+        // 嵌套分配
+        j : int = 1;
+        while (j <= 3) {
+            nested_value : int = i * j;
+            nested_string : string = "nested_value";
+            j = j + 1;
+            total_operations = total_operations + 2;
+        };
+
+        total_operations = total_operations + 3;
+
+        if (i % 50 == 0) {
+            std::println("    基准测试进度");
+        };
+
+        i = i + 1;
+    };
+
+    std::println("  ✅ 性能基准测试完成");
+    std::println("    总迭代次数完成");
+    std::println("    总内存操作数完成");
+    std::println("    平均每次迭代操作数完成");
+
+    return total_operations;
+};
