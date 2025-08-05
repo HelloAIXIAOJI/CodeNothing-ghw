@@ -64,7 +64,7 @@ fn test_loop_variable_optimization(): void {
 // 测试函数参数优化
 fn test_function_parameter_optimization(param1 : int, param2 : int): void {
     std::println("=== 测试3: 函数参数优化 ===");
-    
+
     // 函数参数应该被标记为安全
     result : int = 0;
     i : int = 0;
@@ -73,19 +73,19 @@ fn test_function_parameter_optimization(param1 : int, param2 : int): void {
         result = result + param1 + param2;
         i = i + 1;
     };
-    
-    std::println("函数参数优化测试结果: " + result);
+
+    std::println("函数参数优化测试结果: " + std::to_string(result));
 };
 
 // 测试复杂表达式优化
 fn test_complex_expression_optimization(): void {
     std::println("=== 测试4: 复杂表达式优化 ===");
-    
+
     // 这些变量应该被标记为安全
     x : int = 5;
     y : int = 10;
     z : int = 15;
-    
+
     total : int = 0;
     i : int = 0;
     while (i < 200) {
@@ -93,12 +93,12 @@ fn test_complex_expression_optimization(): void {
         temp1 : int = x * y + z;
         temp2 : int = (x + y) * z;
         temp3 : int = x + y + z;
-        
+
         total = total + temp1 + temp2 + temp3;
         i = i + 1;
     };
-    
-    std::println("复杂表达式优化测试结果: " + total);
+
+    std::println("复杂表达式优化测试结果: " + std::to_string(total));
 };
 
 // 测试跨作用域变量（应该不被优化）
