@@ -1316,9 +1316,38 @@ impl<'a> Interpreter<'a> {
     
     fn access_field(&mut self, obj_expr: &Expression, field_name: &str) -> Value {
         let obj_value = self.evaluate_expression(obj_expr);
-        
+
         match obj_value {
             Value::Object(obj) => {
+                // 检查字段访问权限
+                if let Some(class) = self.classes.get(&obj.class_name) {
+                    // 查找字段定义
+                    if let Some(field) = class.fields.iter().find(|f| f.name == field_name) {
+                        // 检查访问权限
+                        match field.visibility {
+                            crate::ast::Visibility::Private => {
+                                // 私有字段只能在同一个类内部访问
+                                // 这里简化处理：如果是this访问则允许，否则拒绝
+                                if let Expression::This = *obj_expr {
+                                    // this.field 访问，允许
+                                } else {
+                                    eprintln!("错误: 字段 '{}' 是私有的，无法从外部访问", field_name);
+                                    return Value::None;
+                                }
+                            },
+                            crate::ast::Visibility::Protected => {
+                                // 保护字段可以在同一个类或子类中访问
+                                // 这里简化处理：暂时允许访问
+                                // TODO: 实现完整的继承检查
+                            },
+                            crate::ast::Visibility::Public => {
+                                // 公共字段可以自由访问
+                            }
+                        }
+                    }
+                }
+
+                // 执行实际的字段访问
                 match obj.fields.get(field_name) {
                     Some(value) => value.clone(),
                     None => {
@@ -1418,13 +1447,37 @@ impl<'a> Interpreter<'a> {
         match obj_value {
             Value::Object(obj) => {
                 // 使用继承支持的方法查找，克隆方法以避免借用冲突
-                let method_clone = match self.find_method(&obj.class_name, method_name) {
-                    Some((_class, method)) => method.clone(),
+                let (class, method) = match self.find_method(&obj.class_name, method_name) {
+                    Some((class, method)) => (class, method),
                     None => {
                         eprintln!("错误: 类 '{}' 没有方法 '{}'", obj.class_name, method_name);
                         return Value::None;
                     }
                 };
+
+                // 检查方法访问权限
+                match method.visibility {
+                    crate::ast::Visibility::Private => {
+                        // 私有方法只能在同一个类内部调用
+                        // 这里简化处理：如果是this调用则允许，否则拒绝
+                        if let Expression::This = *obj_expr {
+                            // this.method() 调用，允许
+                        } else {
+                            eprintln!("错误: 方法 '{}' 是私有的，无法从外部调用", method_name);
+                            return Value::None;
+                        }
+                    },
+                    crate::ast::Visibility::Protected => {
+                        // 保护方法可以在同一个类或子类中调用
+                        // 这里简化处理：暂时允许调用
+                        // TODO: 实现完整的继承检查
+                    },
+                    crate::ast::Visibility::Public => {
+                        // 公共方法可以自由调用
+                    }
+                }
+
+                let method_clone = method.clone();
 
                 // 检查抽象方法
                 if method_clone.is_abstract {
@@ -1513,8 +1566,14 @@ impl<'a> Interpreter<'a> {
                     let value = self.evaluate_expression_with_method_context(init_expr, &current_this, method_env);
                     self.local_env.insert(var_name.clone(), value);
                 },
+                Statement::FunctionCallStatement(expr) => {
+                    // 处理函数调用语句
+                    self.evaluate_expression_with_method_context(expr, &current_this, method_env);
+                },
                 _ => {
-                    // 其他语句暂时跳过
+                    // 其他语句类型可能需要进一步处理
+                    // 暂时跳过，但记录警告
+                    eprintln!("警告: 方法体中的语句类型暂未完全支持: {:?}", statement);
                 }
             }
         }
@@ -1526,13 +1585,25 @@ impl<'a> Interpreter<'a> {
     }
     
     fn evaluate_expression_with_method_context(&mut self, expr: &Expression, this_obj: &ObjectInstance, method_env: &HashMap<String, Value>) -> Value {
+        eprintln!("调试: 在方法上下文中评估表达式: {:?}", expr);
         match expr {
-            Expression::This => Value::Object(this_obj.clone()),
+            Expression::This => {
+                eprintln!("调试: 处理Expression::This, 对象类型: {}", this_obj.class_name);
+                eprintln!("调试: this_obj字段: {:?}", this_obj.fields.keys().collect::<Vec<_>>());
+                let result = Value::Object(this_obj.clone());
+                eprintln!("调试: 返回this对象: {:?}", result);
+                result
+            },
             Expression::FieldAccess(obj_expr, field_name) => {
                 if let Expression::This = **obj_expr {
                     // this.field 访问 - 直接从this_obj获取
+                    eprintln!("调试: 访问this.{}, 对象类型: {}", field_name, this_obj.class_name);
+                    eprintln!("调试: 对象字段: {:?}", this_obj.fields.keys().collect::<Vec<_>>());
                     match this_obj.fields.get(field_name) {
-                        Some(value) => value.clone(),
+                        Some(value) => {
+                            eprintln!("调试: 找到字段 '{}', 值: {:?}", field_name, value);
+                            value.clone()
+                        },
                         None => {
                             eprintln!("错误: 对象 '{}' 没有字段 '{}'", this_obj.class_name, field_name);
                             Value::None
@@ -1587,6 +1658,172 @@ impl<'a> Interpreter<'a> {
                     return value.clone();
                 }
                 Value::None
+            },
+            Expression::StaticMethodCall(class_name, method_name, args) => {
+                // 在方法上下文中处理StaticMethodCall
+                eprintln!("调试: 在方法上下文中处理StaticMethodCall: {}::{}", class_name, method_name);
+
+                // 检查是否是库命名空间函数调用
+                if self.library_namespaces.contains_key(class_name) {
+                    eprintln!("调试: 识别为库命名空间函数调用");
+                    // 在方法上下文中计算参数
+                    let mut arg_values = Vec::new();
+                    for arg_expr in args {
+                        arg_values.push(self.evaluate_expression_with_method_context(arg_expr, this_obj, method_env));
+                    }
+
+                    // 调用库函数
+                    let string_args = super::library_loader::convert_values_to_string_args(&arg_values);
+                    let full_path = format!("{}::{}", class_name, method_name);
+
+                    if let Some(lib_name) = self.library_namespaces.get(class_name) {
+                        match super::library_loader::call_library_function(lib_name, &full_path, string_args) {
+                            Ok(result) => {
+                                // 尝试将结果转换为适当的值类型
+                                if let Ok(int_val) = result.parse::<i32>() {
+                                    return Value::Int(int_val);
+                                } else if let Ok(float_val) = result.parse::<f64>() {
+                                    return Value::Float(float_val);
+                                } else if result == "true" {
+                                    return Value::Bool(true);
+                                } else if result == "false" {
+                                    return Value::Bool(false);
+                                } else {
+                                    return Value::String(result);
+                                }
+                            },
+                            Err(_) => return Value::None,
+                        }
+                    }
+                }
+
+                // 如果不是库函数，回退到普通处理
+                self.evaluate_expression(expr)
+            },
+            Expression::MethodCall(obj_expr, method_name, args) => {
+                // 在方法上下文中处理MethodCall
+                eprintln!("调试: 在方法上下文中处理MethodCall: {}", method_name);
+
+                if let Expression::This = **obj_expr {
+                    eprintln!("调试: 处理this.{}方法调用", method_name);
+                    // this.method() 调用 - 在方法上下文中计算参数
+                    let mut arg_values = Vec::new();
+                    for arg_expr in args {
+                        arg_values.push(self.evaluate_expression_with_method_context(arg_expr, this_obj, method_env));
+                    }
+
+                    // 查找方法并调用
+                    let (_class, method) = match self.find_method(&this_obj.class_name, method_name) {
+                        Some(result) => result,
+                        None => {
+                            eprintln!("错误: 类 '{}' 中未找到方法 '{}'", this_obj.class_name, method_name);
+                            return Value::None;
+                        }
+                    };
+
+                    // 克隆方法以避免借用冲突
+                    let method_clone = method.clone();
+
+                    // 检查抽象方法
+                    if method_clone.is_abstract {
+                        eprintln!("错误: 不能调用抽象方法 '{}'", method_name);
+                        return Value::None;
+                    }
+
+                    // 创建方法参数环境
+                    let mut method_env_new = HashMap::new();
+                    for (i, param) in method_clone.parameters.iter().enumerate() {
+                        if i < arg_values.len() {
+                            method_env_new.insert(param.name.clone(), arg_values[i].clone());
+                        }
+                    }
+
+                    // 执行方法体，传递this对象和参数环境
+                    let (result, _updated_obj) = self.execute_method_body_with_context(&method_clone.body, this_obj, &method_env_new);
+                    return result;
+                } else {
+                    // 其他对象的方法调用，递归处理
+                    let obj_value = self.evaluate_expression_with_method_context(obj_expr, this_obj, method_env);
+                    match obj_value {
+                        Value::Object(obj) => {
+                            let mut arg_values = Vec::new();
+                            for arg_expr in args {
+                                arg_values.push(self.evaluate_expression_with_method_context(arg_expr, this_obj, method_env));
+                            }
+
+                            let (_class, method) = match self.find_method(&obj.class_name, method_name) {
+                                Some(result) => result,
+                                None => {
+                                    eprintln!("错误: 类 '{}' 中未找到方法 '{}'", obj.class_name, method_name);
+                                    return Value::None;
+                                }
+                            };
+
+                            // 克隆方法以避免借用冲突
+                            let method_clone = method.clone();
+
+                            // 检查抽象方法
+                            if method_clone.is_abstract {
+                                eprintln!("错误: 不能调用抽象方法 '{}'", method_name);
+                                return Value::None;
+                            }
+
+                            // 创建方法参数环境
+                            let mut method_env_new = HashMap::new();
+                            for (i, param) in method_clone.parameters.iter().enumerate() {
+                                if i < arg_values.len() {
+                                    method_env_new.insert(param.name.clone(), arg_values[i].clone());
+                                }
+                            }
+
+                            // 执行方法体，传递this对象和参数环境
+                            let (result, _updated_obj) = self.execute_method_body_with_context(&method_clone.body, &obj, &method_env_new);
+                            return result;
+                        },
+                        _ => {
+                            eprintln!("错误: 尝试在非对象上调用方法");
+                            return Value::None;
+                        }
+                    }
+                }
+            },
+            Expression::FieldAccess(obj_expr, field_name) => {
+                // 在方法上下文中处理FieldAccess
+                eprintln!("调试: 在方法上下文中处理FieldAccess: {}", field_name);
+
+                if let Expression::This = **obj_expr {
+                    eprintln!("调试: 访问this.{}, 对象类型: {}", field_name, this_obj.class_name);
+                    eprintln!("调试: 对象字段: {:?}", this_obj.fields.keys().collect::<Vec<_>>());
+
+                    if let Some(value) = this_obj.fields.get(field_name) {
+                        eprintln!("调试: 找到字段 '{}', 值: {:?}", field_name, value);
+                        return value.clone();
+                    } else {
+                        eprintln!("调试: 字段 '{}' 不存在", field_name);
+                        return Value::None;
+                    }
+                } else {
+                    // 其他对象的字段访问，递归处理
+                    let obj_value = self.evaluate_expression_with_method_context(obj_expr, this_obj, method_env);
+                    match obj_value {
+                        Value::Object(obj) => {
+                            eprintln!("调试: 访问{}.{}, 对象类型: {}", obj.class_name, field_name, obj.class_name);
+                            eprintln!("调试: 对象字段: {:?}", obj.fields.keys().collect::<Vec<_>>());
+
+                            if let Some(value) = obj.fields.get(field_name) {
+                                eprintln!("调试: 找到字段 '{}', 值: {:?}", field_name, value);
+                                return value.clone();
+                            } else {
+                                eprintln!("调试: 字段 '{}' 不存在", field_name);
+                                return Value::None;
+                            }
+                        },
+                        _ => {
+                            eprintln!("调试: 尝试在非对象上访问字段");
+                            return Value::None;
+                        }
+                    }
+                }
             },
             _ => self.evaluate_expression(expr),
         }
