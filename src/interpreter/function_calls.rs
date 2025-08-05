@@ -274,40 +274,29 @@ impl<'a> FunctionCallHandler for Interpreter<'a> {
             // 执行全局函数
             self.call_function_impl(function, arg_values)
         } else {
-            // 最后一次尝试，检查是否是嵌套命名空间中的函数
-            let mut found = false;
-            for (ns_path, ns_func) in &self.namespaced_functions {
-                if ns_path.ends_with(&format!("::{}", name)) {
-                    debug_println(&format!("找到嵌套命名空间中的函数: {}", ns_path));
-                    found = true;
-                    return self.call_function_impl(ns_func, arg_values);
+            // 检查是否是函数指针变量
+            if let Some(var_value) = self.local_env.get(name).or_else(|| self.global_env.get(name)) {
+                match var_value {
+                    Value::FunctionPointer(func_ptr) => {
+                        // 这是函数指针调用
+                        debug_println(&format!("检测到函数指针调用: {}", name));
+                        let func_ptr_clone = func_ptr.clone();
+                        return self.call_function_pointer_impl(&func_ptr_clone, arg_values);
+                    },
+                    Value::LambdaFunctionPointer(lambda_ptr) => {
+                        // 这是Lambda函数指针调用
+                        debug_println(&format!("检测到Lambda函数指针调用: {}", name));
+                        let lambda_ptr_clone = lambda_ptr.clone();
+                        return self.call_lambda_function_pointer_impl(&lambda_ptr_clone, arg_values);
+                    },
+                    _ => {}
                 }
             }
-            
-            if !found {
-                // 检查是否是函数指针变量
-                if let Some(var_value) = self.local_env.get(name).or_else(|| self.global_env.get(name)) {
-                    match var_value {
-                        Value::FunctionPointer(func_ptr) => {
-                            // 这是函数指针调用
-                            debug_println(&format!("检测到函数指针调用: {}", name));
-                            let func_ptr_clone = func_ptr.clone();
-                            return self.call_function_pointer_impl(&func_ptr_clone, arg_values);
-                        },
-                        Value::LambdaFunctionPointer(lambda_ptr) => {
-                            // 这是Lambda函数指针调用
-                            debug_println(&format!("检测到Lambda函数指针调用: {}", name));
-                            let lambda_ptr_clone = lambda_ptr.clone();
-                            return self.call_lambda_function_pointer_impl(&lambda_ptr_clone, arg_values);
-                        },
-                        _ => {}
-                    }
-                }
-                panic!("未定义的函数: {}", name);
-            }
-            
-            // 这里不会执行到，只是为了编译通过
-            unreachable!();
+
+            // v0.7.2修复: 移除了破坏namespace作用域隔离的代码
+            // 之前的代码会自动查找所有命名空间中以函数名结尾的函数，这完全破坏了namespace的访问控制
+            // 现在只有通过正确的namespace导入或完整路径调用才能访问命名空间函数
+            panic!("未定义的函数: {}。如果要调用命名空间函数，请使用 'using ns namespace_name;' 导入或使用完整路径 'namespace::function'", name);
         }
     }
 
