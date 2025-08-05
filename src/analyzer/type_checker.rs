@@ -38,6 +38,8 @@ pub struct TypeChecker {
     function_signatures: HashMap<String, (Vec<Type>, Type)>, // (参数类型, 返回类型)
     // 类定义表
     class_definitions: HashMap<String, HashMap<String, Type>>, // 类名 -> 字段名 -> 字段类型
+    // 类方法表
+    class_methods: HashMap<String, HashMap<String, (Vec<Type>, Type)>>, // 类名 -> 方法名 -> (参数类型, 返回类型)
     // 枚举定义表
     enum_definitions: HashMap<String, Vec<String>>, // 枚举名 -> 变体列表
     // 错误收集
@@ -53,6 +55,7 @@ impl TypeChecker {
             constant_types: HashMap::new(),
             function_signatures: HashMap::new(),
             class_definitions: HashMap::new(),
+            class_methods: HashMap::new(),
             enum_definitions: HashMap::new(),
             errors: Vec::new(),
             current_function_return_type: None,
@@ -142,11 +145,22 @@ impl TypeChecker {
 
         // 收集类定义
         for class in &program.classes {
+            // 收集字段
             let mut fields = HashMap::new();
             for field in &class.fields {
                 fields.insert(field.name.clone(), field.field_type.clone());
             }
             self.class_definitions.insert(class.name.clone(), fields);
+
+            // 收集方法
+            let mut methods = HashMap::new();
+            for method in &class.methods {
+                let param_types: Vec<Type> = method.parameters.iter()
+                    .map(|p| p.param_type.clone())
+                    .collect();
+                methods.insert(method.name.clone(), (param_types, method.return_type.clone()));
+            }
+            self.class_methods.insert(class.name.clone(), methods);
         }
 
         // 收集枚举定义
@@ -703,6 +717,44 @@ impl TypeChecker {
                         ));
                         Type::Auto
                     }
+                }
+            },
+            Type::Class(class_name) => {
+                // 检查类的方法
+                if let Some(class_methods) = self.class_methods.get(class_name).cloned() {
+                    if let Some((param_types, return_type)) = class_methods.get(method_name) {
+                        // 检查参数数量
+                        if args.len() != param_types.len() {
+                            self.errors.push(TypeCheckError::new(
+                                format!("方法 '{}' 期望 {} 个参数，但得到 {} 个",
+                                    method_name, param_types.len(), args.len())
+                            ));
+                            return Type::Auto;
+                        }
+
+                        // 检查参数类型
+                        for (i, (expected_type, arg)) in param_types.iter().zip(args.iter()).enumerate() {
+                            let actual_type = self.infer_expression_type(arg);
+                            if !self.types_compatible(expected_type, &actual_type) {
+                                self.errors.push(TypeCheckError::new(
+                                    format!("方法 '{}' 的第 {} 个参数类型不匹配：期望 {:?}，得到 {:?}",
+                                        method_name, i + 1, expected_type, actual_type)
+                                ));
+                            }
+                        }
+
+                        return_type.clone()
+                    } else {
+                        self.errors.push(TypeCheckError::new(
+                            format!("类 '{}' 没有方法 '{}'", class_name, method_name)
+                        ));
+                        Type::Auto
+                    }
+                } else {
+                    self.errors.push(TypeCheckError::new(
+                        format!("未定义的类: '{}'", class_name)
+                    ));
+                    Type::Auto
                 }
             },
             _ => {
