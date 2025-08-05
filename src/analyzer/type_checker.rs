@@ -652,6 +652,38 @@ impl TypeChecker {
                     ));
                     Type::Auto
                 }
+            },
+            // v0.7.2新增：位运算操作符类型检查
+            BinaryOperator::BitwiseAnd | BinaryOperator::BitwiseOr | BinaryOperator::BitwiseXor => {
+                // 位运算只支持整数类型
+                match (left_type, right_type) {
+                    (Type::Auto, Type::Auto) => Type::Int,
+                    (Type::Auto, Type::Int) | (Type::Int, Type::Auto) => Type::Int,
+                    (Type::Auto, Type::Long) | (Type::Long, Type::Auto) => Type::Long,
+                    (Type::Int, Type::Int) => Type::Int,
+                    (Type::Long, Type::Long) => Type::Long,
+                    (Type::Int, Type::Long) | (Type::Long, Type::Int) => Type::Long,
+                    _ => {
+                        self.errors.push(TypeCheckError::new(
+                            format!("位运算只支持整数类型，但得到 {:?} 和 {:?}", left_type, right_type)
+                        ));
+                        Type::Auto
+                    }
+                }
+            },
+            BinaryOperator::LeftShift | BinaryOperator::RightShift => {
+                // 移位运算：左操作数是被移位的值，右操作数是移位数量
+                match (left_type, right_type) {
+                    (Type::Auto, _) => Type::Int,
+                    (Type::Int, _) => Type::Int,
+                    (Type::Long, _) => Type::Long,
+                    _ => {
+                        self.errors.push(TypeCheckError::new(
+                            format!("移位运算的左操作数必须是整数类型，但得到 {:?}", left_type)
+                        ));
+                        Type::Auto
+                    }
+                }
             }
         }
     }
