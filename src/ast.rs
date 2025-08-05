@@ -110,6 +110,12 @@ pub enum BinaryOperator {
     Multiply,
     Divide,
     Modulo,
+    // 位运算操作符 - v0.7.2新增
+    BitwiseAnd,    // &
+    BitwiseOr,     // |
+    BitwiseXor,    // ^
+    LeftShift,     // <<
+    RightShift,    // >>
 }
 
 #[derive(Debug, Clone)]
