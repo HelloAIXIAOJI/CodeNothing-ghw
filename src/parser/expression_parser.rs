@@ -497,10 +497,15 @@ impl<'a> ExpressionParser for ParserBase<'a> {
                     
                     // 变量或函数调用
                     let name = self.consume().unwrap();
-                    
+
                     // 调试输出
                     debug_println(&format!("解析标识符: {}", name));
                     debug_println(&format!("下一个token: {:?}", self.peek()));
+
+                    // 特殊处理this关键字 - 但只有在不是字段访问或方法调用时
+                    if name == "this" && self.peek() != Some(&".".to_string()) {
+                        return Ok(Expression::This);
+                    }
                     
                     if self.peek() == Some(&"(".to_string()) {
                         // 函数调用
@@ -771,14 +776,29 @@ impl<'a> ExpressionParser for ParserBase<'a> {
                             
                             if all_calls.len() == 1 {
                                 // 只有一个方法调用
-                                Ok(Expression::MethodCall(Box::new(Expression::Variable(name.clone())), method_name, args))
+                                let obj_expr = if name == "this" {
+                                    Expression::This
+                                } else {
+                                    Expression::Variable(name.clone())
+                                };
+                                Ok(Expression::MethodCall(Box::new(obj_expr), method_name, args))
                             } else {
                                 // 多个方法调用，构建链式调用
-                                Ok(Expression::ChainCall(Box::new(Expression::Variable(name)), all_calls))
+                                let obj_expr = if name == "this" {
+                                    Expression::This
+                                } else {
+                                    Expression::Variable(name)
+                                };
+                                Ok(Expression::ChainCall(Box::new(obj_expr), all_calls))
                             }
                         } else {
                             // 字段访问
-                            Ok(Expression::FieldAccess(Box::new(Expression::Variable(name)), method_name))
+                            let obj_expr = if name == "this" {
+                                Expression::This
+                            } else {
+                                Expression::Variable(name)
+                            };
+                            Ok(Expression::FieldAccess(Box::new(obj_expr), method_name))
                         }
                     } else {
                         // 变量
