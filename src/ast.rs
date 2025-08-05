@@ -272,6 +272,7 @@ pub struct Class {
     pub methods: Vec<Method>,
     pub constructors: Vec<Constructor>,
     pub is_abstract: bool, // 是否为抽象类
+    pub friends: Vec<FriendDeclaration>, // v0.7.2新增：友元声明
 }
 
 #[derive(Debug, Clone)]
