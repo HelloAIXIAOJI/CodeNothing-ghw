@@ -1506,6 +1506,91 @@ impl<'a> Interpreter<'a> {
                             },
                         }
                     },
+                    // v0.7.2新增：位运算操作符支持
+                    crate::ast::BinaryOperator::BitwiseAnd => {
+                        match (&left_val, &right_val) {
+                            (Value::Int(i1), Value::Int(i2)) => Value::Int(i1 & i2),
+                            (Value::Long(l1), Value::Long(l2)) => Value::Long(l1 & l2),
+                            (Value::Int(i), Value::Long(l)) => Value::Long((*i as i64) & l),
+                            (Value::Long(l), Value::Int(i)) => Value::Long(l & (*i as i64)),
+                            _ => {
+                                eprintln!("不支持的按位与操作: {:?} BitwiseAnd {:?}", left_val, right_val);
+                                Value::None
+                            },
+                        }
+                    },
+                    crate::ast::BinaryOperator::BitwiseOr => {
+                        match (&left_val, &right_val) {
+                            (Value::Int(i1), Value::Int(i2)) => Value::Int(i1 | i2),
+                            (Value::Long(l1), Value::Long(l2)) => Value::Long(l1 | l2),
+                            (Value::Int(i), Value::Long(l)) => Value::Long((*i as i64) | l),
+                            (Value::Long(l), Value::Int(i)) => Value::Long(l | (*i as i64)),
+                            _ => {
+                                eprintln!("不支持的按位或操作: {:?} BitwiseOr {:?}", left_val, right_val);
+                                Value::None
+                            },
+                        }
+                    },
+                    crate::ast::BinaryOperator::BitwiseXor => {
+                        match (&left_val, &right_val) {
+                            (Value::Int(i1), Value::Int(i2)) => Value::Int(i1 ^ i2),
+                            (Value::Long(l1), Value::Long(l2)) => Value::Long(l1 ^ l2),
+                            (Value::Int(i), Value::Long(l)) => Value::Long((*i as i64) ^ l),
+                            (Value::Long(l), Value::Int(i)) => Value::Long(l ^ (*i as i64)),
+                            _ => {
+                                eprintln!("不支持的按位异或操作: {:?} BitwiseXor {:?}", left_val, right_val);
+                                Value::None
+                            },
+                        }
+                    },
+                    crate::ast::BinaryOperator::LeftShift => {
+                        match (&left_val, &right_val) {
+                            (Value::Int(i1), Value::Int(i2)) => {
+                                if *i2 < 0 || *i2 >= 32 {
+                                    eprintln!("错误: 移位操作数超出范围: {}", i2);
+                                    Value::None
+                                } else {
+                                    Value::Int(i1 << i2)
+                                }
+                            },
+                            (Value::Long(l), Value::Int(i)) => {
+                                if *i < 0 || *i >= 64 {
+                                    eprintln!("错误: 移位操作数超出范围: {}", i);
+                                    Value::None
+                                } else {
+                                    Value::Long(l << i)
+                                }
+                            },
+                            _ => {
+                                eprintln!("不支持的左移操作: {:?} LeftShift {:?}", left_val, right_val);
+                                Value::None
+                            },
+                        }
+                    },
+                    crate::ast::BinaryOperator::RightShift => {
+                        match (&left_val, &right_val) {
+                            (Value::Int(i1), Value::Int(i2)) => {
+                                if *i2 < 0 || *i2 >= 32 {
+                                    eprintln!("错误: 移位操作数超出范围: {}", i2);
+                                    Value::None
+                                } else {
+                                    Value::Int(i1 >> i2)
+                                }
+                            },
+                            (Value::Long(l), Value::Int(i)) => {
+                                if *i < 0 || *i >= 64 {
+                                    eprintln!("错误: 移位操作数超出范围: {}", i);
+                                    Value::None
+                                } else {
+                                    Value::Long(l >> i)
+                                }
+                            },
+                            _ => {
+                                eprintln!("不支持的右移操作: {:?} RightShift {:?}", left_val, right_val);
+                                Value::None
+                            },
+                        }
+                    },
                     _ => {
                         // 其他操作暂时返回None
                         eprintln!("构造函数上下文中不支持的二元操作: {:?}", op);
