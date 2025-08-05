@@ -67,7 +67,7 @@ impl<'a> ExpressionParser for ParserBase<'a> {
     }
     
     fn parse_compare_expression(&mut self) -> Result<Expression, String> {
-        let mut left = self.parse_additive_expression()?;
+        let mut left = self.parse_bitwise_expression()?;
         
         while let Some(op) = self.peek() {
             if op == "==" || op == "!=" || op == ">" || op == "<" || op == ">=" || op == "<=" {
