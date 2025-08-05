@@ -143,6 +143,7 @@ pub extern "C" fn cn_init() -> *mut HashMap<String, LibraryFunction> {
     let std_ns = registry.namespace("std");
     std_ns.add_function("print", std::cn_print)
          .add_function("println", std::cn_println)
+         .add_function("echo", std::cn_println)
          .add_function("read_line", std::cn_read_line)
          .add_function("input", std::cn_read_line) //别名
          .add_function("printf", std::cn_printf);
