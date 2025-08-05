@@ -3729,4 +3729,38 @@ impl<'a> Interpreter<'a> {
             }
         }
     }
+
+    /// v0.7.4新增：优化的变量访问（跳过运行时检查）
+    fn get_variable_optimized(&self, name: &str) -> Value {
+        // 对于安全变量，使用最快的访问路径
+        // 直接按优先级顺序访问，不进行额外的安全检查
+
+        // 1. 常量（最快）
+        if let Some(value) = self.constants.get(name) {
+            return value.clone();
+        }
+
+        // 2. 局部变量
+        if let Some(value) = self.local_env.get(name) {
+            return value.clone();
+        }
+
+        // 3. 全局变量
+        if let Some(value) = self.global_env.get(name) {
+            return value.clone();
+        }
+
+        // 如果到这里还没找到，说明分析有误，回退到普通处理
+        Value::None
+    }
+
+    /// 检查变量是否可以跳过运行时检查
+    fn can_skip_runtime_check(&self, var_name: &str) -> bool {
+        // 委托给解释器的生命周期分析结果
+        if let Some(result) = &self.lifetime_analysis_result {
+            result.safe_variables.contains(var_name)
+        } else {
+            false
+        }
+    }
 }
