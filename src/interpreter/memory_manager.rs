@@ -2,6 +2,7 @@ use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex, RwLock};
 use std::time::{SystemTime, UNIX_EPOCH};
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::cell::RefCell;
 use super::value::Value;
 
 // 🚀 v0.6.2 读写锁性能监控（条件编译）
@@ -992,4 +993,442 @@ where
     // 为循环体提供优化的内存操作环境
     // 这里可以添加循环特定的优化逻辑
     operations()
+}
+
+// 🚀 v0.6.11 线程本地内存池系统
+
+/// 线程本地内存池配置
+#[derive(Debug, Clone)]
+pub struct LocalMemoryPoolConfig {
+    /// 初始池大小
+    pub initial_pool_size: usize,
+    /// 最大池大小
+    pub max_pool_size: usize,
+    /// 块大小（字节）
+    pub block_size: usize,
+    /// 预分配块数量
+    pub prealloc_blocks: usize,
+    /// 自动扩展阈值
+    pub expand_threshold: f32,
+}
+
+impl Default for LocalMemoryPoolConfig {
+    fn default() -> Self {
+        Self {
+            initial_pool_size: 1024 * 1024,      // 1MB初始大小
+            max_pool_size: 16 * 1024 * 1024,     // 16MB最大大小
+            block_size: 64,                      // 64字节块大小
+            prealloc_blocks: 1000,               // 预分配1000个块
+            expand_threshold: 0.8,               // 80%使用率时扩展
+        }
+    }
+}
+
+/// 内存块元数据
+#[derive(Debug, Clone)]
+struct LocalMemoryBlockMeta {
+    address: usize,
+    size: usize,
+    is_free: bool,
+    allocation_time: u64,
+    thread_id: std::thread::ThreadId,
+}
+
+/// 线程本地内存管理器
+#[derive(Debug)]
+pub struct LocalMemoryManager {
+    /// 配置
+    config: LocalMemoryPoolConfig,
+    /// 空闲块列表
+    free_blocks: Vec<LocalMemoryBlockMeta>,
+    /// 已分配块映射
+    allocated_blocks: HashMap<usize, LocalMemoryBlockMeta>,
+    /// 内存池基地址
+    pool_base: usize,
+    /// 当前池大小
+    current_pool_size: usize,
+    /// 下一个可用地址
+    next_address: usize,
+    /// 分配统计
+    allocation_count: u64,
+    /// 释放统计
+    deallocation_count: u64,
+    /// 线程ID
+    thread_id: std::thread::ThreadId,
+}
+
+impl LocalMemoryManager {
+    /// 创建新的线程本地内存管理器
+    pub fn new() -> Self {
+        Self::with_config(LocalMemoryPoolConfig::default())
+    }
+
+    /// 使用指定配置创建内存管理器
+    pub fn with_config(config: LocalMemoryPoolConfig) -> Self {
+        let thread_id = std::thread::current().id();
+        let pool_base = Self::allocate_pool_memory(config.initial_pool_size);
+
+        let mut manager = Self {
+            config: config.clone(),
+            free_blocks: Vec::with_capacity(config.prealloc_blocks),
+            allocated_blocks: HashMap::new(),
+            pool_base,
+            current_pool_size: config.initial_pool_size,
+            next_address: pool_base,
+            allocation_count: 0,
+            deallocation_count: 0,
+            thread_id,
+        };
+
+        // 预分配空闲块
+        manager.preallocate_blocks();
+        manager
+    }
+
+    /// 分配池内存（模拟）
+    fn allocate_pool_memory(size: usize) -> usize {
+        // 在实际实现中，这里会调用系统内存分配
+        // 这里我们使用一个模拟的地址空间
+        static NEXT_POOL_ADDRESS: AtomicU64 = AtomicU64::new(0x10000000);
+        NEXT_POOL_ADDRESS.fetch_add(size as u64, Ordering::SeqCst) as usize
+    }
+
+    /// 预分配空闲块
+    fn preallocate_blocks(&mut self) {
+        let block_count = self.config.prealloc_blocks;
+        let block_size = self.config.block_size;
+
+        for i in 0..block_count {
+            let address = self.pool_base + i * block_size;
+            let block = LocalMemoryBlockMeta {
+                address,
+                size: block_size,
+                is_free: true,
+                allocation_time: 0,
+                thread_id: self.thread_id,
+            };
+            self.free_blocks.push(block);
+        }
+
+        self.next_address = self.pool_base + block_count * block_size;
+    }
+
+    /// 分配内存
+    pub fn allocate(&mut self, value: Value) -> Result<(usize, u64), String> {
+        // 尝试从空闲块列表分配
+        if let Some(block_index) = self.find_suitable_free_block(&value) {
+            return self.allocate_from_free_block(block_index, value);
+        }
+
+        // 空闲块不足，尝试扩展池
+        if self.should_expand_pool() {
+            self.expand_pool()?;
+            // 重试分配
+            if let Some(block_index) = self.find_suitable_free_block(&value) {
+                return self.allocate_from_free_block(block_index, value);
+            }
+        }
+
+        // 从池中分配新块
+        self.allocate_new_block(value)
+    }
+
+    /// 查找合适的空闲块
+    fn find_suitable_free_block(&self, value: &Value) -> Option<usize> {
+        let required_size = self.calculate_value_size(value);
+
+        for (index, block) in self.free_blocks.iter().enumerate() {
+            if block.is_free && block.size >= required_size {
+                return Some(index);
+            }
+        }
+
+        None
+    }
+
+    /// 计算值所需的内存大小
+    fn calculate_value_size(&self, value: &Value) -> usize {
+        match value {
+            Value::Int(_) => 8,
+            Value::Long(_) => 8,
+            Value::Float(_) => 8,
+            Value::Bool(_) => 1,
+            Value::String(s) => s.len() + 8, // 字符串长度 + 元数据
+            Value::Array(arr) => arr.len() * 8 + 16, // 数组元素 + 元数据
+            _ => self.config.block_size, // 默认块大小
+        }
+    }
+
+    /// 从空闲块分配
+    fn allocate_from_free_block(&mut self, block_index: usize, value: Value) -> Result<(usize, u64), String> {
+        let mut block = self.free_blocks.remove(block_index);
+        block.is_free = false;
+        block.allocation_time = self.get_current_time();
+
+        let address = block.address;
+        let tag_id = self.generate_tag_id();
+
+        // 将块移动到已分配映射
+        self.allocated_blocks.insert(address, block);
+        self.allocation_count += 1;
+
+        Ok((address, tag_id))
+    }
+
+    /// 分配新块
+    fn allocate_new_block(&mut self, value: Value) -> Result<(usize, u64), String> {
+        let required_size = self.calculate_value_size(&value);
+        let block_size = required_size.max(self.config.block_size);
+
+        // 检查是否有足够空间
+        if self.next_address + block_size > self.pool_base + self.current_pool_size {
+            return Err("线程本地内存池空间不足".to_string());
+        }
+
+        let address = self.next_address;
+        let tag_id = self.generate_tag_id();
+
+        let block = LocalMemoryBlockMeta {
+            address,
+            size: block_size,
+            is_free: false,
+            allocation_time: self.get_current_time(),
+            thread_id: self.thread_id,
+        };
+
+        self.allocated_blocks.insert(address, block);
+        self.next_address += block_size;
+        self.allocation_count += 1;
+
+        Ok((address, tag_id))
+    }
+
+    /// 释放内存
+    pub fn deallocate(&mut self, address: usize) -> Result<(), String> {
+        if let Some(mut block) = self.allocated_blocks.remove(&address) {
+            block.is_free = true;
+            self.free_blocks.push(block);
+            self.deallocation_count += 1;
+            Ok(())
+        } else {
+            Err(format!("无效的内存地址: 0x{:x}", address))
+        }
+    }
+
+    /// 读取内存
+    pub fn read(&self, address: usize, _tag_id: Option<u64>) -> Result<Value, String> {
+        if self.allocated_blocks.contains_key(&address) {
+            // 在实际实现中，这里会从内存中读取实际数据
+            // 这里返回一个模拟值
+            Ok(Value::Int(42))
+        } else {
+            Err(format!("无效的内存地址: 0x{:x}", address))
+        }
+    }
+
+    /// 写入内存
+    pub fn write(&mut self, address: usize, _value: Value, _tag_id: Option<u64>) -> Result<(), String> {
+        if self.allocated_blocks.contains_key(&address) {
+            // 在实际实现中，这里会将数据写入内存
+            Ok(())
+        } else {
+            Err(format!("无效的内存地址: 0x{:x}", address))
+        }
+    }
+
+    /// 检查是否应该扩展池
+    fn should_expand_pool(&self) -> bool {
+        let used_space = self.next_address - self.pool_base;
+        let usage_ratio = used_space as f32 / self.current_pool_size as f32;
+
+        usage_ratio > self.config.expand_threshold &&
+        self.current_pool_size < self.config.max_pool_size
+    }
+
+    /// 扩展内存池
+    fn expand_pool(&mut self) -> Result<(), String> {
+        let new_size = (self.current_pool_size * 2).min(self.config.max_pool_size);
+        if new_size <= self.current_pool_size {
+            return Err("内存池已达到最大大小".to_string());
+        }
+
+        // 在实际实现中，这里会重新分配更大的内存池
+        // 这里我们只是更新大小
+        self.current_pool_size = new_size;
+
+        // 预分配更多空闲块
+        let additional_blocks = self.config.prealloc_blocks / 2;
+        for i in 0..additional_blocks {
+            let address = self.next_address + i * self.config.block_size;
+            let block = LocalMemoryBlockMeta {
+                address,
+                size: self.config.block_size,
+                is_free: true,
+                allocation_time: 0,
+                thread_id: self.thread_id,
+            };
+            self.free_blocks.push(block);
+        }
+
+        Ok(())
+    }
+
+    /// 获取当前时间戳
+    fn get_current_time(&self) -> u64 {
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_nanos() as u64
+    }
+
+    /// 生成标签ID
+    fn generate_tag_id(&self) -> u64 {
+        static NEXT_TAG_ID: AtomicU64 = AtomicU64::new(1);
+        NEXT_TAG_ID.fetch_add(1, Ordering::SeqCst)
+    }
+
+    /// 获取内存统计信息
+    pub fn get_stats(&self) -> LocalMemoryStats {
+        LocalMemoryStats {
+            thread_id: self.thread_id,
+            total_allocations: self.allocation_count,
+            total_deallocations: self.deallocation_count,
+            active_allocations: self.allocated_blocks.len(),
+            free_blocks: self.free_blocks.len(),
+            pool_size: self.current_pool_size,
+            used_space: self.next_address - self.pool_base,
+            fragmentation_ratio: self.calculate_fragmentation(),
+        }
+    }
+
+    /// 计算碎片化率
+    fn calculate_fragmentation(&self) -> f32 {
+        if self.free_blocks.is_empty() {
+            return 0.0;
+        }
+
+        let total_free_space: usize = self.free_blocks.iter().map(|b| b.size).sum();
+        let largest_free_block = self.free_blocks.iter().map(|b| b.size).max().unwrap_or(0);
+
+        if total_free_space == 0 {
+            0.0
+        } else {
+            1.0 - (largest_free_block as f32 / total_free_space as f32)
+        }
+    }
+}
+
+/// 线程本地内存统计信息
+#[derive(Debug, Clone)]
+pub struct LocalMemoryStats {
+    pub thread_id: std::thread::ThreadId,
+    pub total_allocations: u64,
+    pub total_deallocations: u64,
+    pub active_allocations: usize,
+    pub free_blocks: usize,
+    pub pool_size: usize,
+    pub used_space: usize,
+    pub fragmentation_ratio: f32,
+}
+
+// 🚀 v0.6.11 线程本地内存池全局接口
+
+thread_local! {
+    /// 线程本地内存池实例
+    static LOCAL_MEMORY_POOL: RefCell<LocalMemoryManager> =
+        RefCell::new(LocalMemoryManager::new());
+}
+
+/// 使用线程本地内存池分配内存
+pub fn local_allocate_memory(value: Value) -> Result<(usize, u64), String> {
+    LOCAL_MEMORY_POOL.with(|pool| {
+        pool.borrow_mut().allocate(value)
+    })
+}
+
+/// 使用线程本地内存池释放内存
+pub fn local_deallocate_memory(address: usize) -> Result<(), String> {
+    LOCAL_MEMORY_POOL.with(|pool| {
+        pool.borrow_mut().deallocate(address)
+    })
+}
+
+/// 使用线程本地内存池读取内存
+pub fn local_read_memory(address: usize, tag_id: Option<u64>) -> Result<Value, String> {
+    LOCAL_MEMORY_POOL.with(|pool| {
+        pool.borrow().read(address, tag_id)
+    })
+}
+
+/// 使用线程本地内存池写入内存
+pub fn local_write_memory(address: usize, value: Value, tag_id: Option<u64>) -> Result<(), String> {
+    LOCAL_MEMORY_POOL.with(|pool| {
+        pool.borrow_mut().write(address, value, tag_id)
+    })
+}
+
+/// 获取线程本地内存池统计信息
+pub fn get_local_memory_stats() -> LocalMemoryStats {
+    LOCAL_MEMORY_POOL.with(|pool| {
+        pool.borrow().get_stats()
+    })
+}
+
+/// 批量线程本地内存操作
+pub fn local_batch_memory_operations<F, R>(f: F) -> R
+where
+    F: FnOnce(&mut LocalMemoryManager) -> R,
+{
+    LOCAL_MEMORY_POOL.with(|pool| {
+        f(&mut pool.borrow_mut())
+    })
+}
+
+/// 🚀 v0.6.11 智能内存分配策略
+/// 根据值类型和大小选择最优的分配策略
+pub fn smart_allocate_memory(value: Value) -> Result<(usize, u64), String> {
+    // 分析值的特征
+    let value_size = calculate_smart_value_size(&value);
+    let is_temporary = is_temporary_value(&value);
+
+    // 选择分配策略
+    if is_temporary && value_size <= 64 {
+        // 小型临时值：使用线程本地池
+        local_allocate_memory(value)
+    } else if value_size > 1024 * 1024 {
+        // 大型值：使用全局内存管理器
+        allocate_memory_smart(value)
+    } else {
+        // 中等大小值：优先使用线程本地池
+        match local_allocate_memory(value.clone()) {
+            Ok(result) => Ok(result),
+            Err(_) => {
+                // 线程本地池失败，回退到全局管理器
+                allocate_memory_smart(value)
+            }
+        }
+    }
+}
+
+/// 计算智能值大小
+fn calculate_smart_value_size(value: &Value) -> usize {
+    match value {
+        Value::Int(_) => 8,
+        Value::Long(_) => 8,
+        Value::Float(_) => 8,
+        Value::Bool(_) => 1,
+        Value::String(s) => s.len() + 16,
+        Value::Array(arr) => arr.len() * 8 + 32,
+        _ => 64, // 默认大小
+    }
+}
+
+/// 判断是否为临时值
+fn is_temporary_value(value: &Value) -> bool {
+    match value {
+        Value::Int(_) | Value::Long(_) | Value::Float(_) | Value::Bool(_) => true,
+        Value::String(s) => s.len() < 256, // 短字符串视为临时值
+        Value::Array(arr) => arr.len() < 10, // 小数组视为临时值
+        _ => false,
+    }
 }
