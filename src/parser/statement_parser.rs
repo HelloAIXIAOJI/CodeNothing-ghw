@@ -344,22 +344,66 @@ impl<'a> StatementParser for ParserBase<'a> {
                         
                         // 返回函数调用语句
                         Ok(Statement::FunctionCallStatement(func_call_expr))
-                    } else {
-                        // 检查是否是 this.field = value 的情况
-                        if var_name == "this" && next_token == "." {
-                            self.consume(); // 消费 "."
-                            let field_name = self.consume().ok_or_else(|| "期望字段名".to_string())?;
+                    } else if next_token == "." {
+                        // 处理对象方法调用或字段访问
+                        self.consume(); // 消费 "."
+                        let member_name = self.consume().ok_or_else(|| "期望成员名".to_string())?;
+
+                        if self.peek() == Some(&"(".to_string()) {
+                            // 方法调用: obj.method(args)
+                            self.consume(); // 消费 "("
+
+                            let mut args = Vec::new();
+                            if self.peek() != Some(&")".to_string()) {
+                                loop {
+                                    let arg = self.parse_expression()?;
+                                    args.push(arg);
+
+                                    if self.peek() != Some(&",".to_string()) {
+                                        break;
+                                    }
+                                    self.consume(); // 消费 ","
+                                }
+                            }
+
+                            self.expect(")")?;
+                            self.expect(";")?;
+
+                            // 创建方法调用表达式
+                            let obj_expr = if var_name == "this" {
+                                Expression::This
+                            } else {
+                                Expression::Variable(var_name)
+                            };
+                            let method_call_expr = Expression::MethodCall(
+                                Box::new(obj_expr),
+                                member_name,
+                                args
+                            );
+
+                            Ok(Statement::FunctionCallStatement(method_call_expr))
+                        } else if self.peek() == Some(&"=".to_string()) {
+                            // 字段赋值: obj.field = value
                             self.expect("=")?;
                             let value_expr = self.parse_expression()?;
                             self.expect(";")?;
+
+                            let obj_expr = if var_name == "this" {
+                                Expression::This
+                            } else {
+                                Expression::Variable(var_name)
+                            };
+
                             Ok(Statement::FieldAssignment(
-                                Box::new(Expression::This),
-                                field_name,
+                                Box::new(obj_expr),
+                                member_name,
                                 value_expr
                             ))
                         } else {
-                            Err(format!("不支持的语句: {} {}", var_name, next_token))
+                            Err(format!("期望 '(' 或 '=' 在 '{}.{}' 之后", var_name, member_name))
                         }
+                    } else {
+                        Err(format!("不支持的语句: {} {}", var_name, next_token))
                     }
                 } else {
                     Err("不完整的语句".to_string())
