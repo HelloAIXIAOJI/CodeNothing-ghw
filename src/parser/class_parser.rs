@@ -115,6 +115,7 @@ impl<'a> ClassParser for ParserBase<'a> {
             methods,
             constructors,
             is_abstract,
+            friends: Vec::new(), // v0.7.2新增：暂时为空，后续实现友元解析
         })
     }
     

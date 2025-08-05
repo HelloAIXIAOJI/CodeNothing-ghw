@@ -7,6 +7,9 @@ pub trait ExpressionParser {
     fn parse_expression(&mut self) -> Result<Expression, String>;
     fn parse_logical_expression(&mut self) -> Result<Expression, String>;
     fn parse_compare_expression(&mut self) -> Result<Expression, String>;
+    // v0.7.2新增：位运算表达式解析方法
+    fn parse_bitwise_expression(&mut self) -> Result<Expression, String>;
+    fn parse_shift_expression(&mut self) -> Result<Expression, String>;
     fn parse_additive_expression(&mut self) -> Result<Expression, String>;
     fn parse_multiplicative_expression(&mut self) -> Result<Expression, String>;
     fn parse_unary_expression(&mut self) -> Result<Expression, String>;
