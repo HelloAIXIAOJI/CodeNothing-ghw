@@ -1,4 +1,5 @@
 use crate::ast::{Program, Expression, Statement, BinaryOperator, Type, Namespace, CompareOperator, LogicalOperator, Function, NamespaceType, Class, Enum};
+use crate::analyzer::{VariableLifetimeAnalyzer, LifetimeAnalysisResult};
 use std::collections::HashMap;
 
 /// 变量位置枚举，用于缓存变量查找结果
