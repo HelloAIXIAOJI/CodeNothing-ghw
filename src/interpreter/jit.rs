@@ -587,6 +587,12 @@ impl JitCompiler {
                     BinaryOperator::Multiply => "mul",
                     BinaryOperator::Divide => "div",
                     BinaryOperator::Modulo => "mod",
+                    // v0.7.2新增：位运算符支持
+                    BinaryOperator::BitwiseAnd => "and",
+                    BinaryOperator::BitwiseOr => "or",
+                    BinaryOperator::BitwiseXor => "xor",
+                    BinaryOperator::LeftShift => "shl",
+                    BinaryOperator::RightShift => "shr",
                 };
                 format!("math_{}_{}__{}", op_str, left_key, right_key)
             },
