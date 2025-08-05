@@ -383,6 +383,37 @@ impl<'a> Interpreter<'a> {
     pub fn get_library_namespaces_mut(&mut self) -> &mut HashMap<String, String> {
         &mut self.library_namespaces
     }
+
+    /// v0.7.4新增：执行变量生命周期分析
+    pub fn perform_lifetime_analysis(&mut self) {
+        debug_println("开始执行变量生命周期分析...");
+        let start_time = std::time::Instant::now();
+
+        // 执行生命周期分析
+        let analysis_result = self.lifetime_analyzer.analyze_program(self.program);
+
+        let analysis_time = start_time.elapsed();
+        debug_println(&format!("生命周期分析完成，耗时: {:?}", analysis_time));
+        debug_println(&format!("发现 {} 个安全变量", analysis_result.safe_variables.len()));
+        debug_println(&format!("预估性能提升: {:.2}%", analysis_result.estimated_performance_gain * 100.0));
+
+        // 存储分析结果
+        self.lifetime_analysis_result = Some(analysis_result);
+    }
+
+    /// 检查变量是否可以跳过运行时检查
+    pub fn can_skip_runtime_check(&self, var_name: &str) -> bool {
+        if let Some(result) = &self.lifetime_analysis_result {
+            result.safe_variables.contains(var_name)
+        } else {
+            false
+        }
+    }
+
+    /// 获取生命周期分析结果
+    pub fn get_lifetime_analysis_result(&self) -> Option<&LifetimeAnalysisResult> {
+        self.lifetime_analysis_result.as_ref()
+    }
 }
 
 // Implement all required traits for Interpreter
