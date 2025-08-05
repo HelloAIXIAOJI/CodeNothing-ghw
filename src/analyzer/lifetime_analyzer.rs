@@ -94,8 +94,8 @@ impl VariableLifetimeAnalyzer {
         }
         
         // 分析主程序常量
-        for (const_name, const_value) in &program.constants {
-            self.declare_variable(const_name, None, UsagePattern::SingleAssignment);
+        for (const_name, const_type, _const_expr) in &program.constants {
+            self.declare_variable(const_name, Some(const_type.clone()), UsagePattern::SingleAssignment);
         }
         
         // 生成分析结果
