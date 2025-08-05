@@ -93,7 +93,7 @@ impl<'a> Interpreter<'a> {
             // 尝试编译数学表达式
             match jit.compile_math_expression(expr, key.clone(), true) {
                 Ok(_compiled) => {
-                    println!("✅ 数学表达式JIT编译成功: {}", key);
+                    crate::jit_debug_println!("✅ 数学表达式JIT编译成功: {}", key);
                     // 编译成功，记录在统计中
                     // 注意：这里我们暂时返回None，因为实际执行需要更复杂的实现
                     // 但是编译过程已经被记录在统计中
