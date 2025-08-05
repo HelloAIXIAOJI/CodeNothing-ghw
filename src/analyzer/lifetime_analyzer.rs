@@ -248,12 +248,14 @@ impl VariableLifetimeAnalyzer {
 
     /// 声明变量
     fn declare_variable(&mut self, name: &str, var_type: Option<Type>, usage_pattern: UsagePattern) {
+        let is_safe = self.is_variable_safe(&usage_pattern);
+
         let var_info = VariableInfo {
             name: name.to_string(),
             var_type,
             declared_line: self.current_line,
             last_used_line: self.current_line,
-            is_safe: self.is_variable_safe(&usage_pattern),
+            is_safe,
             usage_pattern,
         };
 
@@ -262,7 +264,7 @@ impl VariableLifetimeAnalyzer {
         }
 
         // 如果变量是安全的，添加到安全变量集合
-        if self.is_variable_safe(&usage_pattern) {
+        if is_safe {
             self.safe_variables.insert(name.to_string());
         }
     }
@@ -301,20 +303,20 @@ impl VariableLifetimeAnalyzer {
         let mut optimization_opportunities = Vec::new();
         let mut total_estimated_gain = 0.0;
 
-        for (var_name, _) in &self.safe_variables {
+        for var_name in &self.safe_variables {
             // 为每个安全变量生成优化机会
             optimization_opportunities.push(OptimizationOpportunity {
                 variable_name: var_name.clone(),
                 optimization_type: OptimizationType::SkipBoundsCheck,
                 estimated_savings: 0.1, // 每次访问节省0.1ms
             });
-            
+
             optimization_opportunities.push(OptimizationOpportunity {
                 variable_name: var_name.clone(),
                 optimization_type: OptimizationType::SkipNullCheck,
                 estimated_savings: 0.05, // 每次访问节省0.05ms
             });
-            
+
             total_estimated_gain += 0.15;
         }
 
