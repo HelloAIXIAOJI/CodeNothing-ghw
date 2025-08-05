@@ -1354,18 +1354,14 @@ impl JitCompiler {
         key: String,
         debug_mode: bool
     ) -> Result<CompiledMathExpression, String> {
-        if debug_mode {
-            println!("🧮 JIT: 尝试编译数学表达式 {}", key);
-        }
+        crate::jit_debug_println!("🧮 JIT: 尝试编译数学表达式 {}", key);
 
         // 识别表达式类型和选择优化策略
         let expr_type = self.identify_math_expression_type(expression);
         let complexity = self.calculate_expression_complexity(expression);
         let optimization = self.select_math_optimization(&expr_type, complexity);
 
-        if debug_mode {
-            println!("🔍 JIT: 表达式类型: {:?}, 优化策略: {:?}", expr_type, optimization);
-        }
+        crate::jit_debug_println!("🔍 JIT: 表达式类型: {:?}, 优化策略: {:?}", expr_type, optimization);
 
         // 根据优化策略选择编译方法
         let compiled_result = match optimization {
@@ -1413,9 +1409,7 @@ impl JitCompiler {
         expr_type: MathExpressionType,
         debug_mode: bool
     ) -> Result<CompiledMathExpression, String> {
-        if debug_mode {
-            println!("🚀 JIT: SIMD编译数学表达式");
-        }
+        crate::jit_debug_println!("🚀 JIT: SIMD编译数学表达式");
 
         // 简化实现：创建占位符编译结果
         let signature = MathExpressionSignature {
@@ -1498,9 +1492,7 @@ impl JitCompiler {
         expr_type: MathExpressionType,
         debug_mode: bool
     ) -> Result<CompiledMathExpression, String> {
-        if debug_mode {
-            println!("🔧 JIT: 标准编译数学表达式");
-        }
+        crate::jit_debug_println!("🔧 JIT: 标准编译数学表达式");
 
         let signature = MathExpressionSignature {
             expression_desc: key.clone(),
