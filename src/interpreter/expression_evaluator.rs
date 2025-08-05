@@ -3754,13 +3754,5 @@ impl<'a> Interpreter<'a> {
         Value::None
     }
 
-    /// 检查变量是否可以跳过运行时检查
-    fn can_skip_runtime_check(&self, var_name: &str) -> bool {
-        // 委托给解释器的生命周期分析结果
-        if let Some(result) = &self.lifetime_analysis_result {
-            result.safe_variables.contains(var_name)
-        } else {
-            false
-        }
-    }
+
 }
