@@ -142,68 +142,69 @@ impl VariableLifetimeAnalyzer {
     /// 分析语句
     fn analyze_statement(&mut self, statement: &Statement) {
         self.current_line += 1;
-        
+
         match statement {
             Statement::VariableDeclaration(name, var_type, init_expr) => {
-                self.declare_variable(name, var_type.clone(), UsagePattern::LocalOnly);
-                if let Some(expr) = init_expr {
-                    self.analyze_expression(expr);
-                }
+                self.declare_variable(name, Some(var_type.clone()), UsagePattern::LocalOnly);
+                self.analyze_expression(init_expr);
             },
-            Statement::Assignment(name, expr) => {
+            Statement::VariableAssignment(name, expr) => {
                 self.use_variable(name);
                 self.analyze_expression(expr);
             },
-            Statement::If(condition, then_block, else_block) => {
+            Statement::IfElse(condition, then_block, else_blocks) => {
                 self.analyze_expression(condition);
-                
+
                 let if_scope = self.create_scope(Some(self.current_scope_id), self.current_line, self.current_line + 100);
                 let old_scope = self.current_scope_id;
                 self.current_scope_id = if_scope;
-                
+
                 for stmt in then_block {
                     self.analyze_statement(stmt);
                 }
-                
-                if let Some(else_stmts) = else_block {
+
+                for (condition_opt, else_stmts) in else_blocks {
+                    if let Some(cond) = condition_opt {
+                        self.analyze_expression(cond);
+                    }
                     for stmt in else_stmts {
                         self.analyze_statement(stmt);
                     }
                 }
-                
+
                 self.current_scope_id = old_scope;
             },
-            Statement::While(condition, body) => {
+            Statement::WhileLoop(condition, body) => {
                 self.analyze_expression(condition);
-                
+
                 let loop_scope = self.create_scope(Some(self.current_scope_id), self.current_line, self.current_line + 100);
                 let old_scope = self.current_scope_id;
                 self.current_scope_id = loop_scope;
-                
+
                 for stmt in body {
                     self.analyze_statement(stmt);
                 }
-                
+
                 self.current_scope_id = old_scope;
             },
-            Statement::For(var_name, start_expr, end_expr, body) => {
+            Statement::ForLoop(var_name, start_expr, end_expr, body) => {
                 self.analyze_expression(start_expr);
                 self.analyze_expression(end_expr);
-                
+
                 let loop_scope = self.create_scope(Some(self.current_scope_id), self.current_line, self.current_line + 100);
                 let old_scope = self.current_scope_id;
                 self.current_scope_id = loop_scope;
-                
+
                 // 循环变量
                 self.declare_variable(var_name, Some(Type::Int), UsagePattern::LoopVariable);
-                
+
                 for stmt in body {
                     self.analyze_statement(stmt);
                 }
-                
+
                 self.current_scope_id = old_scope;
             },
-            Statement::Expression(expr) => {
+            Statement::FunctionCallStatement(expr) => {
                 self.analyze_expression(expr);
             },
             Statement::Return(expr) => {
