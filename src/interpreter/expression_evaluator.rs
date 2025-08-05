@@ -1651,13 +1651,7 @@ impl<'a> Interpreter<'a> {
     
     fn evaluate_expression_with_method_context(&mut self, expr: &Expression, this_obj: &ObjectInstance, method_env: &HashMap<String, Value>) -> Value {
         match expr {
-            Expression::This => {
-                eprintln!("调试: 处理Expression::This, 对象类型: {}", this_obj.class_name);
-                eprintln!("调试: this_obj字段: {:?}", this_obj.fields.keys().collect::<Vec<_>>());
-                let result = Value::Object(this_obj.clone());
-                eprintln!("调试: 返回this对象: {:?}", result);
-                result
-            },
+            Expression::This => Value::Object(this_obj.clone()),
             Expression::FieldAccess(obj_expr, field_name) => {
                 if let Expression::This = **obj_expr {
                     // this.field 访问 - 直接从this_obj获取
@@ -1714,7 +1708,6 @@ impl<'a> Interpreter<'a> {
 
                 // 检查是否是库命名空间函数调用
                 if self.library_namespaces.contains_key(class_name) {
-                    eprintln!("调试: 识别为库命名空间函数调用");
                     // 在方法上下文中计算参数
                     let mut arg_values = Vec::new();
                     for arg_expr in args {
