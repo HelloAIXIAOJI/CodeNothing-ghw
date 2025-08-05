@@ -81,7 +81,7 @@ impl<'a> ExpressionParser for ParserBase<'a> {
                     _ => unreachable!(),
                 };
                 self.consume(); // 消费操作符
-                let right = self.parse_additive_expression()?;
+                let right = self.parse_bitwise_expression()?;
                 left = Expression::CompareOp(Box::new(left), operator, Box::new(right));
             } else {
                 break;
