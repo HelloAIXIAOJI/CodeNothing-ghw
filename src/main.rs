@@ -200,8 +200,8 @@ fn main() {
         println!("示例:");
         println!("  {} hello.cn", args[0]);
         println!("  {} hello.cn --cn-time", args[0]);
-        println!("  {} hello.cn --debug-jit", args[0]);
-        println!("  {} hello.cn --debug-lifetime --cn-time", args[0]);
+        println!("  {} hello.cn --cn-debug-jit", args[0]);
+        println!("  {} hello.cn --cn-debug-lifetime --cn-time", args[0]);
         return;
     }
 
