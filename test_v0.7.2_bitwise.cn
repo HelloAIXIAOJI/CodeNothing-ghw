@@ -1,0 +1,55 @@
+// CodeNothing v0.7.2 位运算符测试
+
+function main() {
+    print("=== CodeNothing v0.7.2 位运算符测试 ===");
+    
+    // 测试1: 基本位运算
+    print("\n=== 测试1: 基本位运算 ===");
+    auto a = 12;  // 1100 (二进制)
+    auto b = 10;  // 1010 (二进制)
+    
+    print("a = " + a + " (1100 二进制)");
+    print("b = " + b + " (1010 二进制)");
+    
+    // 按位与
+    auto and_result = a & b;  // 1000 = 8
+    print("a & b = " + and_result + " (应该是 8)");
+    
+    // 按位或
+    auto or_result = a | b;   // 1110 = 14
+    print("a | b = " + or_result + " (应该是 14)");
+    
+    // 按位异或
+    auto xor_result = a ^ b;  // 0110 = 6
+    print("a ^ b = " + xor_result + " (应该是 6)");
+    
+    // 测试2: 移位运算
+    print("\n=== 测试2: 移位运算 ===");
+    auto x = 5;  // 101 (二进制)
+    print("x = " + x + " (101 二进制)");
+    
+    // 左移
+    auto left_shift = x << 2;  // 10100 = 20
+    print("x << 2 = " + left_shift + " (应该是 20)");
+    
+    // 右移
+    auto right_shift = x >> 1; // 10 = 2
+    print("x >> 1 = " + right_shift + " (应该是 2)");
+    
+    // 测试3: 复杂表达式
+    print("\n=== 测试3: 复杂表达式 ===");
+    auto complex = (a & b) | (x << 1);  // 8 | 10 = 10
+    print("(a & b) | (x << 1) = " + complex + " (应该是 10)");
+    
+    auto complex2 = (a ^ b) & (x >> 1); // 6 & 2 = 2
+    print("(a ^ b) & (x >> 1) = " + complex2 + " (应该是 2)");
+    
+    // 测试4: Auto类型推断与位运算
+    print("\n=== 测试4: Auto类型推断与位运算 ===");
+    auto auto_a = 15;
+    auto auto_b = 7;
+    auto auto_result = auto_a & auto_b;
+    print("auto变量位运算: " + auto_a + " & " + auto_b + " = " + auto_result + " (应该是 7)");
+    
+    print("\n位运算符测试完成！");
+}
