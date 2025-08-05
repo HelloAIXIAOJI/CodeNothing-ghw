@@ -207,6 +207,19 @@ pub enum Visibility {
     Public,
 }
 
+// v0.7.2新增：友元声明支持
+#[derive(Debug, Clone)]
+pub struct FriendDeclaration {
+    pub friend_type: FriendType,
+    pub name: String,
+}
+
+#[derive(Debug, Clone)]
+pub enum FriendType {
+    Class,
+    Function,
+}
+
 #[derive(Debug, Clone)]
 pub struct Field {
     pub name: String,
