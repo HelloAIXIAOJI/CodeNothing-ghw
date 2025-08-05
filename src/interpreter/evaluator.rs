@@ -196,6 +196,65 @@ pub fn perform_binary_operation(left: &Value, op: &BinaryOperator, right: &Value
             Value::String(ptr_str + r)
         },
 
+        // v0.7.2新增：位运算操作符支持
+        // 按位与操作
+        (Value::Int(l), BinaryOperator::BitwiseAnd, Value::Int(r)) => Value::Int(l & r),
+        (Value::Long(l), BinaryOperator::BitwiseAnd, Value::Long(r)) => Value::Long(l & r),
+        (Value::Int(l), BinaryOperator::BitwiseAnd, Value::Long(r)) => Value::Long((*l as i64) & r),
+        (Value::Long(l), BinaryOperator::BitwiseAnd, Value::Int(r)) => Value::Long(l & (*r as i64)),
+
+        // 按位或操作
+        (Value::Int(l), BinaryOperator::BitwiseOr, Value::Int(r)) => Value::Int(l | r),
+        (Value::Long(l), BinaryOperator::BitwiseOr, Value::Long(r)) => Value::Long(l | r),
+        (Value::Int(l), BinaryOperator::BitwiseOr, Value::Long(r)) => Value::Long((*l as i64) | r),
+        (Value::Long(l), BinaryOperator::BitwiseOr, Value::Int(r)) => Value::Long(l | (*r as i64)),
+
+        // 按位异或操作
+        (Value::Int(l), BinaryOperator::BitwiseXor, Value::Int(r)) => Value::Int(l ^ r),
+        (Value::Long(l), BinaryOperator::BitwiseXor, Value::Long(r)) => Value::Long(l ^ r),
+        (Value::Int(l), BinaryOperator::BitwiseXor, Value::Long(r)) => Value::Long((*l as i64) ^ r),
+        (Value::Long(l), BinaryOperator::BitwiseXor, Value::Int(r)) => Value::Long(l ^ (*r as i64)),
+
+        // 左移操作
+        (Value::Int(l), BinaryOperator::LeftShift, Value::Int(r)) => {
+            if *r < 0 || *r >= 32 {
+                panic!("移位操作数超出范围: {}", r);
+            }
+            Value::Int(l << r)
+        },
+        (Value::Long(l), BinaryOperator::LeftShift, Value::Int(r)) => {
+            if *r < 0 || *r >= 64 {
+                panic!("移位操作数超出范围: {}", r);
+            }
+            Value::Long(l << r)
+        },
+        (Value::Int(l), BinaryOperator::LeftShift, Value::Long(r)) => {
+            if *r < 0 || *r >= 32 {
+                panic!("移位操作数超出范围: {}", r);
+            }
+            Value::Int(l << r)
+        },
+
+        // 右移操作
+        (Value::Int(l), BinaryOperator::RightShift, Value::Int(r)) => {
+            if *r < 0 || *r >= 32 {
+                panic!("移位操作数超出范围: {}", r);
+            }
+            Value::Int(l >> r)
+        },
+        (Value::Long(l), BinaryOperator::RightShift, Value::Int(r)) => {
+            if *r < 0 || *r >= 64 {
+                panic!("移位操作数超出范围: {}", r);
+            }
+            Value::Long(l >> r)
+        },
+        (Value::Int(l), BinaryOperator::RightShift, Value::Long(r)) => {
+            if *r < 0 || *r >= 32 {
+                panic!("移位操作数超出范围: {}", r);
+            }
+            Value::Int(l >> r)
+        },
+
         // 不支持的操作
         _ => panic!("不支持的二元操作: {:?} {:?} {:?}", left, op, right),
     }
