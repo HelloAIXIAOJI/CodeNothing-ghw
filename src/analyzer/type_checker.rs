@@ -598,24 +598,44 @@ impl TypeChecker {
         match op {
             BinaryOperator::Add | BinaryOperator::Subtract | BinaryOperator::Multiply | BinaryOperator::Divide => {
                 // 算术操作
-                if self.types_compatible(left_type, right_type) {
-                    match (left_type, right_type) {
-                        (Type::Int, Type::Int) => Type::Int,
-                        (Type::Float, _) | (_, Type::Float) => Type::Float,
-                        (Type::Long, _) | (_, Type::Long) => Type::Long,
-                        (Type::String, Type::String) if matches!(op, BinaryOperator::Add) => Type::String,
-                        _ => {
+                match (left_type, right_type) {
+                    // Auto类型推断：如果任一操作数是Auto，则根据另一个操作数推断结果类型
+                    (Type::Auto, Type::Auto) => {
+                        // 两个都是Auto，默认推断为Int类型（最常见的算术类型）
+                        Type::Int
+                    },
+                    (Type::Auto, other) | (other, Type::Auto) => {
+                        // 一个是Auto，使用另一个的类型
+                        match other {
+                            Type::Int | Type::Float | Type::Long => other.clone(),
+                            Type::String if matches!(op, BinaryOperator::Add) => Type::String,
+                            _ => {
+                                // 对于不支持算术操作的类型，默认为Int
+                                Type::Int
+                            }
+                        }
+                    },
+                    // 具体类型的算术操作
+                    (Type::Int, Type::Int) => Type::Int,
+                    (Type::Float, _) | (_, Type::Float) => Type::Float,
+                    (Type::Long, _) | (_, Type::Long) => Type::Long,
+                    (Type::String, Type::String) if matches!(op, BinaryOperator::Add) => Type::String,
+                    // 类型兼容性检查
+                    _ => {
+                        if self.types_compatible(left_type, right_type) {
+                            // 兼容类型，选择更通用的类型
+                            match (left_type, right_type) {
+                                (Type::Int, Type::Float) | (Type::Float, Type::Int) => Type::Float,
+                                (Type::Int, Type::Long) | (Type::Long, Type::Int) => Type::Long,
+                                _ => left_type.clone()
+                            }
+                        } else {
                             self.errors.push(TypeCheckError::new(
                                 format!("不支持的算术操作: {:?} {:?} {:?}", left_type, op, right_type)
                             ));
                             Type::Auto
                         }
                     }
-                } else {
-                    self.errors.push(TypeCheckError::new(
-                        format!("算术操作的类型不兼容: {:?} 和 {:?}", left_type, right_type)
-                    ));
-                    Type::Auto
                 }
             },
             BinaryOperator::Modulo => {
