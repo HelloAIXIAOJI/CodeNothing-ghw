@@ -1746,7 +1746,6 @@ impl<'a> Interpreter<'a> {
                 // 在方法上下文中处理MethodCall
 
                 if let Expression::This = **obj_expr {
-                    eprintln!("调试: 处理this.{}方法调用", method_name);
                     // this.method() 调用 - 在方法上下文中计算参数
                     let mut arg_values = Vec::new();
                     for arg_expr in args {
@@ -1832,14 +1831,9 @@ impl<'a> Interpreter<'a> {
                 // 在方法上下文中处理FieldAccess
 
                 if let Expression::This = **obj_expr {
-                    eprintln!("调试: 访问this.{}, 对象类型: {}", field_name, this_obj.class_name);
-                    eprintln!("调试: 对象字段: {:?}", this_obj.fields.keys().collect::<Vec<_>>());
-
                     if let Some(value) = this_obj.fields.get(field_name) {
-                        eprintln!("调试: 找到字段 '{}', 值: {:?}", field_name, value);
                         return value.clone();
                     } else {
-                        eprintln!("调试: 字段 '{}' 不存在", field_name);
                         return Value::None;
                     }
                 } else {
