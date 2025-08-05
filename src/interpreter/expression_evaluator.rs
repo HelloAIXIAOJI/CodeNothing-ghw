@@ -1315,9 +1315,7 @@ impl<'a> Interpreter<'a> {
     }
     
     fn access_field(&mut self, obj_expr: &Expression, field_name: &str) -> Value {
-        eprintln!("调试: access_field - 访问字段 '{}', 对象表达式: {:?}", field_name, obj_expr);
         let obj_value = self.evaluate_expression(obj_expr);
-        eprintln!("调试: access_field - 对象值: {:?}", obj_value);
 
         match obj_value {
             Value::Object(obj) => {
