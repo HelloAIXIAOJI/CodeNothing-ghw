@@ -2201,6 +2201,12 @@ impl JitCompiler {
                     BinaryOperator::Multiply => Ok(builder.ins().imul(left_val, right_val)),
                     BinaryOperator::Divide => Ok(builder.ins().sdiv(left_val, right_val)),
                     BinaryOperator::Modulo => Ok(builder.ins().srem(left_val, right_val)),
+                    // v0.7.2新增：位运算符JIT支持
+                    BinaryOperator::BitwiseAnd => Ok(builder.ins().band(left_val, right_val)),
+                    BinaryOperator::BitwiseOr => Ok(builder.ins().bor(left_val, right_val)),
+                    BinaryOperator::BitwiseXor => Ok(builder.ins().bxor(left_val, right_val)),
+                    BinaryOperator::LeftShift => Ok(builder.ins().ishl(left_val, right_val)),
+                    BinaryOperator::RightShift => Ok(builder.ins().sshr(left_val, right_val)),
                 }
             },
             Expression::PreIncrement(name) | Expression::PostIncrement(name) => {
