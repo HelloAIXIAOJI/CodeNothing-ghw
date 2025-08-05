@@ -1,6 +1,6 @@
 // CodeNothing v0.7.2 位运算符测试
 
-function main() {
+fn main(): void {
     print("=== CodeNothing v0.7.2 位运算符测试 ===");
     
     // 测试1: 基本位运算
