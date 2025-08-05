@@ -677,6 +677,10 @@ impl JitCompiler {
                     BinaryOperator::Add | BinaryOperator::Subtract |
                     BinaryOperator::Multiply | BinaryOperator::Divide |
                     BinaryOperator::Modulo => MathExpressionType::BasicArithmetic,
+                    // v0.7.2新增：位运算表达式类型
+                    BinaryOperator::BitwiseAnd | BinaryOperator::BitwiseOr |
+                    BinaryOperator::BitwiseXor | BinaryOperator::LeftShift |
+                    BinaryOperator::RightShift => MathExpressionType::BasicArithmetic,
                 }
             },
             Expression::FunctionCall(name, _) => {
