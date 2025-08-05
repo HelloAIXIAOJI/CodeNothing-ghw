@@ -83,26 +83,26 @@ impl VariableLifetimeAnalyzer {
 
     /// 分析整个程序的变量生命周期
     pub fn analyze_program(&mut self, program: &Program) -> LifetimeAnalysisResult {
-        println!("开始变量生命周期分析...");
-        
+        crate::lifetime_debug_println!("开始变量生命周期分析...");
+
         // 创建全局作用域
         self.create_scope(None, 0, usize::MAX);
-        
+
         // 分析所有函数
         for function in &program.functions {
             self.analyze_function(function);
         }
-        
+
         // 分析主程序常量
         for (const_name, const_type, _const_expr) in &program.constants {
             self.declare_variable(const_name, Some(const_type.clone()), UsagePattern::SingleAssignment);
         }
-        
+
         // 生成分析结果
         let result = self.generate_analysis_result();
         self.analysis_result = Some(result.clone());
-        
-        println!("生命周期分析完成，发现 {} 个安全变量", self.safe_variables.len());
+
+        crate::lifetime_debug_println!("生命周期分析完成，发现 {} 个安全变量", self.safe_variables.len());
         result
     }
 
