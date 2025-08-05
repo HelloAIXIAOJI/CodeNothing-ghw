@@ -90,7 +90,52 @@ impl<'a> ExpressionParser for ParserBase<'a> {
         
         Ok(left)
     }
-    
+
+    // v0.7.2新增：位运算表达式解析
+    fn parse_bitwise_expression(&mut self) -> Result<Expression, String> {
+        let mut left = self.parse_shift_expression()?;
+
+        while let Some(op) = self.peek() {
+            if op == "&" || op == "|" || op == "^" {
+                let operator = match op.as_str() {
+                    "&" => BinaryOperator::BitwiseAnd,
+                    "|" => BinaryOperator::BitwiseOr,
+                    "^" => BinaryOperator::BitwiseXor,
+                    _ => unreachable!(),
+                };
+                self.consume(); // 消费操作符
+                let right = self.parse_shift_expression()?;
+                left = Expression::BinaryOp(Box::new(left), operator, Box::new(right));
+            } else {
+                break;
+            }
+        }
+
+        Ok(left)
+    }
+
+    // v0.7.2新增：移位表达式解析
+    fn parse_shift_expression(&mut self) -> Result<Expression, String> {
+        let mut left = self.parse_additive_expression()?;
+
+        while let Some(op) = self.peek() {
+            if op == "<<" || op == ">>" {
+                let operator = match op.as_str() {
+                    "<<" => BinaryOperator::LeftShift,
+                    ">>" => BinaryOperator::RightShift,
+                    _ => unreachable!(),
+                };
+                self.consume(); // 消费操作符
+                let right = self.parse_additive_expression()?;
+                left = Expression::BinaryOp(Box::new(left), operator, Box::new(right));
+            } else {
+                break;
+            }
+        }
+
+        Ok(left)
+    }
+
     fn parse_additive_expression(&mut self) -> Result<Expression, String> {
         let mut left = self.parse_multiplicative_expression()?;
         
