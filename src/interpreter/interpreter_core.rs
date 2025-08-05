@@ -35,7 +35,10 @@ pub fn debug_println(msg: &str) {
 pub fn interpret(program: &Program) -> Value {
     // 创建解释器
     let mut interpreter = Interpreter::new(program);
-    
+
+    // v0.7.4新增：执行变量生命周期分析
+    interpreter.perform_lifetime_analysis();
+
     // 处理顶层的命名空间导入
     for (ns_type, path) in &program.imported_namespaces {
         match ns_type {
