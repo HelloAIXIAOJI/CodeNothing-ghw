@@ -9,6 +9,7 @@ mod ast;
 mod parser;
 mod interpreter;
 mod analyzer;
+mod debug_config;
 use interpreter::jit;
 
 use ast::Program;
@@ -178,11 +179,11 @@ fn format_execution_time(duration_ms: f64) -> String {
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
-    
+
     if args.len() < 2 {
         println!("用法: {} <文件路径> [选项]", args[0]);
         println!("");
-        println!("选项:");
+        println!("传统选项:");
         println!("  --cn-parser     显示详细的解析信息");
         println!("  --cn-lexer      显示词法分析信息");
         println!("  --cn-debug      启用调试模式");
@@ -193,12 +194,19 @@ fn main() {
         println!("  --cn-time       显示程序执行时间");
         println!("  --cn-rwlock     🚀 v0.6.2 显示读写锁性能统计");
         println!("");
+        println!("🆕 v0.7.4 细粒度调试选项:");
+        debug_config::print_debug_help();
+        println!("");
         println!("示例:");
         println!("  {} hello.cn", args[0]);
         println!("  {} hello.cn --cn-time", args[0]);
-        println!("  {} hello.cn --cn-return --cn-time", args[0]);
+        println!("  {} hello.cn --debug-jit", args[0]);
+        println!("  {} hello.cn --debug-lifetime --cn-time", args[0]);
         return;
     }
+
+    // v0.7.4新增：初始化调试配置
+    debug_config::init_debug_config(&args);
 
     let file_path = &args[1];
     let debug_parser = args.iter().any(|arg| arg == "--cn-parser");
