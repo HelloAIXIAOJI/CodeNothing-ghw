@@ -104,12 +104,12 @@ fn test_complex_expression_optimization(): void {
 // 测试跨作用域变量（应该不被优化）
 fn test_cross_scope_variables(): void {
     std::println("=== 测试5: 跨作用域变量（不优化） ===");
-    
+
     outer_var : int = 100;
-    
+
     if (outer_var > 50) {
         // 在内部作用域中访问外部变量
         inner_result : int = outer_var * 2;
-        std::println("跨作用域访问结果: " + inner_result);
+        std::println("跨作用域访问结果: " + std::to_string(inner_result));
     };
 };
