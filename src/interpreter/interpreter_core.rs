@@ -136,6 +136,10 @@ pub struct Interpreter<'a> {
     pub static_members: HashMap<String, crate::interpreter::value::StaticMembers>,
     // 变量类型存储，键是变量名，值是声明的类型
     pub variable_types: HashMap<String, Type>,
+    // v0.7.4新增：变量生命周期分析器
+    pub lifetime_analyzer: VariableLifetimeAnalyzer,
+    // 生命周期分析结果
+    pub lifetime_analysis_result: Option<LifetimeAnalysisResult>,
     // 变量查找缓存：存储最近访问的变量位置
     pub variable_cache: HashMap<String, VariableLocation>,
 }
