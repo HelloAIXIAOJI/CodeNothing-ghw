@@ -1809,6 +1809,12 @@ impl JitCompiler {
                             crate::ast::BinaryOperator::Multiply => builder.ins().imul(current_val, expr_val),
                             crate::ast::BinaryOperator::Divide => builder.ins().sdiv(current_val, expr_val),
                             crate::ast::BinaryOperator::Modulo => builder.ins().srem(current_val, expr_val),
+                            // v0.7.2新增：位运算符JIT支持
+                            crate::ast::BinaryOperator::BitwiseAnd => builder.ins().band(current_val, expr_val),
+                            crate::ast::BinaryOperator::BitwiseOr => builder.ins().bor(current_val, expr_val),
+                            crate::ast::BinaryOperator::BitwiseXor => builder.ins().bxor(current_val, expr_val),
+                            crate::ast::BinaryOperator::LeftShift => builder.ins().ishl(current_val, expr_val),
+                            crate::ast::BinaryOperator::RightShift => builder.ins().sshr(current_val, expr_val),
                         };
                         current_vars[var_index] = new_val;
                     }
