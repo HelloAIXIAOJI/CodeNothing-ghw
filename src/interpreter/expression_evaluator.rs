@@ -359,6 +359,18 @@ impl<'a> ExpressionEvaluator for Interpreter<'a> {
                         if *r == 0 { panic!("除以零错误"); }
                         Value::Int(l % r)
                     },
+                    // v0.7.2新增：内联位运算优化
+                    (Value::Int(l), BinaryOperator::BitwiseAnd, Value::Int(r)) => Value::Int(l & r),
+                    (Value::Int(l), BinaryOperator::BitwiseOr, Value::Int(r)) => Value::Int(l | r),
+                    (Value::Int(l), BinaryOperator::BitwiseXor, Value::Int(r)) => Value::Int(l ^ r),
+                    (Value::Int(l), BinaryOperator::LeftShift, Value::Int(r)) => {
+                        if *r < 0 || *r >= 32 { panic!("移位操作数超出范围: {}", r); }
+                        Value::Int(l << r)
+                    },
+                    (Value::Int(l), BinaryOperator::RightShift, Value::Int(r)) => {
+                        if *r < 0 || *r >= 32 { panic!("移位操作数超出范围: {}", r); }
+                        Value::Int(l >> r)
+                    },
                     // 对于复杂运算，回退到原有实现
                     _ => self.perform_binary_operation(&left_val, op, &right_val)
                 }
