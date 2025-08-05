@@ -606,6 +606,7 @@ impl<'a> StatementParser for ParserBase<'a> {
             "string" => Ok(Type::String),
             "long" => Ok(Type::Long),
             "void" => Ok(Type::Void),
+            "Auto" => Ok(Type::Auto), // 添加Auto类型支持
             "Exception" => Ok(Type::Exception),
             "array" => {
                 // 解析数组元素类型
