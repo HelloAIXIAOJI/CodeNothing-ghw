@@ -1436,8 +1436,73 @@ impl<'a> Interpreter<'a> {
                             },
                         }
                     },
+                    crate::ast::BinaryOperator::Multiply => {
+                        match (&left_val, &right_val) {
+                            (Value::Int(i1), Value::Int(i2)) => Value::Int(i1 * i2),
+                            (Value::Float(f1), Value::Float(f2)) => Value::Float(f1 * f2),
+                            (Value::Int(i), Value::Float(f)) => Value::Float(*i as f64 * f),
+                            (Value::Float(f), Value::Int(i)) => Value::Float(f * *i as f64),
+                            _ => {
+                                eprintln!("不支持的乘法操作: {:?} Multiply {:?}", left_val, right_val);
+                                Value::None
+                            },
+                        }
+                    },
+                    crate::ast::BinaryOperator::Subtract => {
+                        match (&left_val, &right_val) {
+                            (Value::Int(i1), Value::Int(i2)) => Value::Int(i1 - i2),
+                            (Value::Float(f1), Value::Float(f2)) => Value::Float(f1 - f2),
+                            (Value::Int(i), Value::Float(f)) => Value::Float(*i as f64 - f),
+                            (Value::Float(f), Value::Int(i)) => Value::Float(f - *i as f64),
+                            _ => {
+                                eprintln!("不支持的减法操作: {:?} Subtract {:?}", left_val, right_val);
+                                Value::None
+                            },
+                        }
+                    },
+                    crate::ast::BinaryOperator::Divide => {
+                        match (&left_val, &right_val) {
+                            (Value::Int(i1), Value::Int(i2)) => {
+                                if *i2 == 0 {
+                                    eprintln!("错误: 除零");
+                                    Value::None
+                                } else {
+                                    Value::Int(i1 / i2)
+                                }
+                            },
+                            (Value::Float(f1), Value::Float(f2)) => {
+                                if *f2 == 0.0 {
+                                    eprintln!("错误: 除零");
+                                    Value::None
+                                } else {
+                                    Value::Float(f1 / f2)
+                                }
+                            },
+                            (Value::Int(i), Value::Float(f)) => {
+                                if *f == 0.0 {
+                                    eprintln!("错误: 除零");
+                                    Value::None
+                                } else {
+                                    Value::Float(*i as f64 / f)
+                                }
+                            },
+                            (Value::Float(f), Value::Int(i)) => {
+                                if *i == 0 {
+                                    eprintln!("错误: 除零");
+                                    Value::None
+                                } else {
+                                    Value::Float(f / *i as f64)
+                                }
+                            },
+                            _ => {
+                                eprintln!("不支持的除法操作: {:?} Divide {:?}", left_val, right_val);
+                                Value::None
+                            },
+                        }
+                    },
                     _ => {
                         // 其他操作暂时返回None
+                        eprintln!("构造函数上下文中不支持的二元操作: {:?}", op);
                         Value::None
                     }
                 }
