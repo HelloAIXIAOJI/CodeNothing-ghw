@@ -1650,7 +1650,6 @@ impl<'a> Interpreter<'a> {
     }
     
     fn evaluate_expression_with_method_context(&mut self, expr: &Expression, this_obj: &ObjectInstance, method_env: &HashMap<String, Value>) -> Value {
-        eprintln!("调试: 在方法上下文中评估表达式: {:?}", expr);
         match expr {
             Expression::This => {
                 eprintln!("调试: 处理Expression::This, 对象类型: {}", this_obj.class_name);
@@ -1712,7 +1711,6 @@ impl<'a> Interpreter<'a> {
             },
             Expression::StaticMethodCall(class_name, method_name, args) => {
                 // 在方法上下文中处理StaticMethodCall
-                eprintln!("调试: 在方法上下文中处理StaticMethodCall: {}::{}", class_name, method_name);
 
                 // 检查是否是库命名空间函数调用
                 if self.library_namespaces.contains_key(class_name) {
@@ -1753,7 +1751,6 @@ impl<'a> Interpreter<'a> {
             },
             Expression::MethodCall(obj_expr, method_name, args) => {
                 // 在方法上下文中处理MethodCall
-                eprintln!("调试: 在方法上下文中处理MethodCall: {}", method_name);
 
                 if let Expression::This = **obj_expr {
                     eprintln!("调试: 处理this.{}方法调用", method_name);
