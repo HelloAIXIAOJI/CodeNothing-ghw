@@ -41,11 +41,15 @@ impl<'a> Interpreter<'a> {
     fn should_try_math_jit_optimization(&self, expr: &Expression) -> bool {
         match expr {
             Expression::BinaryOp(_, op, _) => {
-                // 只对数学运算符进行JIT优化
+                // v0.7.2更新：包含位运算符的JIT优化
                 matches!(op,
                     BinaryOperator::Add | BinaryOperator::Subtract |
                     BinaryOperator::Multiply | BinaryOperator::Divide |
-                    BinaryOperator::Modulo
+                    BinaryOperator::Modulo |
+                    // 新增位运算符
+                    BinaryOperator::BitwiseAnd | BinaryOperator::BitwiseOr |
+                    BinaryOperator::BitwiseXor | BinaryOperator::LeftShift |
+                    BinaryOperator::RightShift
                 )
             },
             _ => false
