@@ -2144,6 +2144,12 @@ impl JitCompiler {
                     crate::ast::BinaryOperator::Multiply => Ok(builder.ins().imul(left_val, right_val)),
                     crate::ast::BinaryOperator::Divide => Ok(builder.ins().sdiv(left_val, right_val)),
                     crate::ast::BinaryOperator::Modulo => Ok(builder.ins().srem(left_val, right_val)),
+                    // v0.7.2新增：位运算符JIT支持
+                    crate::ast::BinaryOperator::BitwiseAnd => Ok(builder.ins().band(left_val, right_val)),
+                    crate::ast::BinaryOperator::BitwiseOr => Ok(builder.ins().bor(left_val, right_val)),
+                    crate::ast::BinaryOperator::BitwiseXor => Ok(builder.ins().bxor(left_val, right_val)),
+                    crate::ast::BinaryOperator::LeftShift => Ok(builder.ins().ishl(left_val, right_val)),
+                    crate::ast::BinaryOperator::RightShift => Ok(builder.ins().sshr(left_val, right_val)),
                 }
             },
             Expression::CompareOp(left, op, right) => {
