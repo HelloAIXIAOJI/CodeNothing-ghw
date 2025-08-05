@@ -1662,17 +1662,9 @@ impl<'a> Interpreter<'a> {
             Expression::FieldAccess(obj_expr, field_name) => {
                 if let Expression::This = **obj_expr {
                     // this.field 访问 - 直接从this_obj获取
-                    eprintln!("调试: 访问this.{}, 对象类型: {}", field_name, this_obj.class_name);
-                    eprintln!("调试: 对象字段: {:?}", this_obj.fields.keys().collect::<Vec<_>>());
                     match this_obj.fields.get(field_name) {
-                        Some(value) => {
-                            eprintln!("调试: 找到字段 '{}', 值: {:?}", field_name, value);
-                            value.clone()
-                        },
-                        None => {
-                            eprintln!("错误: 对象 '{}' 没有字段 '{}'", this_obj.class_name, field_name);
-                            Value::None
-                        }
+                        Some(value) => value.clone(),
+                        None => Value::None
                     }
                 } else {
                     // 递归处理其他字段访问
@@ -1681,16 +1673,10 @@ impl<'a> Interpreter<'a> {
                         Value::Object(obj) => {
                             match obj.fields.get(field_name) {
                                 Some(value) => value.clone(),
-                                None => {
-                                    eprintln!("错误: 对象 '{}' 没有字段 '{}'", obj.class_name, field_name);
-                                    Value::None
-                                }
+                                None => Value::None
                             }
                         },
-                        _ => {
-                            eprintln!("错误: 尝试访问非对象的字段");
-                            Value::None
-                        }
+                        _ => Value::None
                     }
                 }
             },
