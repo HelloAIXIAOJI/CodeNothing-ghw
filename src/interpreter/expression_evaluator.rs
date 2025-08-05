@@ -309,6 +309,12 @@ impl<'a> ExpressionEvaluator for Interpreter<'a> {
                 self.handle_namespaced_function_call(path, args)
             },
             Expression::Variable(name) => {
+                // v0.7.4新增：生命周期优化的变量访问
+                if self.can_skip_runtime_check(name) {
+                    // 对于安全变量，跳过边界检查，直接访问
+                    return self.get_variable_optimized(name);
+                }
+
                 // 先检查常量
                 if let Some(value) = self.constants.get(name) {
                     return value.clone();
