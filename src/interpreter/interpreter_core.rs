@@ -389,16 +389,16 @@ impl<'a> Interpreter<'a> {
 
     /// v0.7.4新增：执行变量生命周期分析
     pub fn perform_lifetime_analysis(&mut self) {
-        debug_println("开始执行变量生命周期分析...");
+        crate::lifetime_debug_println!("开始执行变量生命周期分析...");
         let start_time = std::time::Instant::now();
 
         // 执行生命周期分析
         let analysis_result = self.lifetime_analyzer.analyze_program(self.program);
 
         let analysis_time = start_time.elapsed();
-        debug_println(&format!("生命周期分析完成，耗时: {:?}", analysis_time));
-        debug_println(&format!("发现 {} 个安全变量", analysis_result.safe_variables.len()));
-        debug_println(&format!("预估性能提升: {:.2}%", analysis_result.estimated_performance_gain * 100.0));
+        crate::lifetime_debug_println!("生命周期分析完成，耗时: {:?}", analysis_time);
+        crate::lifetime_debug_println!("发现 {} 个安全变量", analysis_result.safe_variables.len());
+        crate::lifetime_debug_println!("预估性能提升: {:.2}%", analysis_result.estimated_performance_gain * 100.0);
 
         // 存储分析结果
         self.lifetime_analysis_result = Some(analysis_result);
