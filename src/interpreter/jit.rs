@@ -3293,7 +3293,7 @@ impl LoopComplexityAnalyzer {
         match stmt {
             Statement::VariableDeclaration(_, _, _) => 0.5,
             Statement::VariableAssignment(_, expr) => 0.3 + self.analyze_expression_complexity(expr),
-            Statement::If(condition, then_block, else_blocks) => {
+            Statement::IfElse(condition, then_block, else_blocks) => {
                 let mut score = 1.0 + self.analyze_expression_complexity(condition);
                 for stmt in then_block {
                     score += self.analyze_statement_complexity(stmt) * 0.8;
@@ -3329,7 +3329,7 @@ impl LoopComplexityAnalyzer {
             Expression::IntLiteral(_) | Expression::FloatLiteral(_) | Expression::BoolLiteral(_) => 0.1,
             Expression::StringLiteral(_) => 0.2,
             Expression::Variable(_) => 0.1,
-            Expression::BinaryOperation(_, left, right) => {
+            Expression::BinaryOp(left, _, right) => {
                 0.5 + self.analyze_expression_complexity(left) + self.analyze_expression_complexity(right)
             },
             Expression::FunctionCall(_, args) => {
