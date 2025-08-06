@@ -693,7 +693,7 @@ impl JitCompiler {
 
         // 基于循环体分析选择策略
         if self.has_loop_invariants(loop_body) {
-            strategies.push(LoopOptimizationStrategy::LoopInvariantCodeMotion);
+            strategies.push(LoopOptimizationStrategy::LoopInvariantHoisting);
         }
 
         if self.has_strength_reduction_opportunities(loop_body) {
