@@ -357,6 +357,12 @@ pub fn handle_while_loop(interpreter: &mut Interpreter, condition: Expression, l
         // 记录循环执行统计
         jit_compiler.record_and_analyze_loop(&loop_key, 1, iteration_start.elapsed(), &loop_body);
 
+        // 🔄 v0.7.7: 循环优化策略分析
+        let optimization_strategies = jit_compiler.analyze_and_optimize_loop(&loop_body);
+        if !optimization_strategies.is_empty() {
+            crate::jit_debug_println!("🔧 JIT: While循环优化策略: {:?}", optimization_strategies);
+        }
+
         // 检查是否应该JIT编译（使用增强的热点分析）
         if jit_compiler.should_jit_compile_loop_enhanced(&loop_key) {
             // 尝试JIT编译循环
