@@ -685,9 +685,9 @@ impl JitCompiler {
                 strategies.push(LoopOptimizationStrategy::Vectorization { width: 4 });
             }
 
-            // 内存密集型循环 - 考虑预取
+            // 内存密集型循环 - 考虑循环分布
             if stats.memory_usage_pattern.is_memory_intensive {
-                strategies.push(LoopOptimizationStrategy::MemoryPrefetching);
+                strategies.push(LoopOptimizationStrategy::LoopDistribution);
             }
         }
 
