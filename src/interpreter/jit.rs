@@ -3325,6 +3325,184 @@ impl LoopComplexityAnalyzer {
     }
 }
 
+/// 🔄 v0.7.7: JIT编译阈值配置
+#[derive(Debug, Clone)]
+pub struct LoopJitThresholds {
+    /// 基础执行次数阈值
+    pub base_execution_threshold: usize,
+    /// 复杂度调整因子
+    pub complexity_factor: f32,
+    /// 迭代次数调整因子
+    pub iteration_factor: f32,
+    /// 内存密集型调整因子
+    pub memory_intensive_factor: f32,
+}
+
+impl Default for LoopJitThresholds {
+    fn default() -> Self {
+        LoopJitThresholds {
+            base_execution_threshold: 50,  // 基础阈值降低，更积极地JIT编译
+            complexity_factor: 0.8,        // 复杂度越高，阈值越低
+            iteration_factor: 0.9,         // 迭代次数越多，阈值越低
+            memory_intensive_factor: 1.2,  // 内存密集型循环阈值稍高
+        }
+    }
+}
+
+/// 🔄 v0.7.7: 增强的循环热点分析器
+#[derive(Debug)]
+pub struct LoopHotspotAnalyzer {
+    /// 循环执行统计
+    execution_stats: HashMap<String, LoopExecutionStats>,
+    /// 循环复杂度分析器
+    complexity_analyzer: LoopComplexityAnalyzer,
+    /// JIT编译阈值配置
+    jit_thresholds: LoopJitThresholds,
+    /// 性能监控开始时间
+    monitoring_start_time: Instant,
+}
+
+impl LoopHotspotAnalyzer {
+    pub fn new() -> Self {
+        LoopHotspotAnalyzer {
+            execution_stats: HashMap::new(),
+            complexity_analyzer: LoopComplexityAnalyzer::new(),
+            jit_thresholds: LoopJitThresholds::default(),
+            monitoring_start_time: Instant::now(),
+        }
+    }
+
+    /// 记录循环执行
+    pub fn record_loop_execution(&mut self, loop_key: &str, iterations: usize, execution_time: Duration, loop_body: &[Statement]) {
+        let stats = self.execution_stats.entry(loop_key.to_string()).or_insert_with(LoopExecutionStats::new);
+
+        // 更新执行统计
+        stats.update_execution(iterations, execution_time);
+
+        // 分析复杂度（如果还没有分析过）
+        if stats.complexity_score == 0.0 {
+            stats.complexity_score = self.complexity_analyzer.analyze_loop_complexity(loop_key, loop_body);
+        }
+
+        crate::jit_debug_println!("🔄 JIT: 记录循环执行 {} - 迭代: {}, 时间: {:?}, 复杂度: {:.2}",
+                                 loop_key, iterations, execution_time, stats.complexity_score);
+    }
+
+    /// 检查是否应该JIT编译循环
+    pub fn should_jit_compile_loop(&self, loop_key: &str) -> bool {
+        if let Some(stats) = self.execution_stats.get(loop_key) {
+            let dynamic_threshold = self.calculate_dynamic_threshold(stats);
+            let priority = stats.calculate_jit_priority();
+
+            crate::jit_debug_println!("🎯 JIT: 循环 {} 优先级: {:.2}, 动态阈值: {:.2}",
+                                     loop_key, priority, dynamic_threshold);
+
+            stats.execution_count >= dynamic_threshold
+        } else {
+            false
+        }
+    }
+
+    /// 计算动态JIT编译阈值
+    fn calculate_dynamic_threshold(&self, stats: &LoopExecutionStats) -> usize {
+        let mut threshold = self.jit_thresholds.base_execution_threshold as f32;
+
+        // 基于复杂度调整
+        if stats.complexity_score > 5.0 {
+            threshold *= self.jit_thresholds.complexity_factor;
+        }
+
+        // 基于迭代次数调整
+        if stats.average_iterations_per_execution > 100.0 {
+            threshold *= self.jit_thresholds.iteration_factor;
+        }
+
+        // 基于内存使用模式调整
+        if stats.memory_usage_pattern.is_memory_intensive {
+            threshold *= self.jit_thresholds.memory_intensive_factor;
+        }
+
+        threshold.max(10.0) as usize // 最小阈值为10
+    }
+
+    /// 获取循环执行统计
+    pub fn get_loop_stats(&self, loop_key: &str) -> Option<&LoopExecutionStats> {
+        self.execution_stats.get(loop_key)
+    }
+
+    /// 获取所有热点循环
+    pub fn get_hotspot_loops(&self) -> Vec<(String, f32)> {
+        let mut hotspots: Vec<(String, f32)> = self.execution_stats
+            .iter()
+            .map(|(key, stats)| (key.clone(), stats.calculate_jit_priority()))
+            .collect();
+
+        hotspots.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+        hotspots
+    }
+
+    /// 获取分析器统计信息
+    pub fn get_analyzer_stats(&self) -> LoopHotspotAnalyzerStats {
+        let total_loops = self.execution_stats.len();
+        let total_executions: usize = self.execution_stats.values().map(|s| s.execution_count).sum();
+        let total_iterations: usize = self.execution_stats.values().map(|s| s.total_iterations).sum();
+
+        let hotspot_count = self.execution_stats.values()
+            .filter(|stats| self.should_jit_compile_loop(&format!("loop_{:p}", stats as *const _)))
+            .count();
+
+        LoopHotspotAnalyzerStats {
+            total_loops_monitored: total_loops,
+            total_loop_executions: total_executions,
+            total_loop_iterations: total_iterations,
+            hotspot_loops_count: hotspot_count,
+            average_complexity: if total_loops > 0 {
+                self.execution_stats.values().map(|s| s.complexity_score).sum::<f32>() / total_loops as f32
+            } else {
+                0.0
+            },
+            monitoring_duration: self.monitoring_start_time.elapsed(),
+        }
+    }
+}
+
+/// 🔄 v0.7.7: 循环热点分析器统计信息
+#[derive(Debug, Clone)]
+pub struct LoopHotspotAnalyzerStats {
+    pub total_loops_monitored: usize,
+    pub total_loop_executions: usize,
+    pub total_loop_iterations: usize,
+    pub hotspot_loops_count: usize,
+    pub average_complexity: f32,
+    pub monitoring_duration: Duration,
+}
+
+/// 🔄 v0.7.7: 编译的循环JIT函数
+#[derive(Debug, Clone)]
+pub struct CompiledLoopJitFunction {
+    /// 编译后的函数指针
+    pub func_ptr: *const u8,
+    /// 函数签名
+    pub signature: LoopJitSignature,
+    /// 优化策略
+    pub optimization_strategies: Vec<String>,
+    /// 编译时间
+    pub compilation_time: Duration,
+    /// 预期性能提升
+    pub expected_speedup: f32,
+}
+
+/// 🔄 v0.7.7: 循环JIT函数签名
+#[derive(Debug, Clone)]
+pub struct LoopJitSignature {
+    /// 输入参数类型
+    pub input_types: Vec<JitType>,
+    /// 输出类型
+    pub output_type: JitType,
+    /// 循环变量类型
+    pub loop_variables: Vec<(String, JitType)>,
+}
+
 // 全局函数，用于外部模块调用
 
 /// 检查数组操作是否应该JIT编译
