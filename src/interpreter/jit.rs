@@ -707,14 +707,12 @@ impl JitCompiler {
         // 简化实现：检查是否有常量表达式
         for stmt in loop_body {
             match stmt {
-                Statement::VariableDeclaration(_, _, init_expr) => {
-                    if let Some(expr) = init_expr {
-                        match expr {
-                            Expression::IntLiteral(_) => return true,
-                            Expression::FloatLiteral(_) => return true,
-                            Expression::StringLiteral(_) => return true,
-                            _ => {}
-                        }
+                Statement::VariableDeclaration(_, _, expr) => {
+                    match expr {
+                        Expression::IntLiteral(_) => return true,
+                        Expression::FloatLiteral(_) => return true,
+                        Expression::StringLiteral(_) => return true,
+                        _ => {}
                     }
                 },
                 _ => {}
