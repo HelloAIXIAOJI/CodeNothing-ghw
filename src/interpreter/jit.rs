@@ -721,8 +721,8 @@ impl JitCompiler {
             LoopOptimizationStrategy::LoopUnrolling { factor } => {
                 crate::jit_debug_println!("🔄 JIT: 应用循环展开优化，因子: {}", factor);
             },
-            LoopOptimizationStrategy::Vectorization { simd_width } => {
-                crate::jit_debug_println!("🔄 JIT: 应用向量化优化，SIMD宽度: {}", simd_width);
+            LoopOptimizationStrategy::Vectorization { width } => {
+                crate::jit_debug_println!("🔄 JIT: 应用向量化优化，SIMD宽度: {}", width);
             },
             LoopOptimizationStrategy::StrengthReduction => {
                 crate::jit_debug_println!("🔄 JIT: 应用强度削减优化");
@@ -795,8 +795,8 @@ impl JitCompiler {
                 LoopOptimizationStrategy::LoopUnrolling { factor } => {
                     speedup *= 1.0 + (*factor as f32 * 0.1); // 每个展开因子增加10%
                 },
-                LoopOptimizationStrategy::Vectorization { simd_width } => {
-                    speedup *= 1.0 + (*simd_width as f32 * 0.2); // SIMD带来显著提升
+                LoopOptimizationStrategy::Vectorization { width } => {
+                    speedup *= 1.0 + (*width as f32 * 0.2); // SIMD带来显著提升
                 },
                 LoopOptimizationStrategy::StrengthReduction => {
                     speedup *= 1.15; // 强度削减带来15%提升
