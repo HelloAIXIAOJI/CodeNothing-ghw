@@ -2555,27 +2555,7 @@ impl JitCompiler {
         }
     }
 
-    /// 分析表达式复杂度
-    fn analyze_expression_complexity(&self, expr: &Expression) -> u32 {
-        match expr {
-            Expression::IntLiteral(_) | Expression::LongLiteral(_) |
-            Expression::FloatLiteral(_) | Expression::BoolLiteral(_) |
-            Expression::Variable(_) => 1,
-            Expression::BinaryOp(left, _, right) => {
-                2 + self.analyze_expression_complexity(left) + self.analyze_expression_complexity(right)
-            },
-            Expression::CompareOp(left, _, right) => {
-                2 + self.analyze_expression_complexity(left) + self.analyze_expression_complexity(right)
-            },
-            Expression::FunctionCall(_, args) => {
-                5 + args.iter().map(|arg| self.analyze_expression_complexity(arg)).sum::<u32>()
-            },
-            Expression::ArrayAccess(arr, idx) => {
-                3 + self.analyze_expression_complexity(arr) + self.analyze_expression_complexity(idx)
-            },
-            _ => 3,
-        }
-    }
+
 
     /// 推荐优化策略
     fn recommend_optimization(
