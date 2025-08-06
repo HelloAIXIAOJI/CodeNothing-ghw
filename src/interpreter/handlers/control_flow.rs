@@ -106,6 +106,18 @@ pub fn handle_for_loop(interpreter: &mut Interpreter, variable_name: String, ran
         crate::jit_debug_println!("🔧 JIT: For循环优化策略: {:?}", optimization_strategies);
     }
 
+    // 🔄 v0.7.7: 检查JIT编译缓存
+    let pattern_key = jit_compiler.calculate_loop_pattern_hash(&loop_body, jit::LoopType::For);
+    if let Some(cached_function) = jit_compiler.get_cached_jit_function(&pattern_key) {
+        crate::jit_debug_println!("🗄️ JIT: 找到缓存的For循环编译结果，使用次数: {}", cached_function.usage_count);
+
+        // TODO: 执行缓存的JIT函数
+        // 暂时跳过JIT执行，继续解释执行
+
+        // 更新性能统计
+        jit_compiler.update_cached_function_stats(&pattern_key, loop_start_time.elapsed());
+    }
+
     // 检查是否应该JIT编译（使用增强的热点分析）
     if jit_compiler.should_jit_compile_loop_enhanced(&loop_key) {
         // 尝试JIT编译循环
@@ -367,6 +379,18 @@ pub fn handle_while_loop(interpreter: &mut Interpreter, condition: Expression, l
         let optimization_strategies = jit_compiler.analyze_and_optimize_loop(&loop_body);
         if !optimization_strategies.is_empty() {
             crate::jit_debug_println!("🔧 JIT: While循环优化策略: {:?}", optimization_strategies);
+        }
+
+        // 🔄 v0.7.7: 检查JIT编译缓存
+        let pattern_key = jit_compiler.calculate_loop_pattern_hash(&loop_body, jit::LoopType::While);
+        if let Some(cached_function) = jit_compiler.get_cached_jit_function(&pattern_key) {
+            crate::jit_debug_println!("🗄️ JIT: 找到缓存的While循环编译结果，使用次数: {}", cached_function.usage_count);
+
+            // TODO: 执行缓存的JIT函数
+            // 暂时跳过JIT执行，继续解释执行
+
+            // 更新性能统计
+            jit_compiler.update_cached_function_stats(&pattern_key, iteration_start.elapsed());
         }
 
         // 检查是否应该JIT编译（使用增强的热点分析）
