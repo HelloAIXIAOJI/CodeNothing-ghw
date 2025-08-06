@@ -4,6 +4,7 @@
 use crate::ast::{Expression, BinaryOperator, Statement};
 use crate::interpreter::value::Value;
 use std::collections::HashMap;
+use std::time::{Duration, Instant};
 use cranelift::prelude::*;
 use cranelift_jit::{JITBuilder, JITModule};
 use cranelift_module::{Module, Linkage};
