@@ -1,0 +1,69 @@
+// CodeNothing v0.7.6 简单循环测试
+// 测试循环专用内存管理功能
+using lib <io>;
+
+fn test_simple_loop(): int {
+    println("🔄 测试简单循环");
+
+    sum : int = 0;
+    i : int = 1;
+    while (i <= 1000) {
+        sum = sum + i;
+        i = i + 1;
+    };
+
+    println("简单循环结果: " + sum);
+    return sum;
+};
+
+fn test_nested_loop(): int {
+    println("🔄 测试嵌套循环");
+
+    result : int = 0;
+
+    i : int = 1;
+    while (i <= 50) {
+        j : int = 1;
+        while (j <= 50) {
+            temp : int = i * j;
+            result = result + temp;
+            j = j + 1;
+        };
+        i = i + 1;
+    };
+
+    println("嵌套循环结果: " + result);
+    return result;
+};
+
+fn test_while_loop(): int {
+    println("🔄 测试While循环");
+
+    counter : int = 0;
+    sum : int = 0;
+
+    while (counter < 500) {
+        sum = sum + counter;
+        counter = counter + 1;
+    };
+
+    println("While循环结果: " + sum);
+    return sum;
+};
+
+fn main(): int {
+    println("=== CodeNothing v0.7.6 循环内存管理测试 ===");
+    println("");
+
+    result1 : int = test_simple_loop();
+    result2 : int = test_nested_loop();
+    result3 : int = test_while_loop();
+
+    total : int = result1 + result2 + result3;
+
+    println("");
+    println("=== 测试完成 ===");
+    println("总计结果: " + total);
+
+    return total;
+};
