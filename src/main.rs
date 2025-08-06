@@ -11,6 +11,7 @@ mod interpreter;
 mod analyzer;
 mod debug_config;
 mod memory_pool;
+mod loop_memory;
 use interpreter::jit;
 
 use ast::Program;
@@ -202,6 +203,10 @@ fn main() {
         println!("  --cn-memory-stats   显示内存池统计信息");
         println!("  --cn-memory-debug   启用内存池调试输出");
         println!("");
+        println!("🚀 v0.7.6 循环优化选项:");
+        println!("  --cn-loop-stats     显示循环内存管理统计");
+        println!("  --cn-loop-debug     启用循环内存调试输出");
+        println!("");
         println!("示例:");
         println!("  {} hello.cn", args[0]);
         println!("  {} hello.cn --cn-time", args[0]);
@@ -226,6 +231,8 @@ fn main() {
     let show_rwlock = args.iter().any(|arg| arg == "--cn-rwlock");
     let show_memory_stats = args.iter().any(|arg| arg == "--cn-memory-stats");
     let memory_debug = args.iter().any(|arg| arg == "--cn-memory-debug");
+    let show_loop_stats = args.iter().any(|arg| arg == "--cn-loop-stats");
+    let loop_debug = args.iter().any(|arg| arg == "--cn-loop-debug");
 
     // v0.7.5新增：初始化内存池
     if memory_debug {
@@ -235,6 +242,18 @@ fn main() {
         println!("🧠 v0.7.5: 初始化内存预分配池...");
     }
     let _memory_pool = memory_pool::get_global_memory_pool();
+
+    // v0.7.6新增：初始化循环内存管理
+    if loop_debug {
+        debug_config::get_debug_config().enable_memory_debug(); // 复用内存调试
+    }
+    if loop_debug || show_loop_stats {
+        if let Err(e) = loop_memory::init_loop_manager(64 * 1024) { // 64KB 栈大小
+            eprintln!("循环内存管理器初始化失败: {}", e);
+        } else if loop_debug {
+            println!("🔄 v0.7.6: 初始化循环专用内存管理器...");
+        }
+    }
 
     // 初始化JIT编译器
     interpreter::jit::init_jit(jit_debug);
@@ -352,6 +371,11 @@ fn main() {
                     // 🧠 v0.7.5 显示内存池统计信息（如果启用了--cn-memory-stats参数）
                     if show_memory_stats {
                         memory_pool::print_memory_pool_stats();
+                    }
+
+                    // 🔄 v0.7.6 显示循环内存管理统计信息（如果启用了--cn-loop-stats参数）
+                    if show_loop_stats {
+                        loop_memory::print_loop_performance_stats();
                     }
                 },
                 Err(errors) => {
