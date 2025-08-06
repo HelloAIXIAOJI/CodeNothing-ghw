@@ -3788,22 +3788,7 @@ pub struct LoopJitSignature {
     pub loop_variables: Vec<(String, JitType)>,
 }
 
-/// 🔄 v0.7.7: 循环优化策略
-#[derive(Debug, Clone)]
-pub enum LoopOptimizationStrategy {
-    /// 循环展开
-    LoopUnrolling { factor: usize },
-    /// 向量化
-    Vectorization { simd_width: usize },
-    /// 强度削减
-    StrengthReduction,
-    /// 循环不变量提升
-    LoopInvariantCodeMotion,
-    /// 循环融合
-    LoopFusion,
-    /// 内存预取
-    MemoryPrefetching,
-}
+
 
 // 全局函数，用于外部模块调用
 
