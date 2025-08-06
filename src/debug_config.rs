@@ -15,6 +15,8 @@ pub struct DebugConfig {
     pub function_debug: AtomicBool,
     /// 是否启用变量访问调试输出
     pub variable_debug: AtomicBool,
+    /// 是否启用内存池调试输出
+    pub memory_debug: AtomicBool,
     /// 是否启用所有调试输出
     pub all_debug: AtomicBool,
 }
@@ -28,6 +30,7 @@ impl DebugConfig {
             expression_debug: AtomicBool::new(false),
             function_debug: AtomicBool::new(false),
             variable_debug: AtomicBool::new(false),
+            memory_debug: AtomicBool::new(false),
             all_debug: AtomicBool::new(false),
         }
     }
@@ -107,6 +110,21 @@ impl DebugConfig {
         self.variable_debug.load(Ordering::Relaxed) || self.all_debug.load(Ordering::Relaxed)
     }
 
+    /// 启用内存池调试输出
+    pub fn enable_memory_debug(&self) {
+        self.memory_debug.store(true, Ordering::Relaxed);
+    }
+
+    /// 禁用内存池调试输出
+    pub fn disable_memory_debug(&self) {
+        self.memory_debug.store(false, Ordering::Relaxed);
+    }
+
+    /// 检查是否启用内存池调试输出
+    pub fn is_memory_debug_enabled(&self) -> bool {
+        self.memory_debug.load(Ordering::Relaxed) || self.all_debug.load(Ordering::Relaxed)
+    }
+
     /// 启用所有调试输出
     pub fn enable_all_debug(&self) {
         self.all_debug.store(true, Ordering::Relaxed);
@@ -120,6 +138,7 @@ impl DebugConfig {
         self.expression_debug.store(false, Ordering::Relaxed);
         self.function_debug.store(false, Ordering::Relaxed);
         self.variable_debug.store(false, Ordering::Relaxed);
+        self.memory_debug.store(false, Ordering::Relaxed);
     }
 
     /// 从命令行参数解析调试配置
@@ -131,6 +150,7 @@ impl DebugConfig {
                 "--cn-debug-expression" => self.enable_expression_debug(),
                 "--cn-debug-function" => self.enable_function_debug(),
                 "--cn-debug-variable" => self.enable_variable_debug(),
+                "--cn-debug-memory" => self.enable_memory_debug(),
                 "--cn-debug-all" => self.enable_all_debug(),
                 "--cn-no-debug" => self.disable_all_debug(),
                 _ => {}
@@ -146,6 +166,7 @@ impl DebugConfig {
         println!("表达式求值调试: {}", if self.is_expression_debug_enabled() { "启用" } else { "禁用" });
         println!("函数调用调试: {}", if self.is_function_debug_enabled() { "启用" } else { "禁用" });
         println!("变量访问调试: {}", if self.is_variable_debug_enabled() { "启用" } else { "禁用" });
+        println!("内存池调试: {}", if self.is_memory_debug_enabled() { "启用" } else { "禁用" });
         println!("所有调试: {}", if self.all_debug.load(Ordering::Relaxed) { "启用" } else { "禁用" });
         println!("=====================================");
     }
@@ -215,6 +236,16 @@ macro_rules! variable_debug_println {
     };
 }
 
+/// 内存池调试输出宏
+#[macro_export]
+macro_rules! memory_debug_println {
+    ($($arg:tt)*) => {
+        if $crate::debug_config::get_debug_config().is_memory_debug_enabled() {
+            println!($($arg)*);
+        }
+    };
+}
+
 /// 打印调试帮助信息
 pub fn print_debug_help() {
     println!("CodeNothing v0.7.4 调试选项:");
@@ -223,6 +254,7 @@ pub fn print_debug_help() {
     println!("  --cn-debug-expression 启用表达式求值调试输出");
     println!("  --cn-debug-function   启用函数调用调试输出");
     println!("  --cn-debug-variable   启用变量访问调试输出");
+    println!("  --cn-debug-memory     启用内存池调试输出");
     println!("  --cn-debug-all        启用所有调试输出");
     println!("  --cn-no-debug         禁用所有调试输出");
     println!();
