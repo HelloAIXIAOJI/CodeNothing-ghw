@@ -9,6 +9,8 @@ use cranelift::prelude::*;
 use cranelift_jit::{JITBuilder, JITModule};
 use cranelift_module::{Module, Linkage};
 use std::sync::Mutex;
+use std::hash::{Hash, Hasher};
+use std::collections::hash_map::DefaultHasher;
 
 /// 🔄 v0.7.7: 循环优化策略枚举
 #[derive(Debug, Clone, PartialEq)]
@@ -58,6 +60,95 @@ impl Default for LoopOptimizationConfig {
     }
 }
 
+/// 🔄 v0.7.7: 循环模式哈希键
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct LoopPatternKey {
+    /// 循环体的哈希值
+    pub body_hash: u64,
+    /// 循环类型（for/while）
+    pub loop_type: LoopType,
+    /// 循环复杂度等级
+    pub complexity_level: u8,
+    /// 优化策略组合
+    pub optimization_strategies: Vec<LoopOptimizationStrategy>,
+}
+
+/// 循环类型枚举
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum LoopType {
+    For,
+    While,
+    ForEach,
+}
+
+/// 🔄 v0.7.7: 缓存的JIT编译结果
+#[derive(Debug, Clone)]
+pub struct CachedJitFunction {
+    /// 编译后的函数指针
+    pub function_ptr: *const u8,
+    /// 函数签名
+    pub signature: Signature,
+    /// 编译时间戳
+    pub compiled_at: Instant,
+    /// 使用次数
+    pub usage_count: usize,
+    /// 预期加速比
+    pub expected_speedup: f32,
+    /// 实际性能统计
+    pub performance_stats: JitPerformanceStats,
+}
+
+/// JIT性能统计
+#[derive(Debug, Clone)]
+pub struct JitPerformanceStats {
+    /// 总执行次数
+    pub execution_count: usize,
+    /// 总执行时间
+    pub total_execution_time: Duration,
+    /// 平均执行时间
+    pub average_execution_time: Duration,
+    /// 最快执行时间
+    pub fastest_execution_time: Duration,
+    /// 最慢执行时间
+    pub slowest_execution_time: Duration,
+}
+
+impl Default for JitPerformanceStats {
+    fn default() -> Self {
+        Self {
+            execution_count: 0,
+            total_execution_time: Duration::new(0, 0),
+            average_execution_time: Duration::new(0, 0),
+            fastest_execution_time: Duration::new(u64::MAX, 0),
+            slowest_execution_time: Duration::new(0, 0),
+        }
+    }
+}
+
+/// 🔄 v0.7.7: JIT编译缓存配置
+#[derive(Debug, Clone)]
+pub struct JitCacheConfig {
+    /// 最大缓存条目数
+    pub max_cache_entries: usize,
+    /// 缓存过期时间（秒）
+    pub cache_expiry_seconds: u64,
+    /// 最小使用次数阈值（低于此值的缓存条目会被清理）
+    pub min_usage_threshold: usize,
+    /// 启用缓存统计
+    pub enable_cache_stats: bool,
+}
+
+impl Default for JitCacheConfig {
+    fn default() -> Self {
+        Self {
+            max_cache_entries: 1000,
+            cache_expiry_seconds: 3600, // 1小时
+            min_usage_threshold: 2,
+            enable_cache_stats: true,
+        }
+    }
+}
+
 /// JIT编译器状态
 pub struct JitCompiler {
     /// 表达式热点检测计数器
@@ -96,6 +187,10 @@ pub struct JitCompiler {
     string_operation_threshold: u32,
     /// 🔄 v0.7.7: 循环优化配置
     loop_optimization_config: LoopOptimizationConfig,
+    /// 🔄 v0.7.7: JIT编译缓存
+    jit_cache: HashMap<LoopPatternKey, CachedJitFunction>,
+    /// 🔄 v0.7.7: 缓存配置
+    cache_config: JitCacheConfig,
 }
 
 /// 编译后的函数
@@ -585,6 +680,8 @@ impl JitCompiler {
             math_expression_threshold: 30, // 数学表达式30次后触发JIT编译
             string_operation_threshold: 25, // 字符串操作25次后触发JIT编译
             loop_optimization_config: LoopOptimizationConfig::default(),
+            jit_cache: HashMap::new(),
+            cache_config: JitCacheConfig::default(),
         }
     }
 
@@ -4039,4 +4136,249 @@ impl JitCompiler {
         matches!(loop_body[0], Statement::VariableAssignment(_, _)) &&
         !self.has_nested_loops(loop_body)
     }
+
+    /// 🔄 v0.7.7: 计算循环模式哈希
+    pub fn calculate_loop_pattern_hash(&self, loop_body: &[Statement], loop_type: LoopType) -> LoopPatternKey {
+        let mut hasher = DefaultHasher::new();
+
+        // 计算循环体的哈希
+        for stmt in loop_body {
+            self.hash_statement(stmt, &mut hasher);
+        }
+        let body_hash = hasher.finish();
+
+        // 计算复杂度等级
+        let complexity = self.analyze_loop_complexity(loop_body);
+        let complexity_level = match complexity {
+            0..=5 => 1,
+            6..=15 => 2,
+            16..=30 => 3,
+            _ => 4,
+        };
+
+        // 获取适用的优化策略
+        let optimization_strategies = self.analyze_and_optimize_loop(loop_body);
+
+        LoopPatternKey {
+            body_hash,
+            loop_type,
+            complexity_level,
+            optimization_strategies,
+        }
+    }
+
+    /// 递归计算语句的哈希
+    fn hash_statement(&self, stmt: &Statement, hasher: &mut DefaultHasher) {
+        match stmt {
+            Statement::VariableAssignment(name, expr) => {
+                name.hash(hasher);
+                self.hash_expression(expr, hasher);
+            },
+            Statement::FunctionCallStatement(expr) => {
+                "FunctionCall".hash(hasher);
+                self.hash_expression(expr, hasher);
+            },
+            Statement::IfElse(cond, if_block, else_blocks) => {
+                "IfElse".hash(hasher);
+                self.hash_expression(cond, hasher);
+                for stmt in if_block {
+                    self.hash_statement(stmt, hasher);
+                }
+                for (_, else_block) in else_blocks {
+                    for stmt in else_block {
+                        self.hash_statement(stmt, hasher);
+                    }
+                }
+            },
+            Statement::WhileLoop(cond, body) => {
+                "WhileLoop".hash(hasher);
+                self.hash_expression(cond, hasher);
+                for stmt in body {
+                    self.hash_statement(stmt, hasher);
+                }
+            },
+            Statement::ForLoop(var, start, end, body) => {
+                "ForLoop".hash(hasher);
+                var.hash(hasher);
+                self.hash_expression(start, hasher);
+                self.hash_expression(end, hasher);
+                for stmt in body {
+                    self.hash_statement(stmt, hasher);
+                }
+            },
+            _ => {
+                // 对其他语句类型使用简单的字符串哈希
+                format!("{:?}", stmt).hash(hasher);
+            }
+        }
+    }
+
+    /// 递归计算表达式的哈希
+    fn hash_expression(&self, expr: &Expression, hasher: &mut DefaultHasher) {
+        match expr {
+            Expression::Variable(name) => {
+                "Variable".hash(hasher);
+                name.hash(hasher);
+            },
+            Expression::IntLiteral(val) => {
+                "IntLiteral".hash(hasher);
+                val.hash(hasher);
+            },
+            Expression::FloatLiteral(val) => {
+                "FloatLiteral".hash(hasher);
+                val.to_bits().hash(hasher);
+            },
+            Expression::BoolLiteral(val) => {
+                "BoolLiteral".hash(hasher);
+                val.hash(hasher);
+            },
+            Expression::StringLiteral(val) => {
+                "StringLiteral".hash(hasher);
+                val.hash(hasher);
+            },
+            Expression::BinaryOp(left, op, right) => {
+                "BinaryOp".hash(hasher);
+                self.hash_expression(left, hasher);
+                format!("{:?}", op).hash(hasher);
+                self.hash_expression(right, hasher);
+            },
+            Expression::FunctionCall(name, args) => {
+                "FunctionCall".hash(hasher);
+                name.hash(hasher);
+                for arg in args {
+                    self.hash_expression(arg, hasher);
+                }
+            },
+            _ => {
+                // 对其他表达式类型使用简单的字符串哈希
+                format!("{:?}", expr).hash(hasher);
+            }
+        }
+    }
+
+    /// 🔄 v0.7.7: 检查缓存中是否存在编译结果
+    pub fn get_cached_jit_function(&mut self, pattern_key: &LoopPatternKey) -> Option<&mut CachedJitFunction> {
+        // 检查缓存是否过期
+        if let Some(cached) = self.jit_cache.get(pattern_key) {
+            let elapsed = cached.compiled_at.elapsed();
+            if elapsed.as_secs() > self.cache_config.cache_expiry_seconds {
+                // 缓存过期，移除
+                self.jit_cache.remove(pattern_key);
+                return None;
+            }
+        }
+
+        // 返回缓存的函数并增加使用计数
+        if let Some(cached) = self.jit_cache.get_mut(pattern_key) {
+            cached.usage_count += 1;
+            Some(cached)
+        } else {
+            None
+        }
+    }
+
+    /// 🔄 v0.7.7: 将编译结果添加到缓存
+    pub fn cache_jit_function(&mut self, pattern_key: LoopPatternKey, function: CachedJitFunction) {
+        // 检查缓存大小限制
+        if self.jit_cache.len() >= self.cache_config.max_cache_entries {
+            self.cleanup_cache();
+        }
+
+        self.jit_cache.insert(pattern_key, function);
+
+        if self.cache_config.enable_cache_stats {
+            crate::jit_debug_println!("🗄️ JIT: 缓存新的编译结果，当前缓存大小: {}", self.jit_cache.len());
+        }
+    }
+
+    /// 🔄 v0.7.7: 清理过期和低使用率的缓存条目
+    pub fn cleanup_cache(&mut self) {
+        let mut to_remove = Vec::new();
+        let current_time = Instant::now();
+
+        for (key, cached) in &self.jit_cache {
+            let elapsed = current_time.duration_since(cached.compiled_at);
+
+            // 移除过期或低使用率的条目
+            if elapsed.as_secs() > self.cache_config.cache_expiry_seconds ||
+               cached.usage_count < self.cache_config.min_usage_threshold {
+                to_remove.push(key.clone());
+            }
+        }
+
+        for key in to_remove {
+            self.jit_cache.remove(&key);
+        }
+
+        // 如果仍然超过限制，移除最少使用的条目
+        if self.jit_cache.len() >= self.cache_config.max_cache_entries {
+            let mut entries: Vec<_> = self.jit_cache.iter().collect();
+            entries.sort_by_key(|(_, cached)| cached.usage_count);
+
+            let remove_count = self.jit_cache.len() - self.cache_config.max_cache_entries + 1;
+            for (key, _) in entries.iter().take(remove_count) {
+                self.jit_cache.remove(*key);
+            }
+        }
+
+        if self.cache_config.enable_cache_stats {
+            crate::jit_debug_println!("🧹 JIT: 缓存清理完成，当前缓存大小: {}", self.jit_cache.len());
+        }
+    }
+
+    /// 🔄 v0.7.7: 获取缓存统计信息
+    pub fn get_cache_stats(&self) -> JitCacheStats {
+        let total_entries = self.jit_cache.len();
+        let total_usage_count: usize = self.jit_cache.values().map(|c| c.usage_count).sum();
+        let average_usage = if total_entries > 0 {
+            total_usage_count as f32 / total_entries as f32
+        } else {
+            0.0
+        };
+
+        let mut complexity_distribution = HashMap::new();
+        for key in self.jit_cache.keys() {
+            *complexity_distribution.entry(key.complexity_level).or_insert(0) += 1;
+        }
+
+        JitCacheStats {
+            total_entries,
+            total_usage_count,
+            average_usage,
+            complexity_distribution,
+            cache_hit_rate: 0.0, // 需要在实际使用中计算
+        }
+    }
+
+    /// 🔄 v0.7.7: 更新缓存函数的性能统计
+    pub fn update_cached_function_stats(&mut self, pattern_key: &LoopPatternKey, execution_time: Duration) {
+        if let Some(cached) = self.jit_cache.get_mut(pattern_key) {
+            let stats = &mut cached.performance_stats;
+            stats.execution_count += 1;
+            stats.total_execution_time += execution_time;
+            stats.average_execution_time = stats.total_execution_time / stats.execution_count as u32;
+
+            if execution_time < stats.fastest_execution_time {
+                stats.fastest_execution_time = execution_time;
+            }
+            if execution_time > stats.slowest_execution_time {
+                stats.slowest_execution_time = execution_time;
+            }
+        }
+    }
+}
+
+/// 🔄 v0.7.7: JIT缓存统计信息
+#[derive(Debug, Clone)]
+pub struct JitCacheStats {
+    /// 总缓存条目数
+    pub total_entries: usize,
+    /// 总使用次数
+    pub total_usage_count: usize,
+    /// 平均使用次数
+    pub average_usage: f32,
+    /// 复杂度分布
+    pub complexity_distribution: HashMap<u8, usize>,
+    /// 缓存命中率
+    pub cache_hit_rate: f32,
 }
