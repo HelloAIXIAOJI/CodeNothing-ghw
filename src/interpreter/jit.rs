@@ -518,11 +518,13 @@ impl JitCompiler {
         Self {
             hotspot_counters: HashMap::new(),
             loop_counters: HashMap::new(),
+            loop_hotspot_analyzer: LoopHotspotAnalyzer::new(),
             function_call_counters: HashMap::new(),
             math_expression_counters: HashMap::new(),
             string_operation_counters: HashMap::new(),
             compiled_functions: HashMap::new(),
             compiled_loops: HashMap::new(),
+            compiled_loop_jit_functions: HashMap::new(),
             compiled_function_calls: HashMap::new(),
             compiled_math_expressions: HashMap::new(),
             compiled_string_operations: HashMap::new(),
