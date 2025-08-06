@@ -2536,7 +2536,7 @@ impl JitCompiler {
 
         // 推荐优化策略
         let recommended_optimization = self.recommend_optimization(
-            complexity_score,
+            complexity_score as u32,
             iteration_count,
             has_memory_access,
             has_branches,
@@ -2545,7 +2545,7 @@ impl JitCompiler {
 
         LoopAnalysis {
             iteration_count,
-            complexity_score,
+            complexity_score as u32,
             has_memory_access,
             has_branches,
             has_control_flow,
