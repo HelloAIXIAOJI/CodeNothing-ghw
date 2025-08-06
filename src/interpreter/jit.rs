@@ -733,8 +733,8 @@ impl JitCompiler {
             LoopOptimizationStrategy::LoopFusion => {
                 crate::jit_debug_println!("🔄 JIT: 应用循环融合优化");
             },
-            LoopOptimizationStrategy::MemoryPrefetching => {
-                crate::jit_debug_println!("🔄 JIT: 应用内存预取优化");
+            LoopOptimizationStrategy::LoopDistribution => {
+                crate::jit_debug_println!("🔄 JIT: 应用循环分布优化");
             },
         }
         Ok(())
@@ -801,14 +801,14 @@ impl JitCompiler {
                 LoopOptimizationStrategy::StrengthReduction => {
                     speedup *= 1.15; // 强度削减带来15%提升
                 },
-                LoopOptimizationStrategy::LoopInvariantCodeMotion => {
+                LoopOptimizationStrategy::LoopInvariantHoisting => {
                     speedup *= 1.25; // 不变量提升带来25%提升
                 },
                 LoopOptimizationStrategy::LoopFusion => {
                     speedup *= 1.20; // 循环融合带来20%提升
                 },
-                LoopOptimizationStrategy::MemoryPrefetching => {
-                    speedup *= 1.10; // 内存预取带来10%提升
+                LoopOptimizationStrategy::LoopDistribution => {
+                    speedup *= 1.10; // 循环分布带来10%提升
                 },
             }
         }
