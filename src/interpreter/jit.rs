@@ -727,7 +727,7 @@ impl JitCompiler {
             LoopOptimizationStrategy::StrengthReduction => {
                 crate::jit_debug_println!("🔄 JIT: 应用强度削减优化");
             },
-            LoopOptimizationStrategy::LoopInvariantCodeMotion => {
+            LoopOptimizationStrategy::LoopInvariantHoisting => {
                 crate::jit_debug_println!("🔄 JIT: 应用循环不变量提升优化");
             },
             LoopOptimizationStrategy::LoopFusion => {
