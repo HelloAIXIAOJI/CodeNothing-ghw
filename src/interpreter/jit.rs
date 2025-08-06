@@ -593,8 +593,8 @@ impl JitCompiler {
 
         // 创建函数签名
         let signature = self.create_loop_jit_signature(loop_body)?;
-        let mut func_ctx = FunctionBuilderContext::new();
-        let mut func = Function::with_name_signature(ExternalName::user(0, 0), signature.clone());
+        let mut func = Function::new();
+        func.signature = signature.clone();
 
         // 编译循环体
         {
