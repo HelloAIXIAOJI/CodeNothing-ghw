@@ -189,6 +189,14 @@ pub fn handle_for_loop(interpreter: &mut Interpreter, variable_name: String, ran
     // 优化的循环执行：使用更高效的迭代方式
     let result = execute_for_loop_optimized(interpreter, &var_name_key, start, end, &loop_body);
 
+    // 🔄 v0.7.7: 记录最终循环性能统计
+    let total_loop_time = loop_start_time.elapsed();
+    let jit_compiler = jit::get_jit();
+    jit_compiler.record_and_analyze_loop(&loop_key, total_iterations, total_loop_time, &loop_body);
+
+    crate::jit_debug_println!("🔄 JIT: For循环执行完成 - 迭代次数: {}, 总时间: {:?}",
+                             total_iterations, total_loop_time);
+
     // 🔄 v0.7.6: 退出循环内存管理
     if let Err(e) = exit_loop() {
         crate::memory_debug_println!("⚠️ 循环内存管理退出失败: {}", e);
