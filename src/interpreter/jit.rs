@@ -2545,7 +2545,7 @@ impl JitCompiler {
 
         LoopAnalysis {
             iteration_count,
-            complexity_score as u32,
+            complexity_score: complexity_score as u32,
             has_memory_access,
             has_branches,
             has_control_flow,
