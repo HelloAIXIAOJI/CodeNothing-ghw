@@ -3147,6 +3147,184 @@ pub fn jit_compile_and_execute_expression(expr: &Expression, variables: &HashMap
     }
 }
 
+// ============================================================================
+// 🔄 v0.7.7: 循环JIT编译优化 - 增强的循环热点分析系统
+// ============================================================================
+
+/// 🔄 v0.7.7: 循环执行统计信息
+#[derive(Debug, Clone)]
+pub struct LoopExecutionStats {
+    /// 循环执行次数
+    pub execution_count: usize,
+    /// 总迭代次数
+    pub total_iterations: usize,
+    /// 平均每次执行的迭代次数
+    pub average_iterations_per_execution: f64,
+    /// 总执行时间
+    pub total_execution_time: Duration,
+    /// 平均执行时间
+    pub average_execution_time: Duration,
+    /// 内存使用模式
+    pub memory_usage_pattern: MemoryUsagePattern,
+    /// 循环体复杂度评分
+    pub complexity_score: f32,
+    /// 最后更新时间
+    pub last_updated: Instant,
+}
+
+impl LoopExecutionStats {
+    pub fn new() -> Self {
+        LoopExecutionStats {
+            execution_count: 0,
+            total_iterations: 0,
+            average_iterations_per_execution: 0.0,
+            total_execution_time: Duration::from_millis(0),
+            average_execution_time: Duration::from_millis(0),
+            memory_usage_pattern: MemoryUsagePattern::new(),
+            complexity_score: 0.0,
+            last_updated: Instant::now(),
+        }
+    }
+
+    /// 更新执行统计
+    pub fn update_execution(&mut self, iterations: usize, execution_time: Duration) {
+        self.execution_count += 1;
+        self.total_iterations += iterations;
+        self.total_execution_time += execution_time;
+
+        self.average_iterations_per_execution = self.total_iterations as f64 / self.execution_count as f64;
+        self.average_execution_time = self.total_execution_time / self.execution_count as u32;
+        self.last_updated = Instant::now();
+    }
+
+    /// 计算JIT编译优先级
+    pub fn calculate_jit_priority(&self) -> f32 {
+        let frequency_score = (self.execution_count as f32).ln().max(1.0);
+        let iteration_score = (self.average_iterations_per_execution as f32).ln().max(1.0);
+        let time_score = self.average_execution_time.as_millis() as f32 / 1000.0;
+        let complexity_bonus = self.complexity_score * 0.5;
+
+        frequency_score * iteration_score * time_score + complexity_bonus
+    }
+}
+
+/// 🔄 v0.7.7: 内存使用模式
+#[derive(Debug, Clone)]
+pub struct MemoryUsagePattern {
+    /// 变量访问次数
+    pub variable_accesses: usize,
+    /// 内存分配次数
+    pub memory_allocations: usize,
+    /// 平均内存使用量
+    pub average_memory_usage: usize,
+    /// 是否有内存密集操作
+    pub is_memory_intensive: bool,
+}
+
+impl MemoryUsagePattern {
+    pub fn new() -> Self {
+        MemoryUsagePattern {
+            variable_accesses: 0,
+            memory_allocations: 0,
+            average_memory_usage: 0,
+            is_memory_intensive: false,
+        }
+    }
+}
+
+/// 🔄 v0.7.7: 循环复杂度分析器
+#[derive(Debug)]
+pub struct LoopComplexityAnalyzer {
+    /// 复杂度评分缓存
+    complexity_cache: HashMap<String, f32>,
+}
+
+impl LoopComplexityAnalyzer {
+    pub fn new() -> Self {
+        LoopComplexityAnalyzer {
+            complexity_cache: HashMap::new(),
+        }
+    }
+
+    /// 分析循环体复杂度
+    pub fn analyze_loop_complexity(&mut self, loop_key: &str, loop_body: &[Statement]) -> f32 {
+        if let Some(&cached_score) = self.complexity_cache.get(loop_key) {
+            return cached_score;
+        }
+
+        let mut complexity_score = 0.0;
+
+        for stmt in loop_body {
+            complexity_score += self.analyze_statement_complexity(stmt);
+        }
+
+        // 基于语句数量的基础复杂度
+        complexity_score += loop_body.len() as f32 * 0.1;
+
+        // 缓存结果
+        self.complexity_cache.insert(loop_key.to_string(), complexity_score);
+        complexity_score
+    }
+
+    /// 分析单个语句的复杂度
+    fn analyze_statement_complexity(&self, stmt: &Statement) -> f32 {
+        match stmt {
+            Statement::VariableDeclaration(_, _, _) => 0.5,
+            Statement::VariableAssignment(_, expr) => 0.3 + self.analyze_expression_complexity(expr),
+            Statement::If(condition, then_block, else_blocks) => {
+                let mut score = 1.0 + self.analyze_expression_complexity(condition);
+                for stmt in then_block {
+                    score += self.analyze_statement_complexity(stmt) * 0.8;
+                }
+                for (_, block) in else_blocks {
+                    for stmt in block {
+                        score += self.analyze_statement_complexity(stmt) * 0.8;
+                    }
+                }
+                score
+            },
+            Statement::WhileLoop(condition, body) => {
+                let mut score = 2.0 + self.analyze_expression_complexity(condition);
+                for stmt in body {
+                    score += self.analyze_statement_complexity(stmt) * 1.5; // 嵌套循环权重更高
+                }
+                score
+            },
+            Statement::ForLoop(_, start, end, body) => {
+                let mut score = 2.0 + self.analyze_expression_complexity(start) + self.analyze_expression_complexity(end);
+                for stmt in body {
+                    score += self.analyze_statement_complexity(stmt) * 1.5;
+                }
+                score
+            },
+            _ => 0.2, // 其他语句的基础复杂度
+        }
+    }
+
+    /// 分析表达式复杂度
+    fn analyze_expression_complexity(&self, expr: &Expression) -> f32 {
+        match expr {
+            Expression::IntLiteral(_) | Expression::FloatLiteral(_) | Expression::BoolLiteral(_) => 0.1,
+            Expression::StringLiteral(_) => 0.2,
+            Expression::Variable(_) => 0.1,
+            Expression::BinaryOperation(_, left, right) => {
+                0.5 + self.analyze_expression_complexity(left) + self.analyze_expression_complexity(right)
+            },
+            Expression::FunctionCall(_, args) => {
+                let mut score = 1.0;
+                for arg in args {
+                    score += self.analyze_expression_complexity(arg);
+                }
+                score
+            },
+            Expression::ArrayAccess(array, index) => {
+                0.8 + self.analyze_expression_complexity(array) + self.analyze_expression_complexity(index)
+            },
+            _ => 0.3, // 其他表达式的基础复杂度
+        }
+    }
+}
+
 // 全局函数，用于外部模块调用
 
 /// 检查数组操作是否应该JIT编译
