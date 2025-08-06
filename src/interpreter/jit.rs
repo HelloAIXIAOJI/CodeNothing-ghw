@@ -570,6 +570,89 @@ impl JitCompiler {
         self.loop_hotspot_analyzer.get_hotspot_loops()
     }
 
+    /// 🔄 v0.7.7: 编译循环JIT函数
+    pub fn compile_loop_jit(&mut self, loop_key: &str, loop_body: &[Statement], loop_condition: Option<&Expression>) -> Result<CompiledLoopJitFunction, String> {
+        crate::jit_debug_println!("🔄 JIT: 开始编译循环JIT函数 {}", loop_key);
+
+        // 检查是否已经编译过
+        if let Some(compiled) = self.compiled_loop_jit_functions.get(loop_key) {
+            crate::jit_debug_println!("🔄 JIT: 使用缓存的循环JIT函数 {}", loop_key);
+            return Ok(compiled.clone());
+        }
+
+        let compilation_start = std::time::Instant::now();
+
+        // 分析循环特征
+        let loop_stats = self.loop_hotspot_analyzer.get_loop_stats(loop_key);
+        let optimization_strategies = self.select_optimization_strategies(loop_stats, loop_body);
+
+        // 创建Cranelift编译器
+        let mut builder = JITBuilder::new(cranelift_module::default_libcall_names())
+            .map_err(|e| format!("创建JIT构建器失败: {}", e))?;
+        let mut module = JITModule::new(builder);
+
+        // 创建函数签名
+        let signature = self.create_loop_jit_signature(loop_body)?;
+        let mut func_ctx = FunctionBuilderContext::new();
+        let mut func = Function::with_name_signature(ExternalName::user(0, 0), signature.clone());
+
+        // 编译循环体
+        {
+            let mut builder = FunctionBuilder::new(&mut func, &mut func_ctx);
+            let entry_block = builder.create_block();
+            builder.append_block_params_for_function_params(entry_block);
+            builder.switch_to_block(entry_block);
+
+            // 应用优化策略
+            for strategy in &optimization_strategies {
+                self.apply_optimization_strategy(&mut builder, strategy, loop_body, loop_condition)?;
+            }
+
+            // 编译循环体语句
+            self.compile_loop_body_jit(&mut builder, loop_body)?;
+
+            // 返回结果
+            let return_value = builder.ins().iconst(types::I64, 0);
+            builder.ins().return_(&[return_value]);
+            builder.seal_all_blocks();
+        }
+
+        // 完成编译
+        let func_id = module.declare_function("loop_jit_func", Linkage::Export, &func.signature)
+            .map_err(|e| format!("声明函数失败: {}", e))?;
+
+        module.define_function(func_id, &mut func)
+            .map_err(|e| format!("定义函数失败: {}", e))?;
+
+        module.finalize_definitions()
+            .map_err(|e| format!("完成定义失败: {}", e))?;
+
+        let func_ptr = module.get_finalized_function(func_id);
+
+        let compilation_time = compilation_start.elapsed();
+
+        // 创建编译结果
+        let compiled_function = CompiledLoopJitFunction {
+            func_ptr,
+            signature: LoopJitSignature {
+                input_types: vec![JitType::Int64], // 简化处理
+                output_type: JitType::Int64,
+                loop_variables: vec![], // 后续扩展
+            },
+            optimization_strategies: optimization_strategies.iter().map(|s| format!("{:?}", s)).collect(),
+            compilation_time,
+            expected_speedup: self.estimate_speedup(&optimization_strategies),
+        };
+
+        // 缓存编译结果
+        self.compiled_loop_jit_functions.insert(loop_key.to_string(), compiled_function.clone());
+
+        crate::jit_debug_println!("🔄 JIT: 循环JIT编译完成 {} - 耗时: {:?}, 预期加速: {:.2}x",
+                                 loop_key, compilation_time, compiled_function.expected_speedup);
+
+        Ok(compiled_function)
+    }
+
     /// 检查函数调用是否应该JIT编译
     pub fn should_compile_function_call(&mut self, function_name: &str, call_site: &str) -> bool {
         let key = format!("{}@{}", function_name, call_site);
