@@ -812,9 +812,14 @@ impl JitCompiler {
         // 简化实现：检查是否有常量表达式
         for stmt in loop_body {
             match stmt {
-                Statement::VariableDeclaration(_, _, Some(Expression::IntLiteral(_))) => return true,
-                Statement::VariableDeclaration(_, _, Some(Expression::FloatLiteral(_))) => return true,
-                Statement::VariableDeclaration(_, _, Some(Expression::StringLiteral(_))) => return true,
+                Statement::VariableDeclaration(_, _, Some(expr)) => {
+                    match expr {
+                        Expression::IntLiteral(_) => return true,
+                        Expression::FloatLiteral(_) => return true,
+                        Expression::StringLiteral(_) => return true,
+                        _ => {}
+                    }
+                },
                 _ => {}
             }
         }
