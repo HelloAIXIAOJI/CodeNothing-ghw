@@ -682,7 +682,7 @@ impl JitCompiler {
 
             // 大迭代次数循环 - 考虑向量化
             if stats.average_iterations_per_execution > 100.0 {
-                strategies.push(LoopOptimizationStrategy::Vectorization { simd_width: 4 });
+                strategies.push(LoopOptimizationStrategy::Vectorization { width: 4 });
             }
 
             // 内存密集型循环 - 考虑预取
