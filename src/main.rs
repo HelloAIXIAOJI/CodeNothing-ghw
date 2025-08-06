@@ -10,6 +10,7 @@ mod parser;
 mod interpreter;
 mod analyzer;
 mod debug_config;
+mod memory_pool;
 use interpreter::jit;
 
 use ast::Program;
@@ -197,11 +198,16 @@ fn main() {
         println!("🆕 v0.7.4 细粒度调试选项:");
         debug_config::print_debug_help();
         println!("");
+        println!("🆕 v0.7.5 内存池选项:");
+        println!("  --cn-memory-stats   显示内存池统计信息");
+        println!("  --cn-memory-debug   启用内存池调试输出");
+        println!("");
         println!("示例:");
         println!("  {} hello.cn", args[0]);
         println!("  {} hello.cn --cn-time", args[0]);
         println!("  {} hello.cn --cn-debug-jit", args[0]);
         println!("  {} hello.cn --cn-debug-lifetime --cn-time", args[0]);
+        println!("  {} hello.cn --cn-memory-stats", args[0]);
         return;
     }
 
@@ -218,7 +224,18 @@ fn main() {
     let jit_stats = args.iter().any(|arg| arg == "--cn-jit-stats");
     let show_time = args.iter().any(|arg| arg == "--cn-time");
     let show_rwlock = args.iter().any(|arg| arg == "--cn-rwlock");
-    
+    let show_memory_stats = args.iter().any(|arg| arg == "--cn-memory-stats");
+    let memory_debug = args.iter().any(|arg| arg == "--cn-memory-debug");
+
+    // v0.7.5新增：初始化内存池
+    if memory_debug {
+        debug_config::get_debug_config().enable_memory_debug();
+    }
+    if memory_debug {
+        println!("🧠 v0.7.5: 初始化内存预分配池...");
+    }
+    let _memory_pool = memory_pool::get_global_memory_pool();
+
     // 初始化JIT编译器
     interpreter::jit::init_jit(jit_debug);
 
@@ -330,6 +347,11 @@ fn main() {
                         let duration = start.elapsed();
                         let duration_ms = duration.as_secs_f64() * 1000.0;
                         println!("执行时间: {}", format_execution_time(duration_ms));
+                    }
+
+                    // 🧠 v0.7.5 显示内存池统计信息（如果启用了--cn-memory-stats参数）
+                    if show_memory_stats {
+                        memory_pool::print_memory_pool_stats();
                     }
                 },
                 Err(errors) => {
