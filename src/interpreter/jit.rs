@@ -716,7 +716,7 @@ impl JitCompiler {
     fn compile_loop_body_jit(&self, builder: &mut FunctionBuilder, loop_body: &[Statement]) -> Result<(), String> {
         for stmt in loop_body {
             match stmt {
-                Statement::VariableDeclaration(name, var_type, init_expr) => {
+                Statement::VariableDeclaration(name, _var_type, init_expr) => {
                     crate::jit_debug_println!("🔄 JIT: 编译变量声明 {}", name);
                     // 编译变量声明
                     if let Some(expr) = init_expr {
