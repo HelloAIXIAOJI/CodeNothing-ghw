@@ -746,11 +746,9 @@ impl JitCompiler {
     }
 
     /// 🔄 v0.7.7: 创建循环JIT函数签名
-    fn create_loop_jit_signature(&self, _loop_body: &[Statement]) -> Result<Signature, String> {
-        let mut sig = Signature::new(isa::CallConv::SystemV);
-        // 简化处理：无参数，返回i64
-        sig.returns.push(AbiParam::new(types::I64));
-        Ok(sig)
+    fn create_loop_jit_signature(&self, _loop_body: &[Statement]) -> Result<String, String> {
+        // 简化处理：返回签名字符串
+        Ok("loop_jit_signature".to_string())
     }
 
     /// 🔄 v0.7.7: 估算性能提升
