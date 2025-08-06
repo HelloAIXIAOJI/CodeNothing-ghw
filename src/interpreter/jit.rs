@@ -8,6 +8,8 @@ use std::time::{Duration, Instant};
 use cranelift::prelude::*;
 use cranelift_jit::{JITBuilder, JITModule};
 use cranelift_module::{Module, Linkage};
+use cranelift_codegen::ir::{Function, ExternalName, Signature, AbiParam};
+use cranelift_frontend::{FunctionBuilder, FunctionBuilderContext};
 
 /// JIT编译器状态
 pub struct JitCompiler {
