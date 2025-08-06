@@ -8,6 +8,55 @@ use std::time::{Duration, Instant};
 use cranelift::prelude::*;
 use cranelift_jit::{JITBuilder, JITModule};
 use cranelift_module::{Module, Linkage};
+use std::sync::Mutex;
+
+/// 🔄 v0.7.7: 循环优化策略枚举
+#[derive(Debug, Clone, PartialEq)]
+pub enum LoopOptimizationStrategy {
+    /// 循环展开 - 减少循环开销
+    LoopUnrolling { factor: usize },
+    /// 向量化 - SIMD优化
+    Vectorization { width: usize },
+    /// 强度削减 - 将乘法转换为加法
+    StrengthReduction,
+    /// 循环不变量提升 - 将不变计算移出循环
+    LoopInvariantHoisting,
+    /// 循环融合 - 合并相邻循环
+    LoopFusion,
+    /// 循环分布 - 分解复杂循环
+    LoopDistribution,
+}
+
+/// 🔄 v0.7.7: 循环优化配置
+#[derive(Debug, Clone)]
+pub struct LoopOptimizationConfig {
+    /// 启用的优化策略
+    pub enabled_strategies: Vec<LoopOptimizationStrategy>,
+    /// 循环展开阈值
+    pub unroll_threshold: usize,
+    /// 向量化阈值
+    pub vectorization_threshold: usize,
+    /// 强度削减启用
+    pub enable_strength_reduction: bool,
+    /// 不变量提升启用
+    pub enable_invariant_hoisting: bool,
+}
+
+impl Default for LoopOptimizationConfig {
+    fn default() -> Self {
+        Self {
+            enabled_strategies: vec![
+                LoopOptimizationStrategy::StrengthReduction,
+                LoopOptimizationStrategy::LoopInvariantHoisting,
+                LoopOptimizationStrategy::LoopUnrolling { factor: 4 },
+            ],
+            unroll_threshold: 16,
+            vectorization_threshold: 32,
+            enable_strength_reduction: true,
+            enable_invariant_hoisting: true,
+        }
+    }
+}
 
 /// JIT编译器状态
 pub struct JitCompiler {
@@ -45,6 +94,8 @@ pub struct JitCompiler {
     math_expression_threshold: u32,
     /// 字符串操作热点阈值
     string_operation_threshold: u32,
+    /// 🔄 v0.7.7: 循环优化配置
+    loop_optimization_config: LoopOptimizationConfig,
 }
 
 /// 编译后的函数
