@@ -586,21 +586,11 @@ impl JitCompiler {
         let loop_stats = self.loop_hotspot_analyzer.get_loop_stats(loop_key);
         let optimization_strategies = self.select_optimization_strategies(loop_stats, loop_body);
 
-        // 创建Cranelift编译器
-        let mut builder = JITBuilder::new(cranelift_module::default_libcall_names())
-            .map_err(|e| format!("创建JIT构建器失败: {}", e))?;
-        let mut module = JITModule::new(builder);
-
-        // 创建函数签名
-        let signature = self.create_loop_jit_signature(loop_body)?;
-        let mut func = Function::new();
-        func.signature = signature.clone();
-
-        // 简化的编译过程（暂时跳过复杂的Cranelift编译）
-        // TODO: 实现完整的Cranelift编译逻辑
+        // 简化的JIT编译实现（v0.7.7基础版本）
+        // TODO: 后续版本实现完整的Cranelift编译
         crate::jit_debug_println!("🔄 JIT: 简化编译循环体，策略数量: {}", optimization_strategies.len());
 
-        // 简化的函数指针创建（暂时使用占位符）
+        // 暂时使用占位符函数指针
         let func_ptr = std::ptr::null();
 
         let compilation_time = compilation_start.elapsed();
@@ -670,9 +660,8 @@ impl JitCompiler {
     /// 🔄 v0.7.7: 应用优化策略
     fn apply_optimization_strategy(
         &self,
-        builder: &mut FunctionBuilder,
-        strategy: &LoopOptimizationStrategy,
-        loop_body: &[Statement],
+        _strategy: &LoopOptimizationStrategy,
+        _loop_body: &[Statement],
         _loop_condition: Option<&Expression>
     ) -> Result<(), String> {
         match strategy {
