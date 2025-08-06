@@ -3950,4 +3950,145 @@ impl JitCompiler {
             _ => 2,
         }
     }
+
+    /// 判断是否应该应用循环展开
+    fn should_apply_loop_unrolling(&self, loop_body: &[Statement], complexity: usize) -> bool {
+        // 简单循环且复杂度不高时适合展开
+        complexity <= self.loop_optimization_config.unroll_threshold &&
+        loop_body.len() <= 5 &&
+        !self.has_nested_loops(loop_body) &&
+        self.loop_optimization_config.enabled_strategies.contains(&LoopOptimizationStrategy::LoopUnrolling { factor: 4 })
+    }
+
+    /// 判断是否应该应用强度削减
+    fn should_apply_strength_reduction(&self, loop_body: &[Statement]) -> bool {
+        self.loop_optimization_config.enable_strength_reduction &&
+        self.has_multiplication_in_loop(loop_body) &&
+        self.loop_optimization_config.enabled_strategies.contains(&LoopOptimizationStrategy::StrengthReduction)
+    }
+
+    /// 判断是否应该应用循环不变量提升
+    fn should_apply_invariant_hoisting(&self, loop_body: &[Statement]) -> bool {
+        self.loop_optimization_config.enable_invariant_hoisting &&
+        self.has_loop_invariants(loop_body) &&
+        self.loop_optimization_config.enabled_strategies.contains(&LoopOptimizationStrategy::LoopInvariantHoisting)
+    }
+
+    /// 判断是否应该应用向量化
+    fn should_apply_vectorization(&self, loop_body: &[Statement], complexity: usize) -> bool {
+        complexity >= self.loop_optimization_config.vectorization_threshold &&
+        self.is_vectorizable(loop_body) &&
+        self.loop_optimization_config.enabled_strategies.iter().any(|s| matches!(s, LoopOptimizationStrategy::Vectorization { .. }))
+    }
+
+    /// 检查循环体中是否有嵌套循环
+    fn has_nested_loops(&self, loop_body: &[Statement]) -> bool {
+        for stmt in loop_body {
+            match stmt {
+                Statement::ForLoop(_, _, _, _) | Statement::WhileLoop(_, _) | Statement::ForEachLoop(_, _, _) => return true,
+                Statement::IfElse(_, if_block, else_blocks) => {
+                    if self.has_nested_loops(if_block) {
+                        return true;
+                    }
+                    for (_, else_block) in else_blocks {
+                        if self.has_nested_loops(else_block) {
+                            return true;
+                        }
+                    }
+                },
+                _ => {}
+            }
+        }
+        false
+    }
+
+    /// 检查循环体中是否有乘法运算
+    fn has_multiplication_in_loop(&self, loop_body: &[Statement]) -> bool {
+        for stmt in loop_body {
+            if self.statement_has_multiplication(stmt) {
+                return true;
+            }
+        }
+        false
+    }
+
+    /// 检查语句中是否有乘法运算
+    fn statement_has_multiplication(&self, stmt: &Statement) -> bool {
+        match stmt {
+            Statement::VariableAssignment(_, expr) => self.expression_has_multiplication(expr),
+            Statement::FunctionCallStatement(expr) => self.expression_has_multiplication(expr),
+            Statement::IfElse(cond, if_block, else_blocks) => {
+                if self.expression_has_multiplication(cond) {
+                    return true;
+                }
+                for stmt in if_block {
+                    if self.statement_has_multiplication(stmt) {
+                        return true;
+                    }
+                }
+                for (_, else_block) in else_blocks {
+                    for stmt in else_block {
+                        if self.statement_has_multiplication(stmt) {
+                            return true;
+                        }
+                    }
+                }
+                false
+            },
+            _ => false,
+        }
+    }
+
+    /// 检查表达式中是否有乘法运算
+    fn expression_has_multiplication(&self, expr: &Expression) -> bool {
+        match expr {
+            Expression::BinaryOp(left, BinaryOperator::Multiply, right) => true,
+            Expression::BinaryOp(left, _, right) => {
+                self.expression_has_multiplication(left) || self.expression_has_multiplication(right)
+            },
+            Expression::FunctionCall(_, args) => {
+                args.iter().any(|arg| self.expression_has_multiplication(arg))
+            },
+            _ => false,
+        }
+    }
+
+    /// 检查循环体中是否有循环不变量
+    fn has_loop_invariants(&self, loop_body: &[Statement]) -> bool {
+        // 简化实现：检查是否有常量表达式或不依赖循环变量的计算
+        for stmt in loop_body {
+            if self.statement_has_invariants(stmt) {
+                return true;
+            }
+        }
+        false
+    }
+
+    /// 检查语句中是否有循环不变量
+    fn statement_has_invariants(&self, stmt: &Statement) -> bool {
+        match stmt {
+            Statement::VariableAssignment(_, expr) => self.expression_has_invariants(expr),
+            _ => false,
+        }
+    }
+
+    /// 检查表达式中是否有循环不变量
+    fn expression_has_invariants(&self, expr: &Expression) -> bool {
+        match expr {
+            Expression::IntLiteral(_) | Expression::FloatLiteral(_) |
+            Expression::BoolLiteral(_) | Expression::StringLiteral(_) => true,
+            Expression::BinaryOp(left, _, right) => {
+                self.expression_has_invariants(left) && self.expression_has_invariants(right)
+            },
+            _ => false,
+        }
+    }
+
+    /// 检查循环是否可向量化
+    fn is_vectorizable(&self, loop_body: &[Statement]) -> bool {
+        // 简化实现：检查是否为简单的数组操作循环
+        loop_body.len() == 1 &&
+        matches!(loop_body[0], Statement::VariableAssignment(_, _)) &&
+        !self.has_nested_loops(loop_body)
+    }
 }
