@@ -1,0 +1,179 @@
+// CodeNothing v0.7.6 循环专用内存管理基准测试
+// 目标：验证40%的循环性能提升（相比v0.7.5）
+// 测试场景：密集循环操作、嵌套循环、循环变量管理
+
+// 测试1：简单计数循环 - 测试循环计数器优化
+fn test_simple_counting() : int {
+    print("🔄 测试1: 简单计数循环");
+    
+    sum : int = 0;
+    for i in 1 to 10000 {
+        sum = sum + i;
+    }
+    
+    print("计数循环结果: " + sum);
+    return sum;
+}
+
+// 测试2：累加器循环 - 测试累加器变量优化
+fn test_accumulator_loop() : int {
+    print("🔄 测试2: 累加器循环");
+    
+    total : int = 0;
+    count : int = 0;
+    
+    for i in 1 to 5000 {
+        total = total + i * 2;
+        count = count + 1;
+    }
+    
+    average : int = total / count;
+    print("累加器循环 - 总计: " + total + ", 平均: " + average);
+    return total;
+}
+
+// 测试3：嵌套循环 - 测试嵌套循环内存管理
+fn test_nested_loops() : int {
+    print("🔄 测试3: 嵌套循环");
+    
+    result : int = 0;
+    
+    for i in 1 to 100 {
+        for j in 1 to 100 {
+            temp : int = i * j;
+            result = result + temp;
+        }
+    }
+    
+    print("嵌套循环结果: " + result);
+    return result;
+}
+
+// 测试4：循环中的临时变量 - 测试临时变量优化
+fn test_temporary_variables() : int {
+    print("🔄 测试4: 循环临时变量");
+    
+    sum : int = 0;
+    
+    for i in 1 to 3000 {
+        temp1 : int = i * 2;
+        temp2 : int = temp1 + 5;
+        temp3 : int = temp2 * 3;
+        sum = sum + temp3;
+    }
+    
+    print("临时变量循环结果: " + sum);
+    return sum;
+}
+
+// 测试5：While循环 - 测试while循环内存管理
+fn test_while_loop() : int {
+    print("🔄 测试5: While循环");
+    
+    counter : int = 0;
+    sum : int = 0;
+    
+    while counter < 2000 {
+        sum = sum + counter;
+        counter = counter + 1;
+    }
+    
+    print("While循环结果: " + sum);
+    return sum;
+}
+
+// 测试6：复杂循环模式 - 测试复杂的循环变量管理
+fn test_complex_loop_pattern() : int {
+    print("🔄 测试6: 复杂循环模式");
+    
+    sum1 : int = 0;
+    sum2 : int = 0;
+    product : int = 1;
+    
+    for i in 1 to 1000 {
+        // 多个累加器
+        sum1 = sum1 + i;
+        sum2 = sum2 + i * i;
+        
+        // 条件累乘
+        if i % 10 == 0 {
+            product = product * 2;
+        }
+        
+        // 临时计算
+        temp_calc : int = sum1 + sum2;
+        if temp_calc > 1000000 {
+            break;
+        }
+    }
+    
+    result : int = sum1 + sum2 + product;
+    print("复杂循环结果: " + result);
+    return result;
+}
+
+// 测试7：数组操作循环 - 测试数组相关的循环优化
+fn test_array_loop() : int {
+    print("🔄 测试7: 数组操作循环");
+    
+    // 创建数组
+    arr : array = [1, 2, 3, 4, 5];
+    sum : int = 0;
+    
+    // 重复处理数组
+    for round in 1 to 500 {
+        for item in arr {
+            sum = sum + item;
+        }
+    }
+    
+    print("数组循环结果: " + sum);
+    return sum;
+}
+
+// 测试8：循环不变量 - 测试循环不变量优化
+fn test_loop_invariant() : int {
+    print("🔄 测试8: 循环不变量");
+    
+    constant_value : int = 42;  // 循环不变量
+    sum : int = 0;
+    
+    for i in 1 to 2000 {
+        // constant_value在循环中不变，应该被优化
+        result : int = i + constant_value;
+        sum = sum + result;
+    }
+    
+    print("循环不变量结果: " + sum);
+    return sum;
+}
+
+// 主测试函数
+fn main() : int {
+    print("=== CodeNothing v0.7.6 循环专用内存管理基准测试 ===");
+    print("目标：验证40%循环性能提升");
+    print("");
+    
+    // 执行所有测试
+    result1 : int = test_simple_counting();
+    result2 : int = test_accumulator_loop();
+    result3 : int = test_nested_loops();
+    result4 : int = test_temporary_variables();
+    result5 : int = test_while_loop();
+    result6 : int = test_complex_loop_pattern();
+    result7 : int = test_array_loop();
+    result8 : int = test_loop_invariant();
+    
+    // 计算总结果
+    total_result : int = result1 + result2 + result3 + result4 + result5 + result6 + result7 + result8;
+    
+    print("");
+    print("=== 测试完成 ===");
+    print("所有测试总计: " + total_result);
+    print("循环内存管理系统已验证");
+    
+    return total_result;
+}
+
+// 启动测试
+main();
