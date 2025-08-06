@@ -833,6 +833,82 @@ impl JitCompiler {
         }
     }
 
+    /// 🔄 v0.7.7: 检查循环是否有不变量
+    fn has_loop_invariants(&self, loop_body: &[Statement]) -> bool {
+        // 简化实现：检查是否有常量表达式
+        for stmt in loop_body {
+            match stmt {
+                Statement::VariableDeclaration(_, _, Some(Expression::IntLiteral(_))) => return true,
+                Statement::VariableDeclaration(_, _, Some(Expression::FloatLiteral(_))) => return true,
+                Statement::VariableDeclaration(_, _, Some(Expression::StringLiteral(_))) => return true,
+                _ => {}
+            }
+        }
+        false
+    }
+
+    /// 🔄 v0.7.7: 检查是否有强度削减机会
+    fn has_strength_reduction_opportunities(&self, loop_body: &[Statement]) -> bool {
+        // 简化实现：检查是否有乘法操作
+        for stmt in loop_body {
+            if let Statement::VariableAssignment(_, expr) = stmt {
+                if self.contains_multiplication(expr) {
+                    return true;
+                }
+            }
+        }
+        false
+    }
+
+    /// 🔄 v0.7.7: 检查表达式是否包含乘法
+    fn contains_multiplication(&self, expr: &Expression) -> bool {
+        match expr {
+            Expression::BinaryOp(_, BinaryOperator::Multiply, _) => true,
+            Expression::BinaryOp(left, _, right) => {
+                self.contains_multiplication(left) || self.contains_multiplication(right)
+            },
+            _ => false,
+        }
+    }
+
+    /// 🔄 v0.7.7: 创建循环JIT函数签名
+    fn create_loop_jit_signature(&self, _loop_body: &[Statement]) -> Result<Signature, String> {
+        let mut sig = Signature::new(CallConv::SystemV);
+        // 简化处理：无参数，返回i64
+        sig.returns.push(AbiParam::new(types::I64));
+        Ok(sig)
+    }
+
+    /// 🔄 v0.7.7: 估算性能提升
+    fn estimate_speedup(&self, strategies: &[LoopOptimizationStrategy]) -> f32 {
+        let mut speedup = 1.0;
+
+        for strategy in strategies {
+            match strategy {
+                LoopOptimizationStrategy::LoopUnrolling { factor } => {
+                    speedup *= 1.0 + (*factor as f32 * 0.1); // 每个展开因子增加10%
+                },
+                LoopOptimizationStrategy::Vectorization { simd_width } => {
+                    speedup *= 1.0 + (*simd_width as f32 * 0.2); // SIMD带来显著提升
+                },
+                LoopOptimizationStrategy::StrengthReduction => {
+                    speedup *= 1.15; // 强度削减带来15%提升
+                },
+                LoopOptimizationStrategy::LoopInvariantCodeMotion => {
+                    speedup *= 1.25; // 不变量提升带来25%提升
+                },
+                LoopOptimizationStrategy::LoopFusion => {
+                    speedup *= 1.20; // 循环融合带来20%提升
+                },
+                LoopOptimizationStrategy::MemoryPrefetching => {
+                    speedup *= 1.10; // 内存预取带来10%提升
+                },
+            }
+        }
+
+        speedup
+    }
+
     /// 检查函数调用是否应该JIT编译
     pub fn should_compile_function_call(&mut self, function_name: &str, call_site: &str) -> bool {
         let key = format!("{}@{}", function_name, call_site);
@@ -3786,6 +3862,23 @@ pub struct LoopJitSignature {
     pub output_type: JitType,
     /// 循环变量类型
     pub loop_variables: Vec<(String, JitType)>,
+}
+
+/// 🔄 v0.7.7: 循环优化策略
+#[derive(Debug, Clone)]
+pub enum LoopOptimizationStrategy {
+    /// 循环展开
+    LoopUnrolling { factor: usize },
+    /// 向量化
+    Vectorization { simd_width: usize },
+    /// 强度削减
+    StrengthReduction,
+    /// 循环不变量提升
+    LoopInvariantCodeMotion,
+    /// 循环融合
+    LoopFusion,
+    /// 内存预取
+    MemoryPrefetching,
 }
 
 // 全局函数，用于外部模块调用
