@@ -3842,3 +3842,112 @@ pub fn compile_array_operation(
         bounds_check_eliminated: false,
     })
 }
+
+// 🔄 v0.7.7: 循环优化策略实现
+impl JitCompiler {
+    /// 分析循环并应用优化策略
+    pub fn analyze_and_optimize_loop(&mut self, loop_body: &[Statement]) -> Vec<LoopOptimizationStrategy> {
+        let mut applicable_strategies = Vec::new();
+
+        // 分析循环体复杂度
+        let loop_complexity = self.analyze_loop_complexity(loop_body);
+
+        // 检查是否适合循环展开
+        if self.should_apply_loop_unrolling(loop_body, loop_complexity) {
+            applicable_strategies.push(LoopOptimizationStrategy::LoopUnrolling { factor: 4 });
+        }
+
+        // 检查是否适合强度削减
+        if self.should_apply_strength_reduction(loop_body) {
+            applicable_strategies.push(LoopOptimizationStrategy::StrengthReduction);
+        }
+
+        // 检查是否适合循环不变量提升
+        if self.should_apply_invariant_hoisting(loop_body) {
+            applicable_strategies.push(LoopOptimizationStrategy::LoopInvariantHoisting);
+        }
+
+        // 检查是否适合向量化
+        if self.should_apply_vectorization(loop_body, loop_complexity) {
+            applicable_strategies.push(LoopOptimizationStrategy::Vectorization { width: 4 });
+        }
+
+        applicable_strategies
+    }
+
+    /// 分析循环复杂度
+    fn analyze_loop_complexity(&self, loop_body: &[Statement]) -> usize {
+        let mut complexity = 0;
+
+        for stmt in loop_body {
+            complexity += self.analyze_statement_complexity(stmt);
+        }
+
+        complexity
+    }
+
+    /// 分析语句复杂度
+    fn analyze_statement_complexity(&self, stmt: &Statement) -> usize {
+        match stmt {
+            Statement::VariableAssignment(_, expr) => self.analyze_expression_complexity(expr),
+            Statement::FunctionCallStatement(expr) => self.analyze_expression_complexity(expr) + 5,
+            Statement::IfElse(cond, if_block, else_blocks) => {
+                let mut complexity = self.analyze_expression_complexity(cond) + 2;
+                for stmt in if_block {
+                    complexity += self.analyze_statement_complexity(stmt);
+                }
+                for (_, else_block) in else_blocks {
+                    for stmt in else_block {
+                        complexity += self.analyze_statement_complexity(stmt);
+                    }
+                }
+                complexity
+            },
+            Statement::WhileLoop(cond, body) => {
+                let mut complexity = self.analyze_expression_complexity(cond) + 3;
+                for stmt in body {
+                    complexity += self.analyze_statement_complexity(stmt) * 2; // 循环内语句权重更高
+                }
+                complexity
+            },
+            Statement::ForLoop(_, start, end, body) => {
+                let mut complexity = self.analyze_expression_complexity(start) +
+                                   self.analyze_expression_complexity(end) + 3;
+                for stmt in body {
+                    complexity += self.analyze_statement_complexity(stmt) * 2;
+                }
+                complexity
+            },
+            _ => 1,
+        }
+    }
+
+    /// 分析表达式复杂度
+    fn analyze_expression_complexity(&self, expr: &Expression) -> usize {
+        match expr {
+            Expression::BinaryOp(left, op, right) => {
+                let base_complexity = match op {
+                    BinaryOperator::Multiply | BinaryOperator::Divide | BinaryOperator::Modulo => 3,
+                    BinaryOperator::Add | BinaryOperator::Subtract => 1,
+                    _ => 2,
+                };
+                base_complexity + self.analyze_expression_complexity(left) +
+                                self.analyze_expression_complexity(right)
+            },
+            Expression::FunctionCall(_, args) => {
+                let mut complexity = 5;
+                for arg in args {
+                    complexity += self.analyze_expression_complexity(arg);
+                }
+                complexity
+            },
+            Expression::ArrayAccess(arr, idx) => {
+                2 + self.analyze_expression_complexity(arr) + self.analyze_expression_complexity(idx)
+            },
+            Expression::Variable(_) => 1,
+            Expression::IntLiteral(_) | Expression::FloatLiteral(_) |
+            Expression::BoolLiteral(_) | Expression::StringLiteral(_) => 0,
+            _ => 2,
+        }
+    }
+}
