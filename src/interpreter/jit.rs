@@ -550,6 +550,26 @@ impl JitCompiler {
         *counter >= self.loop_threshold
     }
 
+    /// 🔄 v0.7.7: 记录循环执行并分析热点
+    pub fn record_and_analyze_loop(&mut self, loop_key: &str, iterations: usize, execution_time: Duration, loop_body: &[Statement]) {
+        self.loop_hotspot_analyzer.record_loop_execution(loop_key, iterations, execution_time, loop_body);
+    }
+
+    /// 🔄 v0.7.7: 检查是否应该JIT编译循环（增强版）
+    pub fn should_jit_compile_loop_enhanced(&self, loop_key: &str) -> bool {
+        self.loop_hotspot_analyzer.should_jit_compile_loop(loop_key)
+    }
+
+    /// 🔄 v0.7.7: 获取循环热点分析统计
+    pub fn get_loop_hotspot_stats(&self) -> LoopHotspotAnalyzerStats {
+        self.loop_hotspot_analyzer.get_analyzer_stats()
+    }
+
+    /// 🔄 v0.7.7: 获取所有热点循环
+    pub fn get_hotspot_loops(&self) -> Vec<(String, f32)> {
+        self.loop_hotspot_analyzer.get_hotspot_loops()
+    }
+
     /// 检查函数调用是否应该JIT编译
     pub fn should_compile_function_call(&mut self, function_name: &str, call_site: &str) -> bool {
         let key = format!("{}@{}", function_name, call_site);
