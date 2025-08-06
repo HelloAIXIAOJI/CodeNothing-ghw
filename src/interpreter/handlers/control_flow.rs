@@ -6,7 +6,8 @@ use crate::interpreter::expression_evaluator::ExpressionEvaluator;
 use crate::interpreter::statement_executor::StatementExecutor;
 use crate::interpreter::jit;
 use crate::interpreter::memory_manager::{batch_memory_operations};
-use crate::loop_memory::{LoopVariableType, enter_loop, exit_loop};
+use crate::loop_memory::{LoopVariableType, enter_loop, exit_loop, get_loop_manager};
+use std::time::Instant;
 
 pub fn handle_if_else(interpreter: &mut Interpreter, condition: Expression, if_block: Vec<Statement>, else_blocks: Vec<(Option<Expression>, Vec<Statement>)>) -> ExecutionResult {
     // 修复借用问题：不直接传递self，而是分别计算条件和执行语句块
