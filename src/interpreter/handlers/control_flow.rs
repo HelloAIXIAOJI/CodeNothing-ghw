@@ -305,13 +305,42 @@ pub fn handle_while_loop(interpreter: &mut Interpreter, condition: Expression, l
         crate::memory_debug_println!("⚠️ While循环内存管理启动失败: {}", e);
     }
 
+    // 🔄 v0.7.7: JIT循环编译优化 - 初始化性能监控
+    let loop_start_time = Instant::now();
+    let mut iteration_count = 0;
+
     // 优化：预检查条件类型，避免每次循环都检查
     let is_simple_condition = is_simple_boolean_condition(&condition);
 
     // 循环执行，直到条件为假
     loop {
-        // JIT热点检测和编译
+        iteration_count += 1;
+        let iteration_start = Instant::now();
+
+        // 🔄 v0.7.7: 增强的JIT热点检测和编译
         let jit_compiler = jit::get_jit();
+
+        // 记录循环执行统计
+        jit_compiler.record_and_analyze_loop(&loop_key, 1, iteration_start.elapsed(), &loop_body);
+
+        // 检查是否应该JIT编译（使用增强的热点分析）
+        if jit_compiler.should_jit_compile_loop_enhanced(&loop_key) {
+            // 尝试JIT编译循环
+            match jit_compiler.compile_loop_jit(&loop_key, &loop_body, Some(&condition)) {
+                Ok(compiled_jit_function) => {
+                    crate::jit_debug_println!("🚀 JIT: 成功编译While循环JIT函数，预期加速: {:.2}x",
+                                             compiled_jit_function.expected_speedup);
+
+                    // TODO: 执行编译后的JIT函数
+                    // 暂时跳过JIT执行，继续解释执行
+                },
+                Err(e) => {
+                    crate::jit_debug_println!("⚠️ JIT: While循环JIT编译失败: {}", e);
+                }
+            }
+        }
+
+        // 传统JIT编译（保持向后兼容）
         if jit_compiler.should_compile_loop(&loop_key) {
             // 检查循环是否适合JIT编译
             let while_stmt = Statement::WhileLoop(condition.clone(), loop_body.clone());
@@ -392,6 +421,14 @@ pub fn handle_while_loop(interpreter: &mut Interpreter, condition: Expression, l
             return result;
         }
     }
+
+    // 🔄 v0.7.7: 记录最终循环性能统计
+    let total_loop_time = loop_start_time.elapsed();
+    let jit_compiler = jit::get_jit();
+    jit_compiler.record_and_analyze_loop(&loop_key, iteration_count, total_loop_time, &loop_body);
+
+    crate::jit_debug_println!("🔄 JIT: While循环执行完成 - 迭代次数: {}, 总时间: {:?}",
+                             iteration_count, total_loop_time);
 
     // 🔄 v0.7.6: 退出循环内存管理
     if let Err(e) = exit_loop() {
