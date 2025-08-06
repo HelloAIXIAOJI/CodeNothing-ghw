@@ -13,7 +13,7 @@ use std::hash::{Hash, Hasher};
 use std::collections::hash_map::DefaultHasher;
 
 /// 🔄 v0.7.7: 循环优化策略枚举
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum LoopOptimizationStrategy {
     /// 循环展开 - 减少循环开销
     LoopUnrolling { factor: usize },
@@ -512,12 +512,7 @@ pub struct CompiledArrayOperation {
 }
 
 /// 循环类型
-#[derive(Debug, Clone, PartialEq)]
-pub enum LoopType {
-    While,
-    For,
-    ForEach,
-}
+
 
 /// 循环优化策略
 #[derive(Debug, Clone, PartialEq)]
@@ -4138,7 +4133,7 @@ impl JitCompiler {
     }
 
     /// 🔄 v0.7.7: 计算循环模式哈希
-    pub fn calculate_loop_pattern_hash(&self, loop_body: &[Statement], loop_type: LoopType) -> LoopPatternKey {
+    pub fn calculate_loop_pattern_hash(&mut self, loop_body: &[Statement], loop_type: LoopType) -> LoopPatternKey {
         let mut hasher = DefaultHasher::new();
 
         // 计算循环体的哈希
@@ -4312,12 +4307,12 @@ impl JitCompiler {
 
         // 如果仍然超过限制，移除最少使用的条目
         if self.jit_cache.len() >= self.cache_config.max_cache_entries {
-            let mut entries: Vec<_> = self.jit_cache.iter().collect();
-            entries.sort_by_key(|(_, cached)| cached.usage_count);
+            let mut entries: Vec<_> = self.jit_cache.iter().map(|(k, v)| (k.clone(), v.usage_count)).collect();
+            entries.sort_by_key(|(_, usage_count)| *usage_count);
 
             let remove_count = self.jit_cache.len() - self.cache_config.max_cache_entries + 1;
             for (key, _) in entries.iter().take(remove_count) {
-                self.jit_cache.remove(*key);
+                self.jit_cache.remove(key);
             }
         }
 
