@@ -6,6 +6,7 @@ use crate::interpreter::expression_evaluator::ExpressionEvaluator;
 use crate::interpreter::statement_executor::StatementExecutor;
 use crate::interpreter::jit;
 use crate::interpreter::memory_manager::{batch_memory_operations};
+use crate::loop_memory::{LoopVariableType, enter_loop, exit_loop};
 
 pub fn handle_if_else(interpreter: &mut Interpreter, condition: Expression, if_block: Vec<Statement>, else_blocks: Vec<(Option<Expression>, Vec<Statement>)>) -> ExecutionResult {
     // 修复借用问题：不直接传递self，而是分别计算条件和执行语句块
@@ -74,6 +75,14 @@ pub fn handle_for_loop(interpreter: &mut Interpreter, variable_name: String, ran
 
     // 优化：预计算范围值，避免重复求值
     let (start, end) = evaluate_for_loop_range(interpreter, &range_start, &range_end);
+
+    // 🔄 v0.7.6: 循环内存管理 - 预分析循环变量
+    let expected_variables = analyze_loop_variables(&variable_name, &loop_body);
+
+    // 进入循环内存管理
+    if let Err(e) = enter_loop(&expected_variables) {
+        crate::memory_debug_println!("⚠️ 循环内存管理启动失败: {}", e);
+    }
 
     // 优化：检查范围有效性，避免无效循环
     if start > end {
@@ -151,7 +160,14 @@ pub fn handle_for_loop(interpreter: &mut Interpreter, variable_name: String, ran
     interpreter.local_env.insert(var_name_key.clone(), Value::Int(start));
 
     // 优化的循环执行：使用更高效的迭代方式
-    execute_for_loop_optimized(interpreter, &var_name_key, start, end, &loop_body)
+    let result = execute_for_loop_optimized(interpreter, &var_name_key, start, end, &loop_body);
+
+    // 🔄 v0.7.6: 退出循环内存管理
+    if let Err(e) = exit_loop() {
+        crate::memory_debug_println!("⚠️ 循环内存管理退出失败: {}", e);
+    }
+
+    result
 }
 
 /// 优化的范围计算
@@ -280,6 +296,14 @@ pub fn handle_while_loop(interpreter: &mut Interpreter, condition: Expression, l
     // 生成循环的唯一键用于热点检测
     let loop_key = format!("while_loop_{:p}", &condition as *const _);
 
+    // 🔄 v0.7.6: 循环内存管理 - 预分析循环变量
+    let expected_variables = analyze_while_loop_variables(&loop_body);
+
+    // 进入循环内存管理
+    if let Err(e) = enter_loop(&expected_variables) {
+        crate::memory_debug_println!("⚠️ While循环内存管理启动失败: {}", e);
+    }
+
     // 优化：预检查条件类型，避免每次循环都检查
     let is_simple_condition = is_simple_boolean_condition(&condition);
 
@@ -366,6 +390,11 @@ pub fn handle_while_loop(interpreter: &mut Interpreter, condition: Expression, l
         if let Some(result) = execute_loop_body_optimized(interpreter, &loop_body) {
             return result;
         }
+    }
+
+    // 🔄 v0.7.6: 退出循环内存管理
+    if let Err(e) = exit_loop() {
+        crate::memory_debug_println!("⚠️ While循环内存管理退出失败: {}", e);
     }
 
     ExecutionResult::None
@@ -643,6 +672,84 @@ fn count_consecutive_declarations(loop_body: &[Statement]) -> usize {
     }
 
     max_consecutive
+}
+
+/// 🔄 v0.7.6: 分析循环变量，为循环内存管理做准备
+fn analyze_loop_variables(_loop_var: &str, loop_body: &[Statement]) -> Vec<(&'static str, LoopVariableType, usize)> {
+    let mut variables = Vec::new();
+
+    // 添加循环计数器变量
+    variables.push(("loop_counter", LoopVariableType::Counter, std::mem::size_of::<i32>()));
+
+    // 分析循环体中的变量
+    for stmt in loop_body {
+        match stmt {
+            Statement::VariableDeclaration(_name, var_type, _) => {
+                let size = match var_type {
+                    Type::Int => std::mem::size_of::<i32>(),
+                    Type::Long => std::mem::size_of::<i64>(),
+                    Type::Float => std::mem::size_of::<f64>(),
+                    Type::Bool => std::mem::size_of::<bool>(),
+                    Type::String => 64, // 预估字符串大小
+                    _ => 32, // 默认大小
+                };
+
+                // 根据变量名推断类型（简化处理）
+                let loop_var_type = LoopVariableType::Temporary;
+
+                // 使用静态字符串引用
+                variables.push(("temp_var", loop_var_type, size));
+            },
+            Statement::VariableAssignment(_name, _) => {
+                // 简化处理：添加一个通用的累加器变量
+                variables.push(("accumulator", LoopVariableType::Accumulator, std::mem::size_of::<i32>()));
+            },
+            _ => {
+                // 其他语句类型暂不分析
+            }
+        }
+    }
+
+    // 去重并限制数量
+    variables.truncate(10); // 最多预分配10个变量
+    variables
+}
+
+/// 🔄 v0.7.6: 分析while循环变量
+fn analyze_while_loop_variables(loop_body: &[Statement]) -> Vec<(&'static str, LoopVariableType, usize)> {
+    let mut variables = Vec::new();
+
+    // 分析循环体中的变量
+    for stmt in loop_body {
+        match stmt {
+            Statement::VariableDeclaration(_name, var_type, _) => {
+                let size = match var_type {
+                    Type::Int => std::mem::size_of::<i32>(),
+                    Type::Long => std::mem::size_of::<i64>(),
+                    Type::Float => std::mem::size_of::<f64>(),
+                    Type::Bool => std::mem::size_of::<bool>(),
+                    Type::String => 64, // 预估字符串大小
+                    _ => 32, // 默认大小
+                };
+
+                // 简化类型推断
+                let loop_var_type = LoopVariableType::Temporary;
+
+                variables.push(("while_var", loop_var_type, size));
+            },
+            Statement::VariableAssignment(_name, _) => {
+                // 简化处理：添加通用变量
+                variables.push(("while_counter", LoopVariableType::Counter, std::mem::size_of::<i32>()));
+            },
+            _ => {
+                // 其他语句类型暂不分析
+            }
+        }
+    }
+
+    // 去重并限制数量
+    variables.truncate(8); // while循环预分配较少变量
+    variables
 }
 
 /// 🔧 轻量级批量分配执行
