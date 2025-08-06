@@ -754,24 +754,7 @@ impl JitCompiler {
         Ok(0)
     }
 
-    /// 🔄 v0.7.7: 检查循环是否有不变量
-    fn has_loop_invariants(&self, loop_body: &[Statement]) -> bool {
-        // 简化实现：检查是否有常量表达式
-        for stmt in loop_body {
-            match stmt {
-                Statement::VariableDeclaration(_, _, expr) => {
-                    match expr {
-                        Expression::IntLiteral(_) => return true,
-                        Expression::FloatLiteral(_) => return true,
-                        Expression::StringLiteral(_) => return true,
-                        _ => {}
-                    }
-                },
-                _ => {}
-            }
-        }
-        false
-    }
+
 
     /// 🔄 v0.7.7: 检查是否有强度削减机会
     fn has_strength_reduction_opportunities(&self, loop_body: &[Statement]) -> bool {
