@@ -14,6 +14,8 @@ pub struct JitCompiler {
     hotspot_counters: HashMap<String, u32>,
     /// 循环热点检测计数器
     loop_counters: HashMap<String, u32>,
+    /// 🔄 v0.7.7: 增强的循环热点分析器
+    loop_hotspot_analyzer: LoopHotspotAnalyzer,
     /// 函数调用热点检测计数器
     function_call_counters: HashMap<String, u32>,
     /// 数学表达式热点检测计数器
@@ -24,6 +26,8 @@ pub struct JitCompiler {
     compiled_functions: HashMap<String, CompiledFunction>,
     /// 编译的循环缓存
     compiled_loops: HashMap<String, CompiledLoop>,
+    /// 🔄 v0.7.7: 增强的循环JIT编译缓存
+    compiled_loop_jit_functions: HashMap<String, CompiledLoopJitFunction>,
     /// 编译的函数调用缓存
     compiled_function_calls: HashMap<String, CompiledFunctionCall>,
     /// 编译的数学表达式缓存
