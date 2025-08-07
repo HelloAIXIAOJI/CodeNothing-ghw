@@ -82,12 +82,12 @@ pub enum LoopType {
 }
 
 /// 🔄 v0.7.7: 缓存的JIT编译结果
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct CachedJitFunction {
     /// 编译后的函数指针
     pub function_ptr: *const u8,
-    /// 函数签名
-    pub signature: Signature,
+    /// 函数签名（简化版本，用于缓存）
+    pub signature_info: String,
     /// 编译时间戳
     pub compiled_at: Instant,
     /// 使用次数
@@ -96,6 +96,19 @@ pub struct CachedJitFunction {
     pub expected_speedup: f32,
     /// 实际性能统计
     pub performance_stats: JitPerformanceStats,
+}
+
+impl Clone for CachedJitFunction {
+    fn clone(&self) -> Self {
+        Self {
+            function_ptr: self.function_ptr,
+            signature_info: self.signature_info.clone(),
+            compiled_at: self.compiled_at,
+            usage_count: self.usage_count,
+            expected_speedup: self.expected_speedup,
+            performance_stats: self.performance_stats.clone(),
+        }
+    }
 }
 
 /// JIT性能统计
@@ -191,6 +204,8 @@ pub struct JitCompiler {
     jit_cache: HashMap<LoopPatternKey, CachedJitFunction>,
     /// 🔄 v0.7.7: 缓存配置
     cache_config: JitCacheConfig,
+    /// 🔄 v0.7.7: 性能监控系统
+    performance_monitor: JitPerformanceMonitor,
 }
 
 /// 编译后的函数
@@ -677,6 +692,7 @@ impl JitCompiler {
             loop_optimization_config: LoopOptimizationConfig::default(),
             jit_cache: HashMap::new(),
             cache_config: JitCacheConfig::default(),
+            performance_monitor: JitPerformanceMonitor::default(),
         }
     }
 
@@ -4252,13 +4268,14 @@ impl JitCompiler {
     }
 
     /// 🔄 v0.7.7: 检查缓存中是否存在编译结果
-    pub fn get_cached_jit_function(&mut self, pattern_key: &LoopPatternKey) -> Option<&mut CachedJitFunction> {
+    pub fn get_cached_jit_function(&mut self, pattern_key: &LoopPatternKey) -> Option<CachedJitFunction> {
         // 检查缓存是否过期
         if let Some(cached) = self.jit_cache.get(pattern_key) {
             let elapsed = cached.compiled_at.elapsed();
             if elapsed.as_secs() > self.cache_config.cache_expiry_seconds {
                 // 缓存过期，移除
                 self.jit_cache.remove(pattern_key);
+                self.record_cache_miss();
                 return None;
             }
         }
@@ -4266,8 +4283,13 @@ impl JitCompiler {
         // 返回缓存的函数并增加使用计数
         if let Some(cached) = self.jit_cache.get_mut(pattern_key) {
             cached.usage_count += 1;
-            Some(cached)
+            let result = cached.clone();
+            // 记录缓存命中
+            self.record_cache_hit(Duration::from_millis(10)); // 估算节省的编译时间
+            Some(result)
         } else {
+            // 记录缓存未命中
+            self.record_cache_miss();
             None
         }
     }
@@ -4315,6 +4337,9 @@ impl JitCompiler {
                 self.jit_cache.remove(key);
             }
         }
+
+        // 记录缓存清理事件
+        self.record_cache_cleanup();
 
         if self.cache_config.enable_cache_stats {
             crate::jit_debug_println!("🧹 JIT: 缓存清理完成，当前缓存大小: {}", self.jit_cache.len());
@@ -4376,4 +4401,356 @@ pub struct JitCacheStats {
     pub complexity_distribution: HashMap<u8, usize>,
     /// 缓存命中率
     pub cache_hit_rate: f32,
+}
+
+/// 🔄 v0.7.7: JIT性能监控系统
+#[derive(Debug, Clone)]
+pub struct JitPerformanceMonitor {
+    /// 编译统计
+    pub compilation_stats: CompilationStats,
+    /// 执行统计
+    pub execution_stats: ExecutionStats,
+    /// 优化效果统计
+    pub optimization_stats: OptimizationStats,
+    /// 缓存统计
+    pub cache_stats: CachePerformanceStats,
+    /// 监控开始时间
+    pub start_time: Instant,
+}
+
+/// 编译统计信息
+#[derive(Debug, Clone)]
+pub struct CompilationStats {
+    /// 总编译次数
+    pub total_compilations: usize,
+    /// 成功编译次数
+    pub successful_compilations: usize,
+    /// 失败编译次数
+    pub failed_compilations: usize,
+    /// 总编译时间
+    pub total_compilation_time: Duration,
+    /// 平均编译时间
+    pub average_compilation_time: Duration,
+    /// 最快编译时间
+    pub fastest_compilation_time: Duration,
+    /// 最慢编译时间
+    pub slowest_compilation_time: Duration,
+    /// 按优化策略分组的编译统计
+    pub compilation_by_strategy: HashMap<LoopOptimizationStrategy, usize>,
+}
+
+/// 执行统计信息
+#[derive(Debug, Clone)]
+pub struct ExecutionStats {
+    /// 解释执行次数
+    pub interpreted_executions: usize,
+    /// JIT执行次数
+    pub jit_executions: usize,
+    /// 解释执行总时间
+    pub interpreted_execution_time: Duration,
+    /// JIT执行总时间
+    pub jit_execution_time: Duration,
+    /// 平均解释执行时间
+    pub average_interpreted_time: Duration,
+    /// 平均JIT执行时间
+    pub average_jit_time: Duration,
+    /// 性能提升比例
+    pub performance_improvement_ratio: f32,
+}
+
+/// 优化效果统计
+#[derive(Debug, Clone)]
+pub struct OptimizationStats {
+    /// 循环展开优化次数
+    pub loop_unroll_count: usize,
+    /// 强度削减优化次数
+    pub strength_reduction_count: usize,
+    /// 循环不变量提升次数
+    pub invariant_hoisting_count: usize,
+    /// 向量化优化次数
+    pub vectorization_count: usize,
+    /// 优化前后性能对比
+    pub optimization_improvements: HashMap<LoopOptimizationStrategy, f32>,
+}
+
+/// 缓存性能统计
+#[derive(Debug, Clone)]
+pub struct CachePerformanceStats {
+    /// 缓存命中次数
+    pub cache_hits: usize,
+    /// 缓存未命中次数
+    pub cache_misses: usize,
+    /// 缓存命中率
+    pub hit_rate: f32,
+    /// 缓存节省的编译时间
+    pub saved_compilation_time: Duration,
+    /// 缓存清理次数
+    pub cache_cleanups: usize,
+}
+
+impl Default for CompilationStats {
+    fn default() -> Self {
+        Self {
+            total_compilations: 0,
+            successful_compilations: 0,
+            failed_compilations: 0,
+            total_compilation_time: Duration::new(0, 0),
+            average_compilation_time: Duration::new(0, 0),
+            fastest_compilation_time: Duration::new(u64::MAX, 0),
+            slowest_compilation_time: Duration::new(0, 0),
+            compilation_by_strategy: HashMap::new(),
+        }
+    }
+}
+
+impl Default for ExecutionStats {
+    fn default() -> Self {
+        Self {
+            interpreted_executions: 0,
+            jit_executions: 0,
+            interpreted_execution_time: Duration::new(0, 0),
+            jit_execution_time: Duration::new(0, 0),
+            average_interpreted_time: Duration::new(0, 0),
+            average_jit_time: Duration::new(0, 0),
+            performance_improvement_ratio: 1.0,
+        }
+    }
+}
+
+impl Default for OptimizationStats {
+    fn default() -> Self {
+        Self {
+            loop_unroll_count: 0,
+            strength_reduction_count: 0,
+            invariant_hoisting_count: 0,
+            vectorization_count: 0,
+            optimization_improvements: HashMap::new(),
+        }
+    }
+}
+
+impl Default for CachePerformanceStats {
+    fn default() -> Self {
+        Self {
+            cache_hits: 0,
+            cache_misses: 0,
+            hit_rate: 0.0,
+            saved_compilation_time: Duration::new(0, 0),
+            cache_cleanups: 0,
+        }
+    }
+}
+
+impl Default for JitPerformanceMonitor {
+    fn default() -> Self {
+        Self {
+            compilation_stats: CompilationStats::default(),
+            execution_stats: ExecutionStats::default(),
+            optimization_stats: OptimizationStats::default(),
+            cache_stats: CachePerformanceStats::default(),
+            start_time: Instant::now(),
+        }
+    }
+}
+
+impl JitCompiler {
+    /// 🔄 v0.7.7: 记录编译开始
+    pub fn record_compilation_start(&mut self, strategies: &[LoopOptimizationStrategy]) -> Instant {
+        self.performance_monitor.compilation_stats.total_compilations += 1;
+
+        // 记录按策略分组的编译统计
+        for strategy in strategies {
+            *self.performance_monitor.compilation_stats.compilation_by_strategy
+                .entry(strategy.clone()).or_insert(0) += 1;
+        }
+
+        Instant::now()
+    }
+
+    /// 🔄 v0.7.7: 记录编译完成
+    pub fn record_compilation_end(&mut self, start_time: Instant, success: bool) {
+        let compilation_time = start_time.elapsed();
+
+        if success {
+            self.performance_monitor.compilation_stats.successful_compilations += 1;
+        } else {
+            self.performance_monitor.compilation_stats.failed_compilations += 1;
+        }
+
+        // 更新编译时间统计
+        let stats = &mut self.performance_monitor.compilation_stats;
+        stats.total_compilation_time += compilation_time;
+
+        if stats.total_compilations > 0 {
+            stats.average_compilation_time = stats.total_compilation_time / stats.total_compilations as u32;
+        }
+
+        if compilation_time < stats.fastest_compilation_time {
+            stats.fastest_compilation_time = compilation_time;
+        }
+        if compilation_time > stats.slowest_compilation_time {
+            stats.slowest_compilation_time = compilation_time;
+        }
+
+        crate::jit_debug_println!("📊 JIT: 编译完成，耗时: {:?}，成功: {}", compilation_time, success);
+    }
+
+    /// 🔄 v0.7.7: 记录解释执行
+    pub fn record_interpreted_execution(&mut self, execution_time: Duration) {
+        let stats = &mut self.performance_monitor.execution_stats;
+        stats.interpreted_executions += 1;
+        stats.interpreted_execution_time += execution_time;
+
+        if stats.interpreted_executions > 0 {
+            stats.average_interpreted_time = stats.interpreted_execution_time / stats.interpreted_executions as u32;
+        }
+    }
+
+    /// 🔄 v0.7.7: 记录JIT执行
+    pub fn record_jit_execution(&mut self, execution_time: Duration) {
+        let stats = &mut self.performance_monitor.execution_stats;
+        stats.jit_executions += 1;
+        stats.jit_execution_time += execution_time;
+
+        if stats.jit_executions > 0 {
+            stats.average_jit_time = stats.jit_execution_time / stats.jit_executions as u32;
+        }
+
+        // 计算性能提升比例
+        if stats.average_interpreted_time.as_nanos() > 0 && stats.average_jit_time.as_nanos() > 0 {
+            stats.performance_improvement_ratio =
+                stats.average_interpreted_time.as_nanos() as f32 / stats.average_jit_time.as_nanos() as f32;
+        }
+
+        crate::jit_debug_println!("🚀 JIT: JIT执行完成，耗时: {:?}，性能提升: {:.2}x",
+            execution_time, stats.performance_improvement_ratio);
+    }
+
+    /// 🔄 v0.7.7: 记录优化应用
+    pub fn record_optimization_applied(&mut self, strategy: &LoopOptimizationStrategy, improvement: f32) {
+        let stats = &mut self.performance_monitor.optimization_stats;
+
+        match strategy {
+            LoopOptimizationStrategy::LoopUnrolling { factor: _ } => stats.loop_unroll_count += 1,
+            LoopOptimizationStrategy::StrengthReduction => stats.strength_reduction_count += 1,
+            LoopOptimizationStrategy::LoopInvariantHoisting => stats.invariant_hoisting_count += 1,
+            LoopOptimizationStrategy::Vectorization { width: _ } => stats.vectorization_count += 1,
+            _ => {}
+        }
+
+        stats.optimization_improvements.insert(strategy.clone(), improvement);
+
+        crate::jit_debug_println!("🔧 JIT: 应用优化策略 {:?}，性能提升: {:.2}%", strategy, improvement * 100.0);
+    }
+
+    /// 🔄 v0.7.7: 记录缓存命中
+    pub fn record_cache_hit(&mut self, saved_time: Duration) {
+        let stats = &mut self.performance_monitor.cache_stats;
+        stats.cache_hits += 1;
+        stats.saved_compilation_time += saved_time;
+
+        let total_requests = stats.cache_hits + stats.cache_misses;
+        if total_requests > 0 {
+            stats.hit_rate = stats.cache_hits as f32 / total_requests as f32;
+        }
+
+        crate::jit_debug_println!("🎯 JIT: 缓存命中，节省编译时间: {:?}，命中率: {:.2}%",
+            saved_time, stats.hit_rate * 100.0);
+    }
+
+    /// 🔄 v0.7.7: 记录缓存未命中
+    pub fn record_cache_miss(&mut self) {
+        let stats = &mut self.performance_monitor.cache_stats;
+        stats.cache_misses += 1;
+
+        let total_requests = stats.cache_hits + stats.cache_misses;
+        if total_requests > 0 {
+            stats.hit_rate = stats.cache_hits as f32 / total_requests as f32;
+        }
+
+        crate::jit_debug_println!("❌ JIT: 缓存未命中，当前命中率: {:.2}%", stats.hit_rate * 100.0);
+    }
+
+    /// 🔄 v0.7.7: 记录缓存清理
+    pub fn record_cache_cleanup(&mut self) {
+        self.performance_monitor.cache_stats.cache_cleanups += 1;
+        crate::jit_debug_println!("🧹 JIT: 缓存清理完成，清理次数: {}",
+            self.performance_monitor.cache_stats.cache_cleanups);
+    }
+
+    /// 🔄 v0.7.7: 获取性能监控报告
+    pub fn get_performance_report(&self) -> JitPerformanceReport {
+        let monitor = &self.performance_monitor;
+        let uptime = monitor.start_time.elapsed();
+
+        JitPerformanceReport {
+            uptime,
+            compilation_stats: monitor.compilation_stats.clone(),
+            execution_stats: monitor.execution_stats.clone(),
+            optimization_stats: monitor.optimization_stats.clone(),
+            cache_stats: monitor.cache_stats.clone(),
+            overall_performance_gain: monitor.execution_stats.performance_improvement_ratio,
+        }
+    }
+
+    /// 🔄 v0.7.7: 打印性能报告
+    pub fn print_performance_report(&self) {
+        let report = self.get_performance_report();
+
+        println!("📊 === JIT编译器性能报告 ===");
+        println!("⏱️  运行时间: {:?}", report.uptime);
+        println!();
+
+        println!("🔨 编译统计:");
+        println!("   总编译次数: {}", report.compilation_stats.total_compilations);
+        println!("   成功编译: {}", report.compilation_stats.successful_compilations);
+        println!("   失败编译: {}", report.compilation_stats.failed_compilations);
+        println!("   平均编译时间: {:?}", report.compilation_stats.average_compilation_time);
+        println!("   最快编译时间: {:?}", report.compilation_stats.fastest_compilation_time);
+        println!("   最慢编译时间: {:?}", report.compilation_stats.slowest_compilation_time);
+        println!();
+
+        println!("🚀 执行统计:");
+        println!("   解释执行次数: {}", report.execution_stats.interpreted_executions);
+        println!("   JIT执行次数: {}", report.execution_stats.jit_executions);
+        println!("   平均解释执行时间: {:?}", report.execution_stats.average_interpreted_time);
+        println!("   平均JIT执行时间: {:?}", report.execution_stats.average_jit_time);
+        println!("   性能提升比例: {:.2}x", report.execution_stats.performance_improvement_ratio);
+        println!();
+
+        println!("🔧 优化统计:");
+        println!("   循环展开: {}", report.optimization_stats.loop_unroll_count);
+        println!("   强度削减: {}", report.optimization_stats.strength_reduction_count);
+        println!("   不变量提升: {}", report.optimization_stats.invariant_hoisting_count);
+        println!("   向量化: {}", report.optimization_stats.vectorization_count);
+        println!();
+
+        println!("🗄️  缓存统计:");
+        println!("   缓存命中: {}", report.cache_stats.cache_hits);
+        println!("   缓存未命中: {}", report.cache_stats.cache_misses);
+        println!("   命中率: {:.2}%", report.cache_stats.hit_rate * 100.0);
+        println!("   节省编译时间: {:?}", report.cache_stats.saved_compilation_time);
+        println!("   缓存清理次数: {}", report.cache_stats.cache_cleanups);
+        println!();
+
+        println!("🎯 总体性能提升: {:.2}x", report.overall_performance_gain);
+        println!("=================================");
+    }
+}
+
+/// 🔄 v0.7.7: JIT性能报告
+#[derive(Debug, Clone)]
+pub struct JitPerformanceReport {
+    /// 运行时间
+    pub uptime: Duration,
+    /// 编译统计
+    pub compilation_stats: CompilationStats,
+    /// 执行统计
+    pub execution_stats: ExecutionStats,
+    /// 优化统计
+    pub optimization_stats: OptimizationStats,
+    /// 缓存统计
+    pub cache_stats: CachePerformanceStats,
+    /// 总体性能提升
+    pub overall_performance_gain: f32,
 }
