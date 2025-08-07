@@ -1,0 +1,211 @@
+// CodeNothing v0.7.7 JIT性能监控系统测试
+using lib <io>;
+
+fn test_compilation_monitoring(): int {
+    print("📊 测试编译监控");
+    
+    result : int = 0;
+    
+    // 触发多次JIT编译以测试编译统计
+    for (round : 1..3) {
+        round_sum : int = 0;
+        
+        // 简单循环 - 应该触发JIT编译
+        for (i : 1..20) {
+            round_sum = round_sum + i;
+        };
+        
+        // 复杂循环 - 应该触发不同的优化策略
+        for (j : 1..15) {
+            if (j % 2 == 0) {
+                round_sum = round_sum + j * 2;
+            } else {
+                round_sum = round_sum + j;
+            };
+        };
+        
+        result = result + round_sum;
+        print("第" + round + "轮编译监控测试结果: " + round_sum);
+    };
+    
+    return result;
+};
+
+fn test_execution_monitoring(): int {
+    print("🚀 测试执行监控");
+    
+    total : int = 0;
+    
+    // 测试解释执行 vs JIT执行的性能对比
+    for (batch : 1..4) {
+        batch_result : int = 0;
+        
+        // 数学密集型循环
+        for (i : 1..25) {
+            batch_result = batch_result + i * i;
+        };
+        
+        // 条件分支循环
+        for (k : 1..20) {
+            if (k % 3 == 0) {
+                batch_result = batch_result + k * 5;
+            } else {
+                if (k % 2 == 0) {
+                    batch_result = batch_result + k * 2;
+                } else {
+                    batch_result = batch_result + k;
+                };
+            };
+        };
+        
+        total = total + batch_result;
+        print("第" + batch + "批次执行监控测试结果: " + batch_result);
+    };
+    
+    return total;
+};
+
+fn test_optimization_monitoring(): int {
+    print("🔧 测试优化监控");
+    
+    optimization_result : int = 0;
+    
+    // 测试循环展开优化
+    unroll_sum : int = 0;
+    for (i : 1..12) {
+        unroll_sum = unroll_sum + i;
+    };
+    optimization_result = optimization_result + unroll_sum;
+    print("循环展开优化测试: " + unroll_sum);
+    
+    // 测试强度削减优化
+    strength_sum : int = 0;
+    for (j : 1..18) {
+        strength_sum = strength_sum + j * 7;  // 乘法优化
+    };
+    optimization_result = optimization_result + strength_sum;
+    print("强度削减优化测试: " + strength_sum);
+    
+    // 测试循环不变量提升
+    invariant_sum : int = 0;
+    constant_value : int = 42;
+    for (k : 1..15) {
+        invariant_sum = invariant_sum + k + constant_value;  // constant_value是不变量
+    };
+    optimization_result = optimization_result + invariant_sum;
+    print("循环不变量提升测试: " + invariant_sum);
+    
+    return optimization_result;
+};
+
+fn test_cache_monitoring(): int {
+    print("🗄️ 测试缓存监控");
+    
+    cache_result : int = 0;
+    
+    // 重复执行相同模式的循环以测试缓存命中
+    for (repeat : 1..5) {
+        pattern_sum : int = 0;
+        
+        // 相同的循环模式 - 应该命中缓存
+        for (i : 1..10) {
+            pattern_sum = pattern_sum + i * 2;
+        };
+        
+        cache_result = cache_result + pattern_sum;
+        print("第" + repeat + "次缓存监控测试: " + pattern_sum);
+    };
+    
+    // 不同的循环模式 - 应该缓存未命中
+    different_sum : int = 0;
+    for (j : 1..10) {
+        if (j % 2 == 0) {
+            different_sum = different_sum + j * 3;
+        } else {
+            different_sum = different_sum + j;
+        };
+    };
+    cache_result = cache_result + different_sum;
+    print("不同模式缓存测试: " + different_sum);
+    
+    return cache_result;
+};
+
+fn test_nested_loop_monitoring(): int {
+    print("🔄 测试嵌套循环监控");
+    
+    nested_result : int = 0;
+    
+    // 嵌套循环 - 测试复杂度分析
+    for (outer : 1..6) {
+        outer_sum : int = 0;
+        for (inner : 1..5) {
+            outer_sum = outer_sum + outer * inner;
+        };
+        nested_result = nested_result + outer_sum;
+    };
+    
+    print("嵌套循环监控测试结果: " + nested_result);
+    return nested_result;
+};
+
+fn test_while_loop_monitoring(): int {
+    print("⏰ 测试While循环监控");
+    
+    while_result : int = 0;
+    
+    // While循环性能监控
+    counter : int = 1;
+    while (counter <= 20) {
+        while_result = while_result + counter;
+        counter = counter + 1;
+    };
+    
+    // 复杂While循环
+    complex_counter : int = 1;
+    complex_sum : int = 0;
+    while (complex_counter <= 15) {
+        if (complex_counter % 2 == 0) {
+            complex_sum = complex_sum + complex_counter * 4;
+        } else {
+            complex_sum = complex_sum + complex_counter;
+        };
+        complex_counter = complex_counter + 1;
+    };
+    
+    while_result = while_result + complex_sum;
+    print("While循环监控测试结果: " + while_result);
+    return while_result;
+};
+
+fn main(): int {
+    print("=== CodeNothing v0.7.7 JIT性能监控系统测试 ===");
+    print("");
+    
+    result1 : int = test_compilation_monitoring();
+    print("");
+    
+    result2 : int = test_execution_monitoring();
+    print("");
+    
+    result3 : int = test_optimization_monitoring();
+    print("");
+    
+    result4 : int = test_cache_monitoring();
+    print("");
+    
+    result5 : int = test_nested_loop_monitoring();
+    print("");
+    
+    result6 : int = test_while_loop_monitoring();
+    print("");
+    
+    total : int = result1 + result2 + result3 + result4 + result5 + result6;
+    
+    print("=== JIT性能监控系统测试完成 ===");
+    print("总计结果: " + total);
+    print("🎉 JIT性能监控系统验证完成！");
+    print("请查看JIT调试输出以验证性能统计信息。");
+    
+    return total;
+};

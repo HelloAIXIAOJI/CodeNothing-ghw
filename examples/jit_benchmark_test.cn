@@ -1,0 +1,263 @@
+// CodeNothing v0.7.7 JIT编译器基准测试
+using lib <io>;
+
+fn benchmark_simple_loop(): int {
+    print("📊 基准测试: 简单循环");
+    
+    // 大量迭代的简单循环，测试JIT编译效果
+    sum : int = 0;
+    for (i : 1..1000) {
+        sum = sum + i;
+    };
+    
+    print("简单循环基准测试结果: " + sum);
+    return sum;
+};
+
+fn benchmark_arithmetic_intensive(): int {
+    print("📊 基准测试: 算术密集型循环");
+    
+    // 算术运算密集的循环
+    result : int = 0;
+    for (i : 1..500) {
+        temp : int = i * i + i * 2 + i / 2;
+        result = result + temp;
+    };
+    
+    print("算术密集型基准测试结果: " + result);
+    return result;
+};
+
+fn benchmark_conditional_branches(): int {
+    print("📊 基准测试: 条件分支循环");
+    
+    // 包含大量条件分支的循环
+    branch_sum : int = 0;
+    for (i : 1..300) {
+        if (i % 10 == 0) {
+            branch_sum = branch_sum + i * 5;
+        } else {
+            if (i % 5 == 0) {
+                branch_sum = branch_sum + i * 3;
+            } else {
+                if (i % 2 == 0) {
+                    branch_sum = branch_sum + i * 2;
+                } else {
+                    branch_sum = branch_sum + i;
+                };
+            };
+        };
+    };
+    
+    print("条件分支基准测试结果: " + branch_sum);
+    return branch_sum;
+};
+
+fn benchmark_nested_loops(): int {
+    print("📊 基准测试: 嵌套循环");
+    
+    // 多层嵌套循环
+    nested_total : int = 0;
+    for (i : 1..20) {
+        for (j : 1..15) {
+            for (k : 1..5) {
+                nested_total = nested_total + i + j + k;
+            };
+        };
+    };
+    
+    print("嵌套循环基准测试结果: " + nested_total);
+    return nested_total;
+};
+
+fn benchmark_while_loop_performance(): int {
+    print("📊 基准测试: While循环性能");
+    
+    // While循环性能测试
+    while_result : int = 0;
+    counter : int = 1;
+    while (counter <= 800) {
+        while_result = while_result + counter;
+        if (counter % 2 == 0) {
+            while_result = while_result + counter / 2;
+        };
+        counter = counter + 1;
+    };
+    
+    print("While循环基准测试结果: " + while_result);
+    return while_result;
+};
+
+fn benchmark_optimization_effectiveness(): int {
+    print("📊 基准测试: 优化效果");
+    
+    optimization_sum : int = 0;
+    
+    // 测试循环展开优化效果
+    for (i : 1..100) {
+        optimization_sum = optimization_sum + i;
+    };
+    
+    // 测试强度削减优化效果
+    for (j : 1..80) {
+        optimization_sum = optimization_sum + j * 16;  // 乘以16，可优化为位移
+    };
+    
+    // 测试循环不变量提升效果
+    constant_factor : int = 42;
+    for (k : 1..60) {
+        optimization_sum = optimization_sum + k + constant_factor;
+    };
+    
+    print("优化效果基准测试结果: " + optimization_sum);
+    return optimization_sum;
+};
+
+fn benchmark_cache_performance(): int {
+    print("📊 基准测试: 缓存性能");
+    
+    cache_total : int = 0;
+    
+    // 重复执行相同模式，测试缓存命中率
+    for (round : 1..10) {
+        round_sum : int = 0;
+        for (i : 1..50) {
+            round_sum = round_sum + i * 4;
+        };
+        cache_total = cache_total + round_sum;
+    };
+    
+    print("缓存性能基准测试结果: " + cache_total);
+    return cache_total;
+};
+
+fn benchmark_mixed_workload(): int {
+    print("📊 基准测试: 混合工作负载");
+    
+    mixed_result : int = 0;
+    
+    // 混合不同类型的循环
+    // 1. 简单累加
+    for (i : 1..100) {
+        mixed_result = mixed_result + i;
+    };
+    
+    // 2. 条件处理
+    for (j : 1..80) {
+        if (j % 3 == 0) {
+            mixed_result = mixed_result + j * 2;
+        } else {
+            mixed_result = mixed_result + j;
+        };
+    };
+    
+    // 3. 嵌套计算
+    for (k : 1..15) {
+        inner_sum : int = 0;
+        for (l : 1..10) {
+            inner_sum = inner_sum + l;
+        };
+        mixed_result = mixed_result + inner_sum;
+    };
+    
+    print("混合工作负载基准测试结果: " + mixed_result);
+    return mixed_result;
+};
+
+fn benchmark_stress_test(): int {
+    print("📊 基准测试: 压力测试");
+    
+    stress_total : int = 0;
+    
+    // 高强度循环测试
+    for (batch : 1..5) {
+        batch_sum : int = 0;
+        
+        // 大量迭代
+        for (i : 1..200) {
+            temp_value : int = i;
+            
+            // 多层计算
+            for (j : 1..3) {
+                temp_value = temp_value + j * i;
+            };
+            
+            batch_sum = batch_sum + temp_value;
+        };
+        
+        stress_total = stress_total + batch_sum;
+        print("压力测试第" + batch + "批次: " + batch_sum);
+    };
+    
+    return stress_total;
+};
+
+fn benchmark_compilation_overhead(): int {
+    print("📊 基准测试: 编译开销");
+    
+    compilation_result : int = 0;
+    
+    // 测试不同复杂度的循环编译开销
+    // 简单循环
+    for (i : 1..50) {
+        compilation_result = compilation_result + i;
+    };
+    
+    // 中等复杂度循环
+    for (j : 1..40) {
+        if (j % 2 == 0) {
+            compilation_result = compilation_result + j * 3;
+        } else {
+            compilation_result = compilation_result + j;
+        };
+    };
+    
+    // 复杂循环
+    for (k : 1..30) {
+        complex_value : int = k;
+        if (k % 3 == 0) {
+            complex_value = complex_value * 4;
+        } else {
+            if (k % 2 == 0) {
+                complex_value = complex_value * 2;
+            };
+        };
+        compilation_result = compilation_result + complex_value;
+    };
+    
+    print("编译开销基准测试结果: " + compilation_result);
+    return compilation_result;
+};
+
+fn main(): int {
+    print("=== CodeNothing v0.7.7 JIT编译器基准测试套件 ===");
+    print("🚀 开始执行基准测试...");
+    print("");
+    
+    // 执行各项基准测试
+    result1 : int = benchmark_simple_loop();
+    result2 : int = benchmark_arithmetic_intensive();
+    result3 : int = benchmark_conditional_branches();
+    result4 : int = benchmark_nested_loops();
+    result5 : int = benchmark_while_loop_performance();
+    print("");
+    
+    result6 : int = benchmark_optimization_effectiveness();
+    result7 : int = benchmark_cache_performance();
+    result8 : int = benchmark_mixed_workload();
+    print("");
+    
+    result9 : int = benchmark_stress_test();
+    result10 : int = benchmark_compilation_overhead();
+    print("");
+    
+    total : int = result1 + result2 + result3 + result4 + result5 + 
+                  result6 + result7 + result8 + result9 + result10;
+    
+    print("=== 基准测试完成 ===");
+    print("总计基准测试结果: " + total);
+    print("🎯 JIT编译器基准测试执行完毕！");
+    print("请查看JIT调试输出以分析性能数据。");
+    
+    return total;
+};

@@ -1,0 +1,274 @@
+// CodeNothing v0.7.7 JIT编译性能对比基准测试
+using lib <io>;
+
+fn benchmark_simple_accumulation(): int {
+    print("🔄 基准测试: 简单累加循环");
+    
+    // 大量迭代的简单累加，测试基础JIT编译效果
+    accumulator : int = 0;
+    for (i : 1..500) {
+        accumulator = accumulator + i;
+    };
+    
+    print("简单累加结果: " + accumulator);
+    return accumulator;
+};
+
+fn benchmark_multiplication_intensive(): int {
+    print("🔄 基准测试: 乘法密集型循环");
+    
+    // 乘法密集的循环，测试强度削减优化
+    product_sum : int = 0;
+    for (i : 1..200) {
+        product_sum = product_sum + i * 8;  // 乘以8，可优化为位移
+    };
+    
+    print("乘法密集型结果: " + product_sum);
+    return product_sum;
+};
+
+fn benchmark_conditional_heavy(): int {
+    print("🔄 基准测试: 条件密集型循环");
+    
+    // 大量条件分支的循环，测试分支预测优化
+    conditional_sum : int = 0;
+    for (i : 1..300) {
+        if (i % 15 == 0) {
+            conditional_sum = conditional_sum + i * 7;
+        } else {
+            if (i % 10 == 0) {
+                conditional_sum = conditional_sum + i * 5;
+            } else {
+                if (i % 5 == 0) {
+                    conditional_sum = conditional_sum + i * 3;
+                } else {
+                    if (i % 2 == 0) {
+                        conditional_sum = conditional_sum + i * 2;
+                    } else {
+                        conditional_sum = conditional_sum + i;
+                    };
+                };
+            };
+        };
+    };
+    
+    print("条件密集型结果: " + conditional_sum);
+    return conditional_sum;
+};
+
+fn benchmark_nested_computation(): int {
+    print("🔄 基准测试: 嵌套计算循环");
+    
+    // 多层嵌套的计算密集循环
+    nested_result : int = 0;
+    for (outer : 1..15) {
+        outer_sum : int = 0;
+        for (middle : 1..10) {
+            middle_sum : int = 0;
+            for (inner : 1..5) {
+                middle_sum = middle_sum + inner * outer;
+            };
+            outer_sum = outer_sum + middle_sum + middle;
+        };
+        nested_result = nested_result + outer_sum;
+    };
+    
+    print("嵌套计算结果: " + nested_result);
+    return nested_result;
+};
+
+fn benchmark_invariant_heavy(): int {
+    print("🔄 基准测试: 循环不变量密集型");
+    
+    // 包含大量循环不变量的循环，测试不变量提升优化
+    invariant_result : int = 0;
+    base_constant : int = 100;
+    multiplier : int = 7;
+    offset : int = 42;
+    
+    for (i : 1..200) {
+        // 这些计算包含循环不变量
+        invariant_value : int = base_constant * multiplier + offset;
+        invariant_result = invariant_result + i + invariant_value;
+    };
+    
+    print("循环不变量密集型结果: " + invariant_result);
+    return invariant_result;
+};
+
+fn benchmark_while_loop_intensive(): int {
+    print("⏰ 基准测试: While循环密集型");
+    
+    // 复杂的While循环，测试While循环JIT编译
+    while_sum : int = 0;
+    counter : int = 1;
+    
+    while (counter <= 300) {
+        temp_value : int = counter;
+        
+        // 复杂的计算逻辑
+        if (counter % 7 == 0) {
+            temp_value = temp_value * 4;
+        } else {
+            if (counter % 3 == 0) {
+                temp_value = temp_value * 2;
+            };
+        };
+        
+        while_sum = while_sum + temp_value;
+        counter = counter + 1;
+    };
+    
+    print("While循环密集型结果: " + while_sum);
+    return while_sum;
+};
+
+fn benchmark_mixed_optimization(): int {
+    print("🔧 基准测试: 混合优化场景");
+    
+    // 同时包含多种优化机会的复杂循环
+    mixed_total : int = 0;
+    constant_factor : int = 123;
+    
+    for (i : 1..150) {
+        temp_result : int = 0;
+
+        // 强度削减机会
+        temp_result = temp_result + i * 16;  // 乘以16
+
+        // 循环不变量提升机会
+        temp_result = temp_result + constant_factor * 2;
+        
+        // 条件分支
+        if (i % 4 == 0) {
+            temp_result = temp_result + i * 4;
+        } else {
+            temp_result = temp_result + i;
+        };
+        
+        mixed_total = mixed_total + temp_result;
+    };
+    
+    print("混合优化场景结果: " + mixed_total);
+    return mixed_total;
+};
+
+fn benchmark_cache_friendly(): int {
+    print("🗄️ 基准测试: 缓存友好型循环");
+    
+    cache_total : int = 0;
+    
+    // 重复执行相同模式的循环，测试JIT缓存效果
+    for (iteration : 1..10) {
+        pattern_sum : int = 0;
+
+        // 固定模式的循环，应该命中JIT缓存
+        for (i : 1..50) {
+            pattern_sum = pattern_sum + i * 3;
+        };
+        
+        cache_total = cache_total + pattern_sum;
+    };
+    
+    print("缓存友好型结果: " + cache_total);
+    return cache_total;
+};
+
+fn benchmark_memory_access_pattern(): int {
+    print("💾 基准测试: 内存访问模式");
+    
+    // 测试不同内存访问模式的JIT编译效果
+    memory_result : int = 0;
+    
+    for (i : 1..100) {
+        // 模拟复杂的内存访问
+        local_var1 : int = i * 2;
+        local_var2 : int = i * 3;
+        local_var3 : int = i * 5;
+        
+        combined_value : int = local_var1 + local_var2 + local_var3;
+        
+        if (combined_value % 2 == 0) {
+            memory_result = memory_result + combined_value;
+        } else {
+            memory_result = memory_result + combined_value / 2;
+        };
+    };
+    
+    print("内存访问模式结果: " + memory_result);
+    return memory_result;
+};
+
+fn benchmark_comprehensive_stress(): int {
+    print("🚀 基准测试: 综合压力测试");
+    
+    // 综合性的压力测试，包含所有优化场景
+    stress_total : int = 0;
+    
+    for (phase : 1..5) {
+        phase_result : int = 0;
+
+        // 每个阶段包含不同类型的计算
+        for (i : 1..50) {
+            computation_result : int = i;
+
+            // 算术密集
+            computation_result = computation_result * 2 + i;
+            
+            // 条件分支
+            if (i % phase == 0) {
+                computation_result = computation_result * 2;
+            };
+            
+            // 嵌套计算
+            for (j : 1..3) {
+                computation_result = computation_result + j;
+            };
+            
+            phase_result = phase_result + computation_result;
+        };
+        
+        stress_total = stress_total + phase_result;
+        print("压力测试第" + phase + "阶段: " + phase_result);
+    };
+    
+    return stress_total;
+};
+
+fn main(): int {
+    print("=== CodeNothing v0.7.7 JIT编译性能对比基准测试 ===");
+    print("🎯 测试目标: 验证JIT编译带来的性能提升");
+    print("");
+    
+    // 执行各项基准测试
+    result1 : int = benchmark_simple_accumulation();
+    result2 : int = benchmark_multiplication_intensive();
+    result3 : int = benchmark_conditional_heavy();
+    result4 : int = benchmark_nested_computation();
+    result5 : int = benchmark_invariant_heavy();
+    print("");
+    
+    result6 : int = benchmark_while_loop_intensive();
+    result7 : int = benchmark_mixed_optimization();
+    result8 : int = benchmark_cache_friendly();
+    result9 : int = benchmark_memory_access_pattern();
+    print("");
+    
+    result10 : int = benchmark_comprehensive_stress();
+    print("");
+    
+    total : int = result1 + result2 + result3 + result4 + result5 + 
+                  result6 + result7 + result8 + result9 + result10;
+    
+    print("=== 性能对比基准测试完成 ===");
+    print("总计基准测试结果: " + total);
+    print("🏆 JIT编译性能对比测试执行完毕！");
+    print("");
+    print("📊 性能分析建议:");
+    print("1. 查看JIT调试输出中的编译统计");
+    print("2. 对比解释执行与JIT执行的时间差异");
+    print("3. 分析缓存命中率和优化策略应用情况");
+    print("4. 验证是否达到预期的性能提升目标");
+    
+    return total;
+};
