@@ -713,6 +713,10 @@ impl<'a> ExpressionEvaluator for Interpreter<'a> {
                     Value::None
                 }
             },
+            Expression::MatchExpression(match_expr, arms) => {
+                // Match 表达式求值
+                self.evaluate_match_expression(*match_expr.clone(), arms.clone())
+            },
         }
     }
     
