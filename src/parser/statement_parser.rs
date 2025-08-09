@@ -18,6 +18,7 @@ pub trait StatementParser {
     fn parse_try_catch(&mut self) -> Result<Statement, String>;
     fn parse_throw_statement(&mut self) -> Result<Statement, String>;
     fn parse_switch_statement(&mut self) -> Result<Statement, String>;
+    fn parse_match_statement(&mut self) -> Result<Statement, String>;
     fn parse_case_pattern(&mut self) -> Result<CasePattern, String>;
     fn parse_type(&mut self) -> Result<Type, String>;
 }
