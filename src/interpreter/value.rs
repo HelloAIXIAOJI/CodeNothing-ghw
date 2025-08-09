@@ -65,20 +65,46 @@ pub enum Value {
     None, // 表示空值或未定义的值
 }
 
-#[derive(Debug, Clone)]
+impl PartialEq for Value {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Value::Int(a), Value::Int(b)) => a == b,
+            (Value::Float(a), Value::Float(b)) => a == b,
+            (Value::Bool(a), Value::Bool(b)) => a == b,
+            (Value::String(a), Value::String(b)) => a == b,
+            (Value::Long(a), Value::Long(b)) => a == b,
+            (Value::Array(a), Value::Array(b)) => a == b,
+            (Value::Object(a), Value::Object(b)) => a == b,
+            (Value::FunctionReference(a), Value::FunctionReference(b)) => a == b,
+            (Value::EnumValue(a), Value::EnumValue(b)) => a == b,
+            (Value::Pointer(a), Value::Pointer(b)) => a == b,
+            (Value::ArrayPointer(a), Value::ArrayPointer(b)) => a == b,
+            (Value::PointerArray(a), Value::PointerArray(b)) => a == b,
+            (Value::FunctionPointer(a), Value::FunctionPointer(b)) => a == b,
+            (Value::LambdaFunctionPointer(a), Value::LambdaFunctionPointer(b)) => a == b,
+            (Value::None, Value::None) => true,
+            // Lambda 和 LambdaBlock 暂时不支持比较，因为包含AST节点
+            (Value::Lambda(_, _), Value::Lambda(_, _)) => false,
+            (Value::LambdaBlock(_, _), Value::LambdaBlock(_, _)) => false,
+            _ => false, // 不同类型不相等
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct ObjectInstance {
     pub class_name: String,
     pub fields: HashMap<String, Value>,
 }
 
 // 静态成员存储
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct StaticMembers {
     pub static_fields: HashMap<String, Value>,
 }
 
 // 枚举实例
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct EnumInstance {
     pub enum_name: String,
     pub variant_name: String,
@@ -86,7 +112,7 @@ pub struct EnumInstance {
 }
 
 // 指针实例
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct PointerInstance {
     pub address: usize, // 真实内存地址
     pub target_type: PointerType, // 指向的类型
@@ -96,7 +122,7 @@ pub struct PointerInstance {
 }
 
 // 数组指针实例 (*[size]Type)
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ArrayPointerInstance {
     pub address: usize, // 数组的内存地址
     pub element_type: PointerType, // 数组元素类型
@@ -106,7 +132,7 @@ pub struct ArrayPointerInstance {
 }
 
 // 指针数组实例 ([size]*Type)
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct PointerArrayInstance {
     pub pointers: Vec<PointerInstance>, // 指针数组
     pub element_type: PointerType, // 指针指向的类型
@@ -114,7 +140,7 @@ pub struct PointerArrayInstance {
 }
 
 // 指针类型信息
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum PointerType {
     Int,
     Float,
@@ -139,6 +165,15 @@ pub struct FunctionPointerInstance {
     pub lambda_body: Option<Box<crate::ast::Statement>>, // Lambda函数体
 }
 
+impl PartialEq for FunctionPointerInstance {
+    fn eq(&self, other: &Self) -> bool {
+        self.function_name == other.function_name &&
+        self.is_null == other.is_null &&
+        self.is_lambda == other.is_lambda
+        // 暂时不比较类型和函数体，因为AST节点没有实现PartialEq
+    }
+}
+
 // Lambda函数指针实例（包含完整参数信息）
 #[derive(Debug, Clone)]
 pub struct LambdaFunctionPointerInstance {
@@ -150,6 +185,16 @@ pub struct LambdaFunctionPointerInstance {
     pub lambda_body: Option<Box<crate::ast::Statement>>, // Lambda函数体
     pub lambda_params: Vec<crate::ast::Parameter>, // 完整的参数信息（包含名称）
     pub closure_env: std::collections::HashMap<String, Value>, // 闭包环境
+}
+
+impl PartialEq for LambdaFunctionPointerInstance {
+    fn eq(&self, other: &Self) -> bool {
+        self.function_name == other.function_name &&
+        self.is_null == other.is_null &&
+        self.is_lambda == other.is_lambda &&
+        self.closure_env == other.closure_env
+        // 暂时不比较类型、参数和函数体，因为AST节点没有实现PartialEq
+    }
 }
 
 impl Value {
