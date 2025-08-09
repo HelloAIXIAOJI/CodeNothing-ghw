@@ -129,7 +129,7 @@ impl<'a> PatternParser for ParserBase<'a> {
         let guard = self.parse_guard_condition()?;
         
         // 期望 '=>' 符号
-        if !self.consume_symbol("=") || !self.consume_symbol(">") {
+        if !self.consume_symbol("=>") {
             return Err("期望 '=>' 在模式之后".to_string());
         }
         
@@ -262,7 +262,7 @@ impl<'a> PatternParser for ParserBase<'a> {
                 },
                 
                 // 数字字面量模式
-                s if s.chars().next().unwrap().is_digit(10) || s.starts_with('-') => {
+                s if s.chars().next().map_or(false, |c| c.is_ascii_digit()) || s.starts_with('-') => {
                     let s_clone = s.clone();
                     self.advance();
                     if s_clone.contains('.') {
@@ -281,7 +281,7 @@ impl<'a> PatternParser for ParserBase<'a> {
                 },
                 
                 // 变量模式或枚举模式
-                _ if token.chars().next().unwrap().is_alphabetic() || token.starts_with('_') => {
+                _ if token.chars().next().map_or(false, |c| c.is_alphabetic()) || token.starts_with('_') => {
                     let name = self.advance().unwrap();
                     
                     // 检查是否是枚举模式 (EnumName::Variant)
