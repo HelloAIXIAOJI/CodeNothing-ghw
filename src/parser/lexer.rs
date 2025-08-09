@@ -257,16 +257,17 @@ pub fn tokenize(source: &str, debug: bool) -> Vec<String> {
             continue;
         }
         
-        // 检查数字
-        if c.is_digit(10) || (c == '.' && i + 1 < chars.len() && chars[i + 1].is_digit(10)) {
+        // 检查数字（包括科学计数法）
+        if c.is_digit(10) || (c == '.' && i + 1 < chars.len() && chars[i + 1].is_digit(10)) || (c == 'e' || c == 'E') {
             let mut number = String::new();
             let mut has_dot = c == '.';
-            
+
             if has_dot {
                 number.push('.');
                 i += 1;
             }
-            
+
+            // 解析整数部分和小数部分
             while i < chars.len() && (chars[i].is_digit(10) || (chars[i] == '.' && !has_dot)) {
                 if chars[i] == '.' {
                     // 检查是否是范围操作符
@@ -278,6 +279,25 @@ pub fn tokenize(source: &str, debug: bool) -> Vec<String> {
                 number.push(chars[i]);
                 i += 1;
             }
+
+            // 检查科学计数法 (e 或 E)
+            if i < chars.len() && (chars[i] == 'e' || chars[i] == 'E') {
+                number.push(chars[i]);
+                i += 1;
+
+                // 检查可选的正负号
+                if i < chars.len() && (chars[i] == '+' || chars[i] == '-') {
+                    number.push(chars[i]);
+                    i += 1;
+                }
+
+                // 解析指数部分
+                while i < chars.len() && chars[i].is_digit(10) {
+                    number.push(chars[i]);
+                    i += 1;
+                }
+            }
+
             tokens.push(number);
             continue;
         }
