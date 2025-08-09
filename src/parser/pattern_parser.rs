@@ -118,7 +118,9 @@ impl<'a> PatternParser for ParserBase<'a> {
     
     /// 解析单个匹配分支
     fn parse_match_arm(&mut self) -> Result<MatchArm, String> {
-        self.debug_println("开始解析match分支");
+        if self.debug {
+            println!("开始解析match分支");
+        }
         
         // 解析模式
         let pattern = self.parse_pattern()?;
@@ -156,7 +158,9 @@ impl<'a> PatternParser for ParserBase<'a> {
         // 可选的分号
         self.consume_symbol(";");
         
-        self.debug_println("match分支解析完成");
+        if self.debug {
+            println!("match分支解析完成");
+        }
         Ok(MatchArm {
             pattern,
             guard,
