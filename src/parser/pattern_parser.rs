@@ -263,18 +263,19 @@ impl<'a> PatternParser for ParserBase<'a> {
                 
                 // 数字字面量模式
                 s if s.chars().next().unwrap().is_digit(10) || s.starts_with('-') => {
+                    let s_clone = s.clone();
                     self.advance();
-                    if s.contains('.') {
-                        if let Ok(value) = s.parse::<f64>() {
+                    if s_clone.contains('.') {
+                        if let Ok(value) = s_clone.parse::<f64>() {
                             Ok(Pattern::FloatLiteral(value))
                         } else {
-                            Err(format!("无效的浮点数字面量: {}", s))
+                            Err(format!("无效的浮点数字面量: {}", s_clone))
                         }
                     } else {
-                        if let Ok(value) = s.parse::<i32>() {
+                        if let Ok(value) = s_clone.parse::<i32>() {
                             Ok(Pattern::IntLiteral(value))
                         } else {
-                            Err(format!("无效的整数字面量: {}", s))
+                            Err(format!("无效的整数字面量: {}", s_clone))
                         }
                     }
                 },
