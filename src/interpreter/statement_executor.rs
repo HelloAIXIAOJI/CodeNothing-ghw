@@ -1,9 +1,10 @@
-use crate::ast::{Statement, Expression, Type, NamespaceType, Function, SwitchCase, CasePattern, SwitchType};
+use crate::ast::{Statement, Expression, Type, NamespaceType, Function, SwitchCase, CasePattern, SwitchType, MatchArm};
 use super::value::Value;
 use super::executor::{Executor, ExecutionResult, update_variable_value, handle_increment, handle_decrement};
 use super::library_loader::{load_library, call_library_function, convert_values_to_string_args};
 use super::interpreter_core::{Interpreter, debug_println};
 use super::expression_evaluator::ExpressionEvaluator;
+use super::pattern_matcher::PatternMatcher;
 use super::handlers;
 
 pub trait StatementExecutor {
@@ -384,6 +385,10 @@ impl<'a> StatementExecutor for Interpreter<'a> {
             Statement::Switch(expr, cases, default_block, switch_type) => {
                 // Switch 语句执行
                 self.execute_switch_statement(expr, cases, default_block, switch_type)
+            },
+            Statement::Match(match_expr, arms) => {
+                // Match 语句执行
+                self.execute_match_statement(match_expr, arms)
             },
             // OOP相关语句的临时实现
             Statement::ClassDeclaration(_) => {
