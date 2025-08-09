@@ -52,34 +52,41 @@ impl<'a> EnumParser for ParserBase<'a> {
     
     fn parse_enum_variant(&mut self) -> Result<EnumVariant, String> {
         debug_println("开始解析枚举变体");
-        
+
         // 获取变体名
         let variant_name = self.consume().ok_or_else(|| "期望枚举变体名".to_string())?;
         debug_println(&format!("解析枚举变体: {}", variant_name));
-        
+
         let mut fields = Vec::new();
-        
+
+        // 检查是否有显式值赋值（如 Success = 0）
+        if self.peek() == Some(&"=".to_string()) {
+            self.consume(); // 消费 "="
+            // 跳过值，暂时不处理显式值
+            self.consume(); // 消费值
+        }
+
         // 检查是否有字段定义
         if self.peek() == Some(&"(".to_string()) {
             self.consume(); // 消费 "("
-            
+
             // 解析字段列表
             while self.peek() != Some(&")".to_string()) {
                 let field = self.parse_enum_field()?;
                 fields.push(field);
-                
+
                 if self.peek() == Some(&",".to_string()) {
                     self.consume(); // 消费 ","
                 } else if self.peek() != Some(&")".to_string()) {
                     return Err("期望 ',' 或 ')'".to_string());
                 }
             }
-            
+
             self.expect(")")?; // 期望 ")"
         }
-        
+
         debug_println(&format!("枚举变体解析完成: {} (字段数: {})", variant_name, fields.len()));
-        
+
         Ok(EnumVariant {
             name: variant_name,
             fields,
