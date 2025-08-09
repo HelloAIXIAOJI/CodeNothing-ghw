@@ -22,12 +22,13 @@ cargo build $CARGO_FLAGS
 libraries=(
     "library_io"
     "library_common"
-    "library_example" 
+    "library_example"
     "library_os"
     "library_time"
     "library_http"
     "library_fs"
     "library_json"
+    "library_math"
 )
 
 # Create the target directory for libraries
