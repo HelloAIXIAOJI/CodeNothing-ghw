@@ -246,8 +246,8 @@ impl<'a> PatternParser for ParserBase<'a> {
                 
                 // 字符串字面量模式
                 s if s.starts_with('"') && s.ends_with('"') => {
-                    self.advance();
                     let content = s[1..s.len()-1].to_string();
+                    self.advance();
                     Ok(Pattern::StringLiteral(content))
                 },
                 
