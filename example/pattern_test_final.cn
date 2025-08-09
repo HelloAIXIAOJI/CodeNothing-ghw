@@ -1,0 +1,111 @@
+// CodeNothing 模式匹配测试
+
+using lib <io>;
+using ns std;
+
+fn main() : int {
+    std::println("🎯 CodeNothing 模式匹配测试开始");
+    std::println("=====================================");
+    
+    // 1. 基础字面量模式匹配
+    std::println("1. 基础字面量模式匹配");
+    
+    value : int = 42;
+    match (value) {
+        1 => {
+            std::println("匹配到1");
+        };
+        42 => {
+            std::println("✅ 匹配到42");
+        };
+        _ => {
+            std::println("其他值");
+        };
+    };
+    
+    // 2. 字符串模式匹配
+    std::println("2. 字符串模式匹配");
+    
+    name : string = "CodeNothing";
+    match (name) {
+        "Rust" => {
+            std::println("这是Rust");
+        };
+        "CodeNothing" => {
+            std::println("✅ 这是CodeNothing!");
+        };
+        _ => {
+            std::println("未知语言");
+        };
+    };
+    
+    // 3. 布尔值模式匹配
+    std::println("3. 布尔值模式匹配");
+    
+    flag : bool = true;
+    match (flag) {
+        true => {
+            std::println("✅ 标志为真");
+        };
+        false => {
+            std::println("标志为假");
+        };
+    };
+    
+    // 4. 多选模式匹配 (或模式)
+    std::println("4. 多选模式匹配");
+    
+    grade : int = 85;
+    match (grade) {
+        90 | 91 | 92 | 93 | 94 | 95 | 96 | 97 | 98 | 99 | 100 => {
+            std::println("优秀 (A)");
+        };
+        80 | 81 | 82 | 83 | 84 | 85 | 86 | 87 | 88 | 89 => {
+            std::println("✅ 良好 (B)");
+        };
+        70 | 71 | 72 | 73 | 74 | 75 | 76 | 77 | 78 | 79 => {
+            std::println("中等 (C)");
+        };
+        _ => {
+            std::println("需要改进");
+        };
+    };
+    
+    // 5. 变量绑定模式
+    std::println("5. 变量绑定模式");
+    
+    number : int = 123;
+    match (number) {
+        0 => {
+            std::println("零");
+        };
+        x => {
+            std::println("✅ 绑定变量x = " + x);
+        };
+    };
+    
+    // 6. 通配符模式
+    std::println("6. 通配符模式");
+    
+    unknown : int = 999;
+    match (unknown) {
+        1 => {
+            std::println("一");
+        };
+        2 => {
+            std::println("二");
+        };
+        _ => {
+            std::println("✅ 通配符匹配: 其他数字");
+        };
+    };
+    
+    std::println("=====================================");
+    std::println("🎉 模式匹配测试完成!");
+    std::println("✅ 字面量模式匹配");
+    std::println("✅ 变量绑定模式");
+    std::println("✅ 多选模式 (或模式)");
+    std::println("✅ 通配符模式");
+    
+    return 0;
+};
