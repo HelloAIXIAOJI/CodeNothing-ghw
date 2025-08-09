@@ -291,7 +291,15 @@ pub fn evaluate_compare_operation(left: &Value, op: &CompareOperator, right: &Va
         // 布尔值比较
         (CompareOperator::Equal, Value::Bool(l), Value::Bool(r)) => Value::Bool(l == r),
         (CompareOperator::NotEqual, Value::Bool(l), Value::Bool(r)) => Value::Bool(l != r),
-        
+
+        // 枚举值比较
+        (CompareOperator::Equal, Value::EnumValue(l), Value::EnumValue(r)) => {
+            Value::Bool(l.enum_name == r.enum_name && l.variant_name == r.variant_name && l.fields == r.fields)
+        },
+        (CompareOperator::NotEqual, Value::EnumValue(l), Value::EnumValue(r)) => {
+            Value::Bool(!(l.enum_name == r.enum_name && l.variant_name == r.variant_name && l.fields == r.fields))
+        },
+
         // 混合类型比较
         (CompareOperator::Equal, _, _) => Value::Bool(false), // 不同类型永远不相等
         (CompareOperator::NotEqual, _, _) => Value::Bool(true), // 不同类型永远不相等
