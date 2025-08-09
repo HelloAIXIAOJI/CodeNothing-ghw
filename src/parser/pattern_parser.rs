@@ -94,7 +94,9 @@ impl<'a> PatternParser for ParserBase<'a> {
             return Err("期望 '}' 结束match分支".to_string());
         }
         
-        self.debug_println("match表达式解析完成");
+        if self.debug {
+            println!("match表达式解析完成");
+        }
         Ok((match_expr, arms))
     }
     
