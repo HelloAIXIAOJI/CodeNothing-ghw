@@ -63,7 +63,9 @@ impl<'a> PatternParser for ParserBase<'a> {
     
     /// 解析match表达式
     fn parse_match_expression(&mut self) -> Result<(Expression, Vec<MatchArm>), String> {
-        self.debug_println("开始解析match表达式");
+        if self.debug {
+            println!("开始解析match表达式");
+        }
         
         // 消费 'match' 关键字
         if !self.consume_keyword("match") {
