@@ -19,7 +19,10 @@ pub trait PatternParser {
 impl<'a> PatternParser for ParserBase<'a> {
     /// 解析match语句
     fn parse_match_statement(&mut self) -> Result<(Expression, Vec<MatchArm>), String> {
-        self.debug_println("开始解析match语句");
+        // 调试输出
+        if self.debug {
+            println!("开始解析match语句");
+        }
         
         // 消费 'match' 关键字
         if !self.consume_keyword("match") {
@@ -52,7 +55,9 @@ impl<'a> PatternParser for ParserBase<'a> {
             return Err("期望 ';' 结束match语句".to_string());
         }
         
-        self.debug_println("match语句解析完成");
+        if self.debug {
+            println!("match语句解析完成");
+        }
         Ok((match_expr, arms))
     }
     
