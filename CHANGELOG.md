@@ -1,5 +1,23 @@
 # CodeNothing 更新日志
 
+## [v0.8.2] - 2025-08-10 - 解释器稳定性提升
+
+### 🎯 主要改进
+
+#### 改进了部分问题，请查看Git提交：
+- src\interpreter\handlers\control_flow.rs：在控制流处理程序中添加对错误结果的处理，确保错误能够向上传播。
+- src\interpreter\handlers\exception_handler.rs：在异常处理程序中添加对执行错误的处理，确保错误信息能够正确输出并在 finally 块中处理。
+- src\interpreter\evaluator.rs：在比较操作中添加对枚举值的支持，增强了布尔值和枚举值的比较逻辑。
+- src\interpreter\executor.rs：在执行结果枚举中添加错误类型，增强了错误处理能力。
+- src\interpreter\expression_evaluator.rs：在表达式评估器中添加超时检查和对self关键字的支持，增强了字段赋值和访问的灵活性。
+- src\interpreter\interpreter_core.rs：在解释器中添加超时机制，包含超时检查、重置计时器和设置最大操作次数的功能，增强了程序执行的控制能力。
+- src\interpreter\statement_executor.rs：在解释器中增强错误处理，添加超时检查和错误结果处理，确保执行错误信息能够正确输出并返回相应结果。
+- src\interpreter\value.rs：为Value类型及其相关结构体实现PartialEq特征，增强了值的比较功能，支持多种类型的相等性检查。
+- src\parser\enum_parser.rs：在枚举解析器中添加对显式值赋值的检查，增强了枚举变体解析的灵活性和准确性。
+- src\parser\lexer.rs：在词法分析器中增强数字解析，支持科学计数法的处理，提升了对数字格式的识别能力。
+- src\parser\pattern_parser.rs：在模式解析器中添加对“或”模式的数量限制，防止无限循环，并增强了元组和数组模式的解析能力，支持嵌套“或”模式的解析。
+---
+
 ## [v0.8.1] - 2025-08-10 - 模式匹配系统重大更新版本
 
 ### 🎯 新增功能 (New Features)
