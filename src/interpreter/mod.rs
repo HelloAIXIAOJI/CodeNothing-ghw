@@ -10,6 +10,7 @@ pub mod jit;
 pub mod handlers;
 pub mod memory_manager;
 pub mod pattern_matcher;
+pub mod pattern_jit;
 
 // Re-export main types and functions
 pub use interpreter_core::{interpret, Interpreter, debug_println};
