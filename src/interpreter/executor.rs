@@ -11,6 +11,7 @@ pub enum ExecutionResult {
     Break,               // break语句
     Continue,            // continue语句
     Throw(Value),        // 抛出异常
+    Error(String),       // 执行错误
 }
 
 pub trait Executor: Evaluator {
