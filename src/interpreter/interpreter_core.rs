@@ -145,6 +145,11 @@ pub struct Interpreter<'a> {
     pub lifetime_analysis_result: Option<LifetimeAnalysisResult>,
     // 变量查找缓存：存储最近访问的变量位置
     pub variable_cache: HashMap<String, VariableLocation>,
+    // 超时机制相关字段
+    pub start_time: std::time::Instant,
+    pub timeout_duration: std::time::Duration,
+    pub operation_count: usize,
+    pub max_operations: usize,
 }
 
 impl<'a> Interpreter<'a> {
@@ -186,6 +191,11 @@ impl<'a> Interpreter<'a> {
             // v0.7.4新增：初始化生命周期分析器
             lifetime_analyzer: VariableLifetimeAnalyzer::new(),
             lifetime_analysis_result: None,
+            // 超时机制初始化
+            start_time: std::time::Instant::now(),
+            timeout_duration: std::time::Duration::from_secs(30), // 默认30秒超时
+            operation_count: 0,
+            max_operations: 1_000_000, // 默认最大100万次操作
         };
         
         // 初始化常量
@@ -231,6 +241,39 @@ impl<'a> Interpreter<'a> {
 
         interpreter
     }
+
+    /// 检查是否超时或操作次数过多
+    pub fn check_timeout(&mut self) -> Result<(), String> {
+        self.operation_count += 1;
+
+        // 检查操作次数限制
+        if self.operation_count > self.max_operations {
+            return Err(format!("程序执行操作次数超过限制 ({})", self.max_operations));
+        }
+
+        // 检查时间限制
+        if self.start_time.elapsed() > self.timeout_duration {
+            return Err(format!("程序执行超时 ({:?})", self.timeout_duration));
+        }
+
+        Ok(())
+    }
+
+    /// 重置超时计时器
+    pub fn reset_timeout(&mut self) {
+        self.start_time = std::time::Instant::now();
+        self.operation_count = 0;
+    }
+
+    /// 设置超时时间
+    pub fn set_timeout(&mut self, duration: std::time::Duration) {
+        self.timeout_duration = duration;
+    }
+
+    /// 设置最大操作次数
+    pub fn set_max_operations(&mut self, max_ops: usize) {
+        self.max_operations = max_ops;
+    }
     
     // 递归注册命名空间中的所有函数
     fn register_namespace_functions(
@@ -261,6 +304,14 @@ impl<'a> Interpreter<'a> {
     }
     
     pub fn run(&mut self) -> Value {
+        // 重置超时计时器
+        self.reset_timeout();
+
+        // 直接执行，暂时禁用 panic 恢复机制以便调试
+        self.run_internal()
+    }
+
+    fn run_internal(&mut self) -> Value {
         // 先应用全局命名空间导入
         for path in &self.global_namespace_imports {
             let namespace_path = path.join("::");
