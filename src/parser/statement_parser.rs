@@ -100,7 +100,7 @@ impl<'a> StatementParser for ParserBase<'a> {
                     self.parse_throw_statement()
                 },
                 "match" => {
-                    self.parse_match_statement()
+                    StatementParser::parse_match_statement(self)
                 },
                 "switch" => {
                     self.parse_switch_statement()
