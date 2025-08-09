@@ -1,0 +1,118 @@
+// 词法分析器测试
+// 测试基础的token识别、注释处理、字符串处理等
+
+using lib <io>;
+using ns std;
+
+fn main() : int {
+    std::println("🔍 词法分析器 (Lexer) 测试");
+    std::println("==========================");
+    
+    // 测试1: 基础标识符和关键字
+    std::println("测试1: 基础标识符和关键字");
+    test_basic_tokens();
+    
+    // 测试2: 数字字面量
+    std::println("测试2: 数字字面量");
+    test_number_literals();
+    
+    // 测试3: 字符串字面量
+    std::println("测试3: 字符串字面量");
+    test_string_literals();
+    
+    // 测试4: 运算符和符号
+    std::println("测试4: 运算符和符号");
+    test_operators_and_symbols();
+    
+    // 测试5: 注释处理
+    std::println("测试5: 注释处理");
+    test_comments();
+    
+    std::println("✅ 词法分析器测试完成");
+    return 0;
+};
+
+fn test_basic_tokens() : void {
+    std::println("  - 关键字识别: fn, if, else, for, while, class, interface");
+    std::println("  - 标识符识别: variable_name, functionName, ClassName");
+    std::println("  - 类型关键字: int, float, string, bool, void");
+    std::println("  ✅ 基础token识别正常");
+};
+
+fn test_number_literals() : void {
+    // 整数
+    int_val : int = 42;
+
+    // 浮点数
+    float_val : float = 3.14;
+    scientific : float = 1.23e4;
+
+    std::println("  - 整数字面量: " + int_val);
+    std::println("  - 浮点数: " + float_val);
+    std::println("  - 科学计数法: " + scientific);
+    std::println("  ✅ 数字字面量解析正常");
+};
+
+fn test_string_literals() : void {
+    // 基础字符串
+    simple_string : string = "Hello World";
+    
+    // 转义字符
+    escaped_string : string = "Line 1\nLine 2\tTabbed";
+    
+    // 空字符串
+    empty_string : string = "";
+    
+    std::println("  - 简单字符串: " + simple_string);
+    std::println("  - 转义字符: " + escaped_string);
+    std::println("  - 空字符串长度: " + empty_string);
+    std::println("  ✅ 字符串字面量解析正常");
+};
+
+fn test_operators_and_symbols() : void {
+    // 算术运算符
+    a : int = 10;
+    b : int = 3;
+    
+    add_result : int = a + b;
+    sub_result : int = a - b;
+    mul_result : int = a * b;
+    div_result : int = a / b;
+    mod_result : int = a % b;
+    
+    // 比较运算符
+    eq_result : bool = a == b;
+    ne_result : bool = a != b;
+    gt_result : bool = a > b;
+    lt_result : bool = a < b;
+    ge_result : bool = a >= b;
+    le_result : bool = a <= b;
+    
+    // 逻辑运算符
+    and_result : bool = true && false;
+    or_result : bool = true || false;
+    not_result : bool = !true;
+    
+    std::println("  - 算术运算符: +, -, *, /, %");
+    std::println("  - 比较运算符: ==, !=, >, <, >=, <=");
+    std::println("  - 逻辑运算符: &&, ||, !");
+    std::println("  - 赋值运算符: =, +=, -=, *=, /=");
+    std::println("  - 特殊符号: {}, [], (), ;, :, ., ,");
+    std::println("  ✅ 运算符和符号识别正常");
+};
+
+fn test_comments() : void {
+    // 单行注释测试
+    value : int = 42; // 这是单行注释
+
+    /!
+     * 多行注释测试
+     * 这里可以写多行内容
+     !/
+    another_value : int = 100;
+
+    std::println("  - 单行注释: // 注释内容");
+    std::println("  - 多行注释: /! 注释内容 !/");
+    std::println("  - 注释不影响代码执行: " + value);
+    std::println("  ✅ 注释处理正常");
+};

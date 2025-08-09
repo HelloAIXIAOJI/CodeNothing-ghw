@@ -1,0 +1,51 @@
+// CodeNothing Parser 测试运行器
+// 用于测试解析器各个模块的功能
+
+using lib <io>;
+using ns std;
+
+fn main() : int {
+    std::println("🧪 CodeNothing Parser 测试套件");
+    std::println("================================");
+    
+    // 测试计数器
+    total_tests : int = 0;
+    passed_tests : int = 0;
+    failed_tests : int = 0;
+    
+    std::println("📋 测试计划:");
+    std::println("1. 词法分析器 (Lexer) 测试");
+    std::println("2. 表达式解析器测试");
+    std::println("3. 语句解析器测试");
+    std::println("4. 函数解析器测试");
+    std::println("5. 类和接口解析器测试");
+    std::println("6. 枚举解析器测试");
+    std::println("7. 指针解析器测试");
+    std::println("8. 模式匹配解析器测试");
+    std::println("9. 命名空间解析器测试");
+    std::println("10. 程序解析器测试");
+    std::println("11. 错误处理测试");
+    std::println("");
+    
+    std::println("🚀 开始执行测试...");
+    std::println("================================");
+    
+    // 这里将调用各个具体的测试文件
+    // 由于CodeNothing还不支持文件包含，我们将在每个测试文件中独立运行
+    
+    std::println("✅ 测试框架已准备就绪");
+    std::println("请分别运行各个测试文件:");
+    std::println("- lexer_test.cn");
+    std::println("- expression_test.cn");
+    std::println("- statement_test.cn");
+    std::println("- function_test.cn");
+    std::println("- class_interface_test.cn");
+    std::println("- enum_test.cn");
+    std::println("- pointer_test.cn");
+    std::println("- pattern_test.cn");
+    std::println("- namespace_test.cn");
+    std::println("- program_test.cn");
+    std::println("- error_handling_test.cn");
+    
+    return 0;
+};

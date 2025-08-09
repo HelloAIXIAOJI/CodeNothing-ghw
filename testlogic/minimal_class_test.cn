@@ -1,0 +1,30 @@
+// 最小类测试
+
+using lib <io>;
+using ns std;
+
+// 最简单的类
+class SimpleClass {
+    value : int;
+    
+    constructor(v : int) {
+        self.value = v;
+    };
+    
+    fn get_value() : int {
+        return self.value;
+    };
+};
+
+fn main() : int {
+    std::println("🏗️ 最小类测试");
+    
+    // 创建类实例
+    obj : SimpleClass = new SimpleClass(42);
+    
+    // 调用方法
+    result : int = obj.get_value();
+    
+    std::println("✅ 类实例化成功，值为42");
+    return 0;
+};

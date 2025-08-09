@@ -1,0 +1,19 @@
+// 简单枚举测试
+
+using lib <io>;
+using ns std;
+
+// 简单枚举定义
+enum Color {
+    Red,
+    Green,
+    Blue
+};
+
+fn main() : int {
+    std::println("📋 简单枚举测试");
+    std::println("================");
+    
+    std::println("✅ 枚举定义解析成功");
+    return 0;
+};

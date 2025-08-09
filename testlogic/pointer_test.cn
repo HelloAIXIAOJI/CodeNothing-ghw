@@ -1,0 +1,46 @@
+// 指针解析器测试
+// 测试指针类型和操作
+
+using lib <io>;
+using ns std;
+
+fn main() : int {
+    std::println("👉 指针解析器测试");
+    std::println("==================");
+    
+    // 测试1: 基础指针定义
+    std::println("测试1: 基础指针定义");
+    test_basic_pointers();
+    
+    // 测试2: 指针操作
+    std::println("测试2: 指针操作");
+    test_pointer_operations();
+    
+    std::println("✅ 指针解析器测试完成");
+    return 0;
+};
+
+fn test_basic_pointers() : void {
+    // 基础指针声明和初始化
+    value : int = 42;
+    int_ptr : *int = &value;
+
+    float_val : float = 3.14;
+    float_ptr : *float = &float_val;
+
+    std::println("  - 指针类型声明和初始化: *int, *float");
+    std::println("  ✅ 基础指针定义正常");
+};
+
+fn test_pointer_operations() : void {
+    // 指针操作测试
+    value : int = 42;
+    ptr : *int = &value;
+    
+    // 解引用
+    deref_value : int = *ptr;
+    
+    std::println("  - 取地址操作: &value");
+    std::println("  - 解引用操作: *ptr = " + deref_value);
+    std::println("  ✅ 指针操作正常");
+};

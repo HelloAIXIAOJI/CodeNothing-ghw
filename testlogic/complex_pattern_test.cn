@@ -1,0 +1,56 @@
+// 复杂模式匹配测试
+// 测试修复后的多选模式
+
+using lib <io>;
+using ns std;
+
+fn main() : int {
+    std::println("🎯 复杂模式匹配测试");
+    std::println("====================");
+    
+    // 测试1: 多选模式
+    std::println("测试1: 多选模式");
+    test_or_patterns();
+    
+    // 测试2: 变量绑定模式
+    std::println("测试2: 变量绑定模式");
+    test_variable_binding();
+    
+    std::println("✅ 复杂模式匹配测试完成");
+    return 0;
+};
+
+fn test_or_patterns() : void {
+    // 测试多选模式
+    grade : int = 85;
+    match (grade) {
+        90 | 91 | 92 | 93 | 94 | 95 => {
+            std::println("  - 优秀 (A)");
+        };
+        80 | 81 | 82 | 83 | 84 | 85 | 86 | 87 | 88 | 89 => {
+            std::println("  - ✅ 良好 (B)");
+        };
+        70 | 71 | 72 | 73 | 74 | 75 | 76 | 77 | 78 | 79 => {
+            std::println("  - 中等 (C)");
+        };
+        _ => {
+            std::println("  - 需要改进");
+        };
+    };
+    
+    std::println("  ✅ 多选模式正常");
+};
+
+fn test_variable_binding() : void {
+    number : int = 123;
+    match (number) {
+        0 => {
+            std::println("  - 匹配到零");
+        };
+        x => {
+            std::println("  - ✅ 绑定变量x = " + x);
+        };
+    };
+    
+    std::println("  ✅ 变量绑定模式正常");
+};

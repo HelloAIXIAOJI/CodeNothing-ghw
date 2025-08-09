@@ -1,0 +1,23 @@
+// 简单模式匹配测试
+
+using lib <io>;
+using ns std;
+
+fn main() : int {
+    std::println("🎯 简单模式匹配测试");
+    std::println("====================");
+    
+    // 最简单的模式匹配
+    value : int = 42;
+    match (value) {
+        42 => {
+            std::println("匹配到42");
+        };
+        _ => {
+            std::println("其他值");
+        };
+    };
+    
+    std::println("✅ 简单模式匹配完成");
+    return 0;
+};

@@ -1,0 +1,108 @@
+// 语句解析器测试
+// 测试各种语句的解析和执行
+
+using lib <io>;
+using ns std;
+
+fn main() : int {
+    std::println("📝 语句解析器测试");
+    std::println("==================");
+    
+    // 测试1: 变量声明语句
+    std::println("测试1: 变量声明语句");
+    test_variable_declarations();
+    
+    // 测试2: if语句
+    std::println("测试2: if语句");
+    test_if_statements();
+    
+    // 测试3: 循环语句
+    std::println("测试3: 循环语句");
+    test_loop_statements();
+    
+    // 测试4: 赋值语句
+    std::println("测试4: 赋值语句");
+    test_assignment_statements();
+    
+    std::println("✅ 语句解析器测试完成");
+    return 0;
+};
+
+fn test_variable_declarations() : void {
+    // 基础类型声明
+    int_var : int = 42;
+    float_var : float = 3.14;
+    string_var : string = "Hello";
+    bool_var : bool = true;
+
+    // 默认值声明
+    empty_int : int = 0;
+    empty_string : string = "";
+
+    std::println("  - 整数声明: int_var = " + int_var);
+    std::println("  - 浮点数声明: float_var = " + float_var);
+    std::println("  - 字符串声明: string_var = " + string_var);
+    std::println("  - 布尔值声明: bool_var = " + bool_var);
+    std::println("  - 默认值声明: empty_int = " + empty_int);
+    std::println("  ✅ 变量声明语句解析正常");
+};
+
+fn test_if_statements() : void {
+    x : int = 10;
+    
+    // 简单if语句
+    if (x > 5) {
+        std::println("  - 简单if: x > 5 为真");
+    };
+    
+    // if-else语句
+    if (x < 5) {
+        std::println("  - if-else: x < 5");
+    } else {
+        std::println("  - if-else: x >= 5");
+    };
+    
+    // 嵌套if语句
+    if (x > 0) {
+        if (x > 5) {
+            std::println("  - 嵌套if: x > 5");
+        } else {
+            std::println("  - 嵌套if: 0 < x <= 5");
+        };
+    };
+    
+    std::println("  ✅ if语句解析正常");
+};
+
+fn test_loop_statements() : void {
+    // for循环 (CodeNothing语法: for (variable : start..end))
+    std::println("  - for循环测试:");
+    for (i : 0..3) {
+        std::println("    循环 " + i);
+    };
+
+    // while循环
+    std::println("  - while循环测试:");
+    j : int = 0;
+    while (j < 3) {
+        std::println("    while循环 " + j);
+        j = j + 1;
+    };
+
+    std::println("  ✅ 循环语句解析正常");
+};
+
+fn test_assignment_statements() : void {
+    // 基础赋值
+    a : int = 10;
+    a = 20;
+    
+    // 复合赋值
+    a += 5;
+    a -= 3;
+    a *= 2;
+    a /= 4;
+    
+    std::println("  - 基础赋值和复合赋值: a = " + a);
+    std::println("  ✅ 赋值语句解析正常");
+};

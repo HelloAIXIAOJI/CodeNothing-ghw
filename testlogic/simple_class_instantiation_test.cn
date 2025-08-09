@@ -1,0 +1,33 @@
+// 简单类实例化测试
+
+using lib <io>;
+using ns std;
+
+// 简单类定义
+class Person {
+    name : string;
+    age : int;
+    
+    constructor(n : string, a : int) {
+        self.name = n;
+        self.age = a;
+    };
+    
+    fn greet() : void {
+        std::println("Hello from " + self.name);
+    };
+};
+
+fn main() : int {
+    std::println("🏗️ 简单类实例化测试");
+    std::println("======================");
+    
+    // 创建类实例
+    person : Person = new Person("Alice", 25);
+    
+    // 调用方法
+    person.greet();
+    
+    std::println("✅ 类实例化成功");
+    return 0;
+};

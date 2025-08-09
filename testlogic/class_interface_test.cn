@@ -1,0 +1,70 @@
+// 类和接口解析器测试
+// 测试面向对象编程语法
+
+using lib <io>;
+using ns std;
+
+fn main() : int {
+    std::println("🏗️ 类和接口解析器测试");
+    std::println("======================");
+    
+    // 测试1: 基础类定义
+    std::println("测试1: 基础类定义");
+    test_basic_class();
+    
+    // 测试2: 类方法调用
+    std::println("测试2: 类方法调用");
+    test_class_methods();
+    
+    std::println("✅ 类和接口解析器测试完成");
+    return 0;
+};
+
+// 基础类定义测试
+class Person {
+    name : string;
+    age : int;
+
+    constructor(name : string, age : int) {
+        self.name = name;
+        self.age = age;
+    };
+
+    fn get_name() : string {
+        return self.name;
+    };
+
+    fn get_age() : int {
+        return self.age;
+    };
+
+    fn greet() : void {
+        std::println("Hello, I'm " + self.name);
+    };
+};
+
+fn test_basic_class() : void {
+    // 创建类实例
+    person : Person = new Person("Alice", 25);
+
+    // 调用方法
+    name : string = person.get_name();
+    age : int = person.get_age();
+
+    std::println("  - 创建Person实例: " + name + ", " + age + "岁");
+    person.greet();
+
+    std::println("  ✅ 基础类定义正常");
+};
+
+fn test_class_methods() : void {
+    // 测试多个实例
+    person1 : Person = new Person("Bob", 30);
+    person2 : Person = new Person("Carol", 28);
+
+    std::println("  - 多个实例测试:");
+    person1.greet();
+    person2.greet();
+
+    std::println("  ✅ 类方法调用正常");
+};

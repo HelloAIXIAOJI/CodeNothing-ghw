@@ -1,0 +1,25 @@
+// 简单类定义测试
+
+using lib <io>;
+using ns std;
+
+// 简单类定义
+class SimpleClass {
+    value : int;
+    
+    constructor(v : int) {
+        self.value = v;
+    };
+    
+    fn get_value() : int {
+        return self.value;
+    };
+};
+
+fn main() : int {
+    std::println("🏗️ 简单类定义测试");
+    std::println("==================");
+    
+    std::println("✅ 类定义解析成功");
+    return 0;
+};

@@ -1,0 +1,66 @@
+// 枚举值使用测试
+
+using lib <io>;
+using ns std;
+
+// 简单枚举
+enum Color {
+    Red,
+    Green,
+    Blue
+};
+
+// 带值的枚举
+enum Status {
+    Success = 0,
+    Error = 1,
+    Pending = 2
+};
+
+fn main() : int {
+    std::println("📋 枚举值使用测试");
+    std::println("==================");
+    
+    // 测试1: 枚举值赋值
+    std::println("测试1: 枚举值赋值");
+    test_enum_assignment();
+    
+    // 测试2: 枚举值比较
+    std::println("测试2: 枚举值比较");
+    test_enum_comparison();
+    
+    std::println("✅ 枚举值使用测试完成");
+    return 0;
+};
+
+fn test_enum_assignment() : void {
+    // 枚举值赋值
+    color : Color = Color::Red;
+    status : Status = Status::Success;
+    
+    std::println("  - 枚举值赋值成功");
+    std::println("  ✅ 枚举值赋值正常");
+};
+
+fn test_enum_comparison() : void {
+    // 枚举值比较
+    color1 : Color = Color::Red;
+    color2 : Color = Color::Red;
+    color3 : Color = Color::Blue;
+    
+    // 比较相同的枚举值
+    if (color1 == color2) {
+        std::println("  - 相同枚举值比较: 正确");
+    } else {
+        std::println("  - 相同枚举值比较: 错误");
+    };
+    
+    // 比较不同的枚举值
+    if (color1 != color3) {
+        std::println("  - 不同枚举值比较: 正确");
+    } else {
+        std::println("  - 不同枚举值比较: 错误");
+    };
+    
+    std::println("  ✅ 枚举值比较正常");
+};

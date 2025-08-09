@@ -1,0 +1,74 @@
+// 表达式解析器测试
+// 测试各种表达式的解析和计算
+
+using lib <io>;
+using ns std;
+
+fn main() : int {
+    std::println("🧮 表达式解析器测试");
+    std::println("====================");
+
+    // 测试1: 基础算术表达式
+    std::println("测试1: 基础算术表达式");
+    test_basic_arithmetic();
+
+    // 测试2: 比较表达式
+    std::println("测试2: 比较表达式");
+    test_basic_comparison();
+
+    // 测试3: 逻辑表达式
+    std::println("测试3: 逻辑表达式");
+    test_basic_logical();
+
+    std::println("✅ 表达式解析器测试完成");
+    return 0;
+};
+
+fn test_basic_arithmetic() : void {
+    // 基础算术运算
+    a : int = 10;
+    b : int = 3;
+
+    add_result : int = a + b;
+    sub_result : int = a - b;
+    mul_result : int = a * b;
+    div_result : int = a / b;
+
+    std::println("  - 加法: 10 + 3 = " + add_result);
+    std::println("  - 减法: 10 - 3 = " + sub_result);
+    std::println("  - 乘法: 10 * 3 = " + mul_result);
+    std::println("  - 除法: 10 / 3 = " + div_result);
+    std::println("  ✅ 基础算术表达式解析正常");
+};
+
+fn test_basic_comparison() : void {
+    a : int = 10;
+    b : int = 5;
+
+    eq_result : bool = a == a;
+    ne_result : bool = a != b;
+    gt_result : bool = a > b;
+    lt_result : bool = b < a;
+
+    std::println("  - 等于: 10 == 10 = " + eq_result);
+    std::println("  - 不等于: 10 != 5 = " + ne_result);
+    std::println("  - 大于: 10 > 5 = " + gt_result);
+    std::println("  - 小于: 5 < 10 = " + lt_result);
+    std::println("  ✅ 比较表达式解析正常");
+};
+
+fn test_basic_logical() : void {
+    p : bool = true;
+    q : bool = false;
+
+    and_result : bool = p && q;
+    or_result : bool = p || q;
+    not_p : bool = !p;
+
+    std::println("  - 逻辑与: true && false = " + and_result);
+    std::println("  - 逻辑或: true || false = " + or_result);
+    std::println("  - 逻辑非: !true = " + not_p);
+    std::println("  ✅ 逻辑表达式解析正常");
+};
+
+

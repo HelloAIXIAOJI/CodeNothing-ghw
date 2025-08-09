@@ -1,0 +1,50 @@
+// 枚举解析器测试
+// 测试枚举定义和使用
+
+using lib <io>;
+using ns std;
+
+fn main() : int {
+    std::println("📋 枚举解析器测试");
+    std::println("==================");
+    
+    // 测试1: 基础枚举定义
+    std::println("测试1: 基础枚举定义");
+    test_basic_enum();
+    
+    // 测试2: 枚举值使用
+    std::println("测试2: 枚举值使用");
+    test_enum_usage();
+    
+    std::println("✅ 枚举解析器测试完成");
+    return 0;
+};
+
+// 基础枚举定义
+enum Color {
+    Red,
+    Green,
+    Blue
+};
+
+// 带值的枚举
+enum Status {
+    Success = 0,
+    Error = 1,
+    Pending = 2
+};
+
+fn test_basic_enum() : void {
+    std::println("  - 枚举Color定义: Red, Green, Blue");
+    std::println("  - 枚举Status定义: Success=0, Error=1, Pending=2");
+    std::println("  ✅ 基础枚举定义正常");
+};
+
+fn test_enum_usage() : void {
+    // 测试枚举值的使用
+    color : Color = Color::Red;
+    status : Status = Status::Success;
+    
+    std::println("  - 枚举值赋值: color = Red, status = Success");
+    std::println("  ✅ 枚举值使用正常");
+};

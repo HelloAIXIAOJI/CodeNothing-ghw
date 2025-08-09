@@ -1,0 +1,12 @@
+// 简单命名空间测试
+
+using lib <io>;
+using ns std;
+
+fn main() : int {
+    std::println("📦 简单命名空间测试");
+    std::println("====================");
+    
+    std::println("✅ 命名空间解析正常");
+    return 0;
+};
