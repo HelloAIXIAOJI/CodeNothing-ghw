@@ -23,3 +23,4 @@ pub use executor::{Executor, ExecutionResult, update_variable_value, handle_incr
 pub use library_loader::{load_library, call_library_function, convert_values_to_string_args, convert_value_to_string_arg}; 
 pub use jit::{jit_eval_const_expr, should_compile_array_operation, compile_array_operation};
 pub use pattern_matcher::PatternMatcher;
+pub use pattern_jit::{get_pattern_jit_compiler, should_use_pattern_jit, jit_match_pattern, get_pattern_jit_stats, reset_pattern_jit_stats};
