@@ -2,6 +2,8 @@
 use crate::ast::{Pattern, MatchArm, Expression, Statement};
 use crate::interpreter::{Interpreter, Value, ExecutionResult};
 use crate::interpreter::pattern_jit::{should_use_pattern_jit, jit_match_pattern};
+use crate::interpreter::expression_evaluator::ExpressionEvaluator;
+use crate::interpreter::statement_executor::StatementExecutor;
 use std::collections::HashMap;
 
 /// 模式匹配结果
