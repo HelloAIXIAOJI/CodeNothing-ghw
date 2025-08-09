@@ -3,7 +3,7 @@ use crate::ast::{Pattern, MatchArm, Expression, Statement};
 use crate::parser::parser_base::ParserBase;
 use crate::parser::expression_parser::ExpressionParser;
 use crate::parser::statement_parser::StatementParser;
-use crate::interpreter::debug_println;
+
 
 pub trait PatternParser {
     fn parse_match_statement(&mut self) -> Result<(Expression, Vec<MatchArm>), String>;
@@ -16,7 +16,7 @@ pub trait PatternParser {
     fn parse_guard_condition(&mut self) -> Result<Option<Expression>, String>;
 }
 
-impl PatternParser for ParserBase {
+impl<'a> PatternParser for ParserBase<'a> {
     /// 解析match语句
     fn parse_match_statement(&mut self) -> Result<(Expression, Vec<MatchArm>), String> {
         self.debug_println("开始解析match语句");
