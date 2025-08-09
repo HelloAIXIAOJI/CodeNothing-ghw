@@ -17,12 +17,13 @@ if ($BuildType -eq "release" -or $BuildType -eq "both") {
 $libraries = @(
     "library_io",
     "library_common",
-    "library_example", 
+    "library_example",
     "library_os",
     "library_time",
     "library_http",
     "library_fs",
-    "library_json"
+    "library_json",
+    "library_math"
 )
 
 # create the target directory for release
