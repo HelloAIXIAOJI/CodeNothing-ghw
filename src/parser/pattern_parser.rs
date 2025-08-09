@@ -176,11 +176,17 @@ impl<'a> PatternParser for ParserBase<'a> {
     /// 解析或模式 (pattern1 | pattern2 | pattern3)
     fn parse_pattern_or(&mut self) -> Result<Pattern, String> {
         let mut patterns = vec![self.parse_pattern_primary()?];
-        
+        let mut or_count = 0;
+        const MAX_OR_PATTERNS: usize = 100; // 限制最大或模式数量
+
         while self.consume_symbol("|") {
+            or_count += 1;
+            if or_count > MAX_OR_PATTERNS {
+                return Err("或模式数量过多，可能存在无限循环".to_string());
+            }
             patterns.push(self.parse_pattern_primary()?);
         }
-        
+
         if patterns.len() == 1 {
             Ok(patterns.into_iter().next().unwrap())
         } else {
@@ -202,22 +208,22 @@ impl<'a> PatternParser for ParserBase<'a> {
                 "(" => {
                     self.advance();
                     let mut patterns = Vec::new();
-                    
+
                     if !self.check_symbol(")") {
-                        patterns.push(self.parse_pattern()?);
-                        
+                        patterns.push(self.parse_pattern_or()?);
+
                         while self.consume_symbol(",") {
                             if self.check_symbol(")") {
                                 break;
                             }
-                            patterns.push(self.parse_pattern()?);
+                            patterns.push(self.parse_pattern_or()?);
                         }
                     }
-                    
+
                     if !self.consume_symbol(")") {
                         return Err("期望 ')' 结束元组模式".to_string());
                     }
-                    
+
                     Ok(Pattern::Tuple(patterns))
                 },
                 
@@ -225,22 +231,22 @@ impl<'a> PatternParser for ParserBase<'a> {
                 "[" => {
                     self.advance();
                     let mut patterns = Vec::new();
-                    
+
                     if !self.check_symbol("]") {
-                        patterns.push(self.parse_pattern()?);
-                        
+                        patterns.push(self.parse_pattern_or()?);
+
                         while self.consume_symbol(",") {
                             if self.check_symbol("]") {
                                 break;
                             }
-                            patterns.push(self.parse_pattern()?);
+                            patterns.push(self.parse_pattern_or()?);
                         }
                     }
-                    
+
                     if !self.consume_symbol("]") {
                         return Err("期望 ']' 结束数组模式".to_string());
                     }
-                    
+
                     Ok(Pattern::Array(patterns))
                 },
                 
@@ -291,22 +297,22 @@ impl<'a> PatternParser for ParserBase<'a> {
                         // 检查是否有参数
                         let params = if self.consume_symbol("(") {
                             let mut patterns = Vec::new();
-                            
+
                             if !self.check_symbol(")") {
-                                patterns.push(self.parse_pattern()?);
-                                
+                                patterns.push(self.parse_pattern_or()?);
+
                                 while self.consume_symbol(",") {
                                     if self.check_symbol(")") {
                                         break;
                                     }
-                                    patterns.push(self.parse_pattern()?);
+                                    patterns.push(self.parse_pattern_or()?);
                                 }
                             }
-                            
+
                             if !self.consume_symbol(")") {
                                 return Err("期望 ')' 结束枚举变体参数".to_string());
                             }
-                            
+
                             patterns
                         } else {
                             Vec::new()
