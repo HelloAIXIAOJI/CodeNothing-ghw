@@ -113,8 +113,40 @@ impl PatternMatcher for Interpreter {
         panic!("match表达式没有匹配的分支");
     }
     
-    /// 匹配模式
+    /// 匹配模式（支持JIT优化）
     fn match_pattern(&mut self, pattern: &Pattern, value: &Value) -> MatchResult {
+        // 检查是否应该使用JIT编译
+        static mut PATTERN_USAGE_COUNT: HashMap<String, usize> = HashMap::new();
+
+        unsafe {
+            let pattern_key = format!("{:?}", pattern);
+            let usage_count = PATTERN_USAGE_COUNT.entry(pattern_key.clone()).or_insert(0);
+            *usage_count += 1;
+
+            // 如果使用次数足够多，尝试JIT编译
+            if should_use_pattern_jit(pattern, *usage_count) {
+                match jit_match_pattern(pattern, value, self) {
+                    Ok(matched) => {
+                        if matched {
+                            // JIT匹配成功，但我们仍需要处理变量绑定
+                            return self.match_pattern_with_bindings(pattern, value);
+                        } else {
+                            return MatchResult::new_unmatched();
+                        }
+                    },
+                    Err(_) => {
+                        // JIT失败，回退到解释执行
+                    }
+                }
+            }
+        }
+
+        // 解释执行模式匹配
+        self.match_pattern_interpreted(pattern, value)
+    }
+
+    /// 解释执行模式匹配
+    fn match_pattern_interpreted(&mut self, pattern: &Pattern, value: &Value) -> MatchResult {
         match pattern {
             // 字面量模式
             Pattern::IntLiteral(expected) => {
@@ -289,5 +321,53 @@ impl PatternMatcher for Interpreter {
         self.local_env = saved_env;
         
         result
+    }
+
+    /// 带变量绑定的模式匹配（用于JIT后的绑定处理）
+    fn match_pattern_with_bindings(&mut self, pattern: &Pattern, value: &Value) -> MatchResult {
+        match pattern {
+            Pattern::Variable(name) => {
+                let mut bindings = HashMap::new();
+                bindings.insert(name.clone(), value.clone());
+                MatchResult::new_matched(bindings)
+            },
+            Pattern::Wildcard => {
+                MatchResult::new_matched(HashMap::new())
+            },
+            Pattern::Tuple(patterns) => {
+                if let Value::Array(values) = value {
+                    if patterns.len() == values.len() {
+                        let mut all_bindings = HashMap::new();
+
+                        for (pattern, value) in patterns.iter().zip(values.iter()) {
+                            let result = self.match_pattern_with_bindings(pattern, value);
+                            if !result.matched {
+                                return MatchResult::new_unmatched();
+                            }
+                            all_bindings.extend(result.bindings);
+                        }
+
+                        MatchResult::new_matched(all_bindings)
+                    } else {
+                        MatchResult::new_unmatched()
+                    }
+                } else {
+                    MatchResult::new_unmatched()
+                }
+            },
+            Pattern::Or(patterns) => {
+                for pattern in patterns {
+                    let result = self.match_pattern_with_bindings(pattern, value);
+                    if result.matched {
+                        return result;
+                    }
+                }
+                MatchResult::new_unmatched()
+            },
+            _ => {
+                // 对于字面量模式，不需要绑定
+                MatchResult::new_matched(HashMap::new())
+            }
+        }
     }
 }
