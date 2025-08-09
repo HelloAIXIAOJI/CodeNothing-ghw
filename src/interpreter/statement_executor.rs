@@ -16,6 +16,12 @@ pub trait StatementExecutor {
 
 impl<'a> StatementExecutor for Interpreter<'a> {
     fn execute_statement(&mut self, statement: Statement) -> ExecutionResult {
+        // 检查超时和操作次数限制
+        if let Err(timeout_msg) = self.check_timeout() {
+            eprintln!("⚠️ 执行超时: {}", timeout_msg);
+            return ExecutionResult::Error(timeout_msg);
+        }
+
         match statement {
             Statement::Return(expr) => {
                 // 返回语句，计算表达式值并返回
@@ -430,6 +436,11 @@ impl<'a> StatementExecutor for Interpreter<'a> {
                 ExecutionResult::Throw(value) => {
                     self.namespace_import_stack.pop();
                     panic!("未捕获的异常: {:?}", value);
+                },
+                ExecutionResult::Error(msg) => {
+                    self.namespace_import_stack.pop();
+                    eprintln!("执行错误: {}", msg);
+                    return Value::None;
                 }
             }
         }
@@ -506,6 +517,7 @@ impl<'a> Interpreter<'a> {
                             },
                             ExecutionResult::Continue => return ExecutionResult::Continue,
                             ExecutionResult::Throw(value) => return ExecutionResult::Throw(value),
+                            ExecutionResult::Error(msg) => return ExecutionResult::Error(msg),
                         }
                     }
                 }
@@ -543,6 +555,7 @@ impl<'a> Interpreter<'a> {
                             },
                             ExecutionResult::Continue => return ExecutionResult::Continue,
                             ExecutionResult::Throw(value) => return ExecutionResult::Throw(value),
+                            ExecutionResult::Error(msg) => return ExecutionResult::Error(msg),
                         }
                     }
                 }
@@ -570,6 +583,7 @@ impl<'a> Interpreter<'a> {
                         },
                         ExecutionResult::Continue => return ExecutionResult::Continue,
                         ExecutionResult::Throw(value) => return ExecutionResult::Throw(value),
+                        ExecutionResult::Error(msg) => return ExecutionResult::Error(msg),
                     }
                 }
             }
