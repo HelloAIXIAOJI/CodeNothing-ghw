@@ -71,6 +71,8 @@ pub enum Expression {
     SwitchExpression(Box<Expression>, Vec<SwitchCase>, Option<Box<Expression>>), // switch表达式：表达式、case列表、default表达式
     // 字符串插值
     StringInterpolation(Vec<StringInterpolationSegment>), // 字符串插值表达式
+    // 模式匹配表达式
+    MatchExpression(Box<Expression>, Vec<MatchArm>), // match表达式：匹配表达式和匹配分支列表
     // Enum 相关表达式
     EnumVariantCreation(String, String, Vec<Expression>), // 枚举变体创建 (枚举名, 变体名, 参数)
     EnumVariantAccess(String, String), // 枚举变体访问 (枚举名::变体名)
@@ -94,6 +96,49 @@ pub enum Expression {
 pub enum StringInterpolationSegment {
     Text(String),                 // 普通文本
     Expression(Box<Expression>),  // 插入的表达式
+}
+
+// 模式匹配分支
+#[derive(Debug, Clone)]
+pub struct MatchArm {
+    pub pattern: Pattern,                    // 匹配模式
+    pub guard: Option<Expression>,           // 可选的守卫条件 (if condition)
+    pub body: Vec<Statement>,                // 匹配成功时执行的语句块
+}
+
+// 模式定义
+#[derive(Debug, Clone)]
+pub enum Pattern {
+    // 字面量模式
+    IntLiteral(i32),                         // 整数字面量模式
+    FloatLiteral(f64),                       // 浮点数字面量模式
+    BoolLiteral(bool),                       // 布尔字面量模式
+    StringLiteral(String),                   // 字符串字面量模式
+
+    // 变量模式
+    Variable(String),                        // 变量绑定模式 (x)
+    Wildcard,                               // 通配符模式 (_)
+
+    // 复合模式
+    Tuple(Vec<Pattern>),                     // 元组模式 (x, y, z)
+    Array(Vec<Pattern>),                     // 数组模式 [x, y, z]
+
+    // 范围模式
+    Range(Box<Pattern>, Box<Pattern>),       // 范围模式 (1..10)
+
+    // 多选模式
+    Or(Vec<Pattern>),                        // 或模式 (1 | 2 | 3)
+
+    // 结构化模式
+    Struct(String, Vec<(String, Pattern)>),  // 结构体模式 Person { name, age }
+
+    // 枚举模式
+    EnumVariant(String, String, Vec<Pattern>), // 枚举变体模式 Option::Some(x)
+
+    // 引用模式
+    Reference(Box<Pattern>),                 // 引用模式 &pattern
+
+    // 守卫模式 (在MatchArm中处理)
 }
 
 // 命名空间类型
@@ -174,6 +219,8 @@ pub enum Statement {
     FieldAssignment(Box<Expression>, String, Expression), // 字段赋值 (obj.field = value)
     // Enum相关语句
     EnumDeclaration(Enum), // 枚举声明
+    // 模式匹配语句
+    Match(Expression, Vec<MatchArm>), // match语句：匹配表达式和匹配分支列表
     // 未来可以扩展更多语句类型
 }
 
