@@ -55,4 +55,52 @@ impl<'a> ParserBase<'a> {
     pub fn peek_ahead(&self, offset: usize) -> Option<&String> {
         self.tokens.get(self.position + offset)
     }
-} 
+
+    // 检查当前token是否是指定的符号，不消费
+    pub fn check_symbol(&self, symbol: &str) -> bool {
+        if let Some(token) = self.peek() {
+            token == symbol
+        } else {
+            false
+        }
+    }
+
+    // 如果当前token是指定的符号，则消费并返回true，否则返回false
+    pub fn consume_symbol(&mut self, symbol: &str) -> bool {
+        if self.check_symbol(symbol) {
+            self.consume();
+            true
+        } else {
+            false
+        }
+    }
+
+    // 检查当前token是否是指定的关键字，不消费
+    pub fn check_keyword(&self, keyword: &str) -> bool {
+        if let Some(token) = self.peek() {
+            token == keyword
+        } else {
+            false
+        }
+    }
+
+    // 如果当前token是指定的关键字，则消费并返回true，否则返回false
+    pub fn consume_keyword(&mut self, keyword: &str) -> bool {
+        if self.check_keyword(keyword) {
+            self.consume();
+            true
+        } else {
+            false
+        }
+    }
+
+    // 消费当前token并返回，类似consume但名字不同
+    pub fn advance(&mut self) -> Option<String> {
+        self.consume()
+    }
+
+    // 检查是否到达了输入的末尾
+    pub fn is_at_end(&self) -> bool {
+        self.position >= self.tokens.len()
+    }
+}
