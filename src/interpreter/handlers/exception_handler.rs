@@ -20,6 +20,10 @@ pub fn handle_try_catch(interpreter: &mut Interpreter, try_block: Vec<Statement>
                     exception_caught = true;
                     exception_value = Some(value);
                     break;
+                },
+                ExecutionResult::Error(msg) => {
+                    eprintln!("执行错误: {}", msg);
+                    return ExecutionResult::Error(msg);
                 }
             }
         }
@@ -64,6 +68,15 @@ pub fn handle_try_catch(interpreter: &mut Interpreter, try_block: Vec<Statement>
                             }
                         }
                         return ExecutionResult::Throw(value);
+                    },
+                    ExecutionResult::Error(msg) => {
+                        // 执行 finally 块（如果存在）
+                        if let Some(ref finally_block) = finally_block {
+                            for stmt in finally_block {
+                                interpreter.execute_statement_direct(stmt.clone());
+                            }
+                        }
+                        return ExecutionResult::Error(msg);
                     }
                 }
             }
@@ -82,6 +95,7 @@ pub fn handle_try_catch(interpreter: &mut Interpreter, try_block: Vec<Statement>
                 ExecutionResult::Break => return ExecutionResult::Break,
                 ExecutionResult::Continue => return ExecutionResult::Continue,
                 ExecutionResult::Throw(value) => return ExecutionResult::Throw(value),
+                ExecutionResult::Error(msg) => return ExecutionResult::Error(msg),
             }
         }
     }
