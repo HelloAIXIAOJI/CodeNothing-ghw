@@ -33,9 +33,11 @@ pub trait PatternMatcher {
     fn match_pattern(&mut self, pattern: &Pattern, value: &Value) -> MatchResult;
     fn evaluate_guard(&mut self, guard: &Expression, bindings: &HashMap<String, Value>) -> bool;
     fn execute_match_arm_body(&mut self, body: &[Statement], bindings: &HashMap<String, Value>) -> ExecutionResult;
+    fn match_pattern_interpreted(&mut self, pattern: &Pattern, value: &Value) -> MatchResult;
+    fn match_pattern_with_bindings(&mut self, pattern: &Pattern, value: &Value) -> MatchResult;
 }
 
-impl PatternMatcher for Interpreter {
+impl<'a> PatternMatcher for Interpreter<'a> {
     /// 执行match语句
     fn execute_match_statement(&mut self, match_expr: Expression, arms: Vec<MatchArm>) -> ExecutionResult {
         // 计算匹配表达式的值
@@ -115,28 +117,27 @@ impl PatternMatcher for Interpreter {
     
     /// 匹配模式（支持JIT优化）
     fn match_pattern(&mut self, pattern: &Pattern, value: &Value) -> MatchResult {
-        // 检查是否应该使用JIT编译
-        static mut PATTERN_USAGE_COUNT: HashMap<String, usize> = HashMap::new();
+        use std::sync::Mutex;
+        use std::collections::HashMap;
 
-        unsafe {
-            let pattern_key = format!("{:?}", pattern);
-            let usage_count = PATTERN_USAGE_COUNT.entry(pattern_key.clone()).or_insert(0);
-            *usage_count += 1;
+        // 使用lazy_static或者简单的全局计数器
+        static PATTERN_USAGE_COUNTER: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
 
-            // 如果使用次数足够多，尝试JIT编译
-            if should_use_pattern_jit(pattern, *usage_count) {
-                match jit_match_pattern(pattern, value, self) {
-                    Ok(matched) => {
-                        if matched {
-                            // JIT匹配成功，但我们仍需要处理变量绑定
-                            return self.match_pattern_with_bindings(pattern, value);
-                        } else {
-                            return MatchResult::new_unmatched();
-                        }
-                    },
-                    Err(_) => {
-                        // JIT失败，回退到解释执行
+        let usage_count = PATTERN_USAGE_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+
+        // 如果使用次数足够多，尝试JIT编译
+        if should_use_pattern_jit(pattern, usage_count) {
+            match jit_match_pattern(pattern, value, self) {
+                Ok(matched) => {
+                    if matched {
+                        // JIT匹配成功，但我们仍需要处理变量绑定
+                        return self.match_pattern_with_bindings(pattern, value);
+                    } else {
+                        return MatchResult::new_unmatched();
                     }
+                },
+                Err(_) => {
+                    // JIT失败，回退到解释执行
                 }
             }
         }
