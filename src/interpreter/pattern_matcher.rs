@@ -1,6 +1,7 @@
 // 模式匹配解释器
 use crate::ast::{Pattern, MatchArm, Expression, Statement};
 use crate::interpreter::{Interpreter, Value, ExecutionResult};
+use crate::interpreter::pattern_jit::{should_use_pattern_jit, jit_match_pattern};
 use std::collections::HashMap;
 
 /// 模式匹配结果
