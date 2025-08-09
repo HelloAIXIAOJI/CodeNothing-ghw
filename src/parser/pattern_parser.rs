@@ -190,7 +190,7 @@ impl<'a> PatternParser for ParserBase<'a> {
     
     /// 解析基础模式
     fn parse_pattern_primary(&mut self) -> Result<Pattern, String> {
-        if let Some(token) = self.peek() {
+        if let Some(token) = self.peek().cloned() {
             match token.as_str() {
                 // 通配符模式
                 "_" => {
