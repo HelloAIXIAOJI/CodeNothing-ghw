@@ -840,9 +840,8 @@ impl<'a> StatementParser for ParserBase<'a> {
 
     /// 解析match语句
     fn parse_match_statement(&mut self) -> Result<Statement, String> {
-        self.debug_println("开始解析match语句");
-
-        let (match_expr, arms) = self.parse_match_statement()?;
+        // 使用PatternParser trait的方法
+        let (match_expr, arms) = PatternParser::parse_match_statement(self)?;
 
         Ok(Statement::Match(match_expr, arms))
     }
