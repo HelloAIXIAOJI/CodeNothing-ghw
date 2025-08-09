@@ -1,6 +1,7 @@
-use crate::ast::{Expression, BinaryOperator, CompareOperator, LogicalOperator, Parameter, Type, Statement};
+use crate::ast::{Expression, BinaryOperator, CompareOperator, LogicalOperator, Parameter, Type, Statement, MatchArm};
 use crate::parser::parser_base::ParserBase;
 use crate::parser::pointer_parser::PointerParser;
+use crate::parser::pattern_parser::PatternParser;
 use crate::interpreter::debug_println;
 
 pub trait ExpressionParser {
@@ -476,6 +477,11 @@ impl<'a> ExpressionParser for ParserBase<'a> {
                     self.expect(")")?;
                     
                     Ok(Expression::ObjectCreation(class_name, args))
+                },
+                "match" => {
+                    // 解析match表达式
+                    let (match_expr, arms) = self.parse_match_expression()?;
+                    Ok(Expression::MatchExpression(Box::new(match_expr), arms))
                 },
                 _ => {
                     // 检查是否是字符串字面量
