@@ -184,6 +184,12 @@ impl<'a> Interpreter<'a> {
 
 impl<'a> ExpressionEvaluator for Interpreter<'a> {
     fn evaluate_expression(&mut self, expr: &Expression) -> Value {
+        // 检查超时和操作次数限制
+        if let Err(timeout_msg) = self.check_timeout() {
+            eprintln!("⚠️ 执行超时: {}", timeout_msg);
+            return Value::None;
+        }
+
         // 启用常量表达式JIT优化
         if self.is_pure_constant_expression(expr) {
             if let Some(val) = jit::jit_eval_const_expr(expr) {
@@ -1395,10 +1401,19 @@ impl<'a> Interpreter<'a> {
 
         match statement {
             Statement::FieldAssignment(obj_expr, field_name, value_expr) => {
-                // 检查是否是this.field = value
-                if let crate::ast::Expression::This = **obj_expr {
-                    let value = self.evaluate_expression_with_constructor_context(value_expr, this_obj, constructor_env);
-                    this_obj.fields.insert(field_name.clone(), value);
+                // 检查是否是this.field = value 或 self.field = value
+                match **obj_expr {
+                    crate::ast::Expression::This => {
+                        let value = self.evaluate_expression_with_constructor_context(value_expr, this_obj, constructor_env);
+                        this_obj.fields.insert(field_name.clone(), value);
+                    },
+                    crate::ast::Expression::Variable(ref var_name) if var_name == "self" => {
+                        let value = self.evaluate_expression_with_constructor_context(value_expr, this_obj, constructor_env);
+                        this_obj.fields.insert(field_name.clone(), value);
+                    },
+                    _ => {
+                        // 其他对象的字段赋值，暂时跳过
+                    }
                 }
             },
             _ => {
@@ -1765,23 +1780,33 @@ impl<'a> Interpreter<'a> {
         match expr {
             Expression::This => Value::Object(this_obj.clone()),
             Expression::FieldAccess(obj_expr, field_name) => {
-                if let Expression::This = **obj_expr {
-                    // this.field 访问 - 直接从this_obj获取
-                    match this_obj.fields.get(field_name) {
-                        Some(value) => value.clone(),
-                        None => Value::None
-                    }
-                } else {
-                    // 递归处理其他字段访问
-                    let obj_value = self.evaluate_expression_with_method_context(obj_expr, this_obj, method_env);
-                    match obj_value {
-                        Value::Object(obj) => {
-                            match obj.fields.get(field_name) {
-                                Some(value) => value.clone(),
-                                None => Value::None
-                            }
-                        },
-                        _ => Value::None
+                match **obj_expr {
+                    Expression::This => {
+                        // this.field 访问 - 直接从this_obj获取
+                        match this_obj.fields.get(field_name) {
+                            Some(value) => value.clone(),
+                            None => Value::None
+                        }
+                    },
+                    Expression::Variable(ref var_name) if var_name == "self" => {
+                        // self.field 访问 - 直接从this_obj获取
+                        match this_obj.fields.get(field_name) {
+                            Some(value) => value.clone(),
+                            None => Value::None
+                        }
+                    },
+                    _ => {
+                        // 递归处理其他字段访问
+                        let obj_value = self.evaluate_expression_with_method_context(obj_expr, this_obj, method_env);
+                        match obj_value {
+                            Value::Object(obj) => {
+                                match obj.fields.get(field_name) {
+                                    Some(value) => value.clone(),
+                                    None => Value::None
+                                }
+                            },
+                            _ => Value::None
+                        }
                     }
                 }
             },
@@ -1793,8 +1818,8 @@ impl<'a> Interpreter<'a> {
                 self.perform_binary_operation(&left_val, op, &right_val)
             },
             Expression::Variable(var_name) => {
-                // 特殊处理this关键字
-                if var_name == "this" {
+                // 特殊处理this和self关键字
+                if var_name == "this" || var_name == "self" {
                     return Value::Object(this_obj.clone());
                 }
                 // 首先检查方法参数
