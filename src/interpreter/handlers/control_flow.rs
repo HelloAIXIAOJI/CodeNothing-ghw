@@ -582,6 +582,7 @@ fn execute_loop_body_standard(interpreter: &mut Interpreter, loop_body: &[Statem
             ExecutionResult::Break => return Some(ExecutionResult::None), // 跳出循环，但不向上传递break
             ExecutionResult::Continue => break, // 跳过当前迭代的剩余语句，继续下一次迭代
             ExecutionResult::Throw(value) => return Some(ExecutionResult::Throw(value)), // 异常向上传播
+            ExecutionResult::Error(msg) => return Some(ExecutionResult::Error(msg)), // 错误向上传播
         }
     }
     None
@@ -603,6 +604,7 @@ fn execute_loop_body_with_batch_memory(
                 ExecutionResult::Break => return Some(ExecutionResult::None),
                 ExecutionResult::Continue => break,
                 ExecutionResult::Throw(value) => return Some(ExecutionResult::Throw(value)),
+                ExecutionResult::Error(msg) => return Some(ExecutionResult::Error(msg)),
             }
         }
         None
