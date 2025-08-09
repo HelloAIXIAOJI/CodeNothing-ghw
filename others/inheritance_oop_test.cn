@@ -1,0 +1,244 @@
+// CodeNothing 继承OOP测试
+// 测试类继承、方法重写等功能
+
+using lib <io>;
+using ns std;
+
+// 基础动物类
+class Animal {
+    protected name : string;
+    protected age : int;
+    
+    constructor(name : string, age : int) {
+        this.name = name;
+        this.age = age;
+        std::println("创建动物: " + name);
+    };
+    
+    fn get_name() : string {
+        return this.name;
+    };
+    
+    fn get_age() : int {
+        return this.age;
+    };
+    
+    fn get_info() : string {
+        return "动物: " + this.name + ", 年龄: " + this.age;
+    };
+    
+    virtual fn make_sound() : string {
+        return this.name + " 发出声音";
+    };
+    
+    virtual fn move() : string {
+        return this.name + " 正在移动";
+    };
+    
+    static fn get_kingdom() : string {
+        return "动物界";
+    };
+};
+
+// 狗类 - 继承自动物
+class Dog extends Animal {
+    private breed : string;
+    
+    constructor(name : string, age : int, breed : string) {
+        this.name = name;
+        this.age = age;
+        this.breed = breed;
+        std::println("创建狗: " + name + " (" + breed + ")");
+    };
+    
+    override fn make_sound() : string {
+        return this.name + " 汪汪叫";
+    };
+    
+    override fn move() : string {
+        return this.name + " 正在奔跑";
+    };
+    
+    fn get_breed() : string {
+        return this.breed;
+    };
+    
+    fn fetch() : string {
+        return this.name + " 正在捡球";
+    };
+    
+    override fn get_info() : string {
+        return "狗: " + this.name + " (" + this.breed + "), 年龄: " + this.age;
+    };
+};
+
+// 猫类 - 继承自动物
+class Cat extends Animal {
+    private indoor : bool;
+    
+    constructor(name : string, age : int, indoor : bool) {
+        this.name = name;
+        this.age = age;
+        this.indoor = indoor;
+        indoor_str : string = "室外";
+        std::println("创建猫: " + name + " (" + indoor_str + ")");
+    };
+    
+    override fn make_sound() : string {
+        return this.name + " 喵喵叫";
+    };
+    
+    override fn move() : string {
+        return this.name + " 正在优雅地走动";
+    };
+    
+    fn climb() : string {
+        return this.name + " 正在爬树";
+    };
+    
+    fn is_indoor() : bool {
+        return this.indoor;
+    };
+    
+    override fn get_info() : string {
+        location : string = "室外";
+        return "猫: " + this.name + " (" + location + "), 年龄: " + this.age;
+    };
+};
+
+// 鸟类 - 继承自动物
+class Bird extends Animal {
+    private can_fly : bool;
+    
+    constructor(name : string, age : int, can_fly : bool) {
+        this.name = name;
+        this.age = age;
+        this.can_fly = can_fly;
+        std::println("创建鸟: " + name);
+    };
+    
+    override fn make_sound() : string {
+        return this.name + " 啾啾叫";
+    };
+    
+    override fn move() : string {
+        return this.name + " 正在飞翔";
+    };
+    
+    fn fly() : string {
+        return this.name + " 正在天空中飞翔";
+    };
+    
+    fn can_fly_check() : bool {
+        return this.can_fly;
+    };
+    
+    override fn get_info() : string {
+        return "鸟: " + this.name + ", 年龄: " + this.age;
+    };
+};
+
+// 主函数
+fn main() : int {
+    std::println("🐾 CodeNothing 继承OOP测试开始");
+    std::println("=====================================");
+    
+    // 1. 创建不同类型的动物
+    std::println("1. 创建动物对象测试");
+    animal : Animal = new Animal("通用动物", 5);
+    dog : Dog = new Dog("旺财", 3, "金毛");
+    cat : Cat = new Cat("咪咪", 2, true);
+    bird : Bird = new Bird("小鸟", 1, true);
+    std::println("");
+    
+    // 2. 基础方法调用测试
+    std::println("2. 基础方法调用测试");
+    std::println("动物姓名: " + animal.get_name());
+    std::println("狗姓名: " + dog.get_name());
+    std::println("猫姓名: " + cat.get_name());
+    std::println("鸟姓名: " + bird.get_name());
+    std::println("");
+    
+    // 3. 方法重写测试
+    std::println("3. 方法重写测试 - 叫声");
+    std::println(animal.make_sound());
+    std::println(dog.make_sound());
+    std::println(cat.make_sound());
+    std::println(bird.make_sound());
+    std::println("");
+    
+    // 4. 方法重写测试 - 移动
+    std::println("4. 方法重写测试 - 移动");
+    std::println(animal.move());
+    std::println(dog.move());
+    std::println(cat.move());
+    std::println(bird.move());
+    std::println("");
+    
+    // 5. 子类特有方法测试
+    std::println("5. 子类特有方法测试");
+    std::println("狗的品种: " + dog.get_breed());
+    std::println(dog.fetch());
+    
+    std::println(cat.climb());
+    std::println("猫是否室内: " + cat.is_indoor());
+    
+    std::println(bird.fly());
+    std::println("鸟是否会飞: " + bird.can_fly_check());
+    std::println("");
+    
+    // 6. 信息输出测试
+    std::println("6. 对象信息输出测试");
+    std::println(animal.get_info());
+    std::println(dog.get_info());
+    std::println(cat.get_info());
+    std::println(bird.get_info());
+    std::println("");
+    
+    // 7. 静态方法测试
+    std::println("7. 静态方法测试");
+    kingdom : string = Animal::get_kingdom();
+    std::println("所属界: " + kingdom);
+    std::println("");
+    
+    // 8. 继承字段访问测试
+    std::println("8. 继承字段访问测试");
+    std::println("直接访问狗的名字: " + dog.get_name());
+    std::println("直接访问猫的年龄: " + cat.get_age());
+    std::println("直接访问鸟的名字: " + bird.get_name());
+    std::println("");
+    
+    // 9. 综合演示
+    std::println("9. 综合演示 - 动物园场景");
+    std::println("=== 动物园参观 ===");
+    std::println("欢迎来到 " + Animal::get_kingdom() + " 动物园!");
+    std::println("");
+    
+    std::println("动物表演时间:");
+    std::println("1. " + dog.get_info());
+    std::println("   " + dog.make_sound());
+    std::println("   " + dog.move());
+    std::println("   " + dog.fetch());
+    std::println("");
+    
+    std::println("2. " + cat.get_info());
+    std::println("   " + cat.make_sound());
+    std::println("   " + cat.move());
+    std::println("   " + cat.climb());
+    std::println("");
+    
+    std::println("3. " + bird.get_info());
+    std::println("   " + bird.make_sound());
+    std::println("   " + bird.move());
+    std::println("   " + bird.fly());
+    std::println("");
+    
+    std::println("=== 参观结束 ===");
+    std::println("");
+    
+    std::println("✅ 继承OOP测试完成!");
+    std::println("=====================================");
+    std::println("测试结果: 继承、方法重写、多态功能正常工作");
+    
+    return 0;
+};

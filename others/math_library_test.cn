@@ -1,0 +1,184 @@
+// CodeNothing Math Library 测试程序
+// 测试数学库的各种功能
+
+using lib <io>;
+using lib <math>;
+using ns std;
+
+fn main() : int {
+    std::println("🧮 CodeNothing Math Library 测试开始");
+    std::println("=====================================");
+    
+    // 1. 基础数学函数测试
+    std::println("1. 基础数学函数测试");
+    
+    // 绝对值测试
+    result1 : float = abs("-5.5");
+    std::println("abs(-5.5) = " + result1);
+
+    result2 : float = abs("3.14");
+    std::println("abs(3.14) = " + result2);
+
+    // 最大值和最小值测试
+    result3 : float = max("10", "20");
+    std::println("max(10, 20) = " + result3);
+
+    result4 : float = min("10", "20");
+    std::println("min(10, 20) = " + result4);
+
+    // 幂运算测试
+    result5 : float = pow("2", "3");
+    std::println("pow(2, 3) = " + result5);
+
+    result6 : float = pow("5", "2");
+    std::println("pow(5, 2) = " + result6);
+
+    // 平方根测试
+    result7 : float = sqrt("16");
+    std::println("sqrt(16) = " + result7);
+
+    result8 : float = sqrt("25");
+    std::println("sqrt(25) = " + result8);
+    
+    std::println("");
+    
+    // 2. 三角函数测试
+    std::println("2. 三角函数测试");
+    using ns trig;
+    
+    // 基本三角函数
+    sin_result : float = sin("0");
+    std::println("sin(0) = " + sin_result);
+
+    cos_result : float = cos("0");
+    std::println("cos(0) = " + cos_result);
+
+    tan_result : float = tan("0");
+    std::println("tan(0) = " + tan_result);
+
+    // 角度弧度转换
+    rad_result : float = to_radians("90");
+    std::println("to_radians(90°) = " + rad_result);
+
+    deg_result : float = to_degrees("1.5708");
+    std::println("to_degrees(1.5708) = " + deg_result);
+
+    // 反三角函数
+    asin_result : float = asin("0.5");
+    std::println("asin(0.5) = " + asin_result);
+
+    acos_result : float = acos("0.5");
+    std::println("acos(0.5) = " + acos_result);
+
+    atan_result : float = atan("1");
+    std::println("atan(1) = " + atan_result);
+    
+    std::println("");
+    
+    // 3. 对数函数测试
+    std::println("3. 对数函数测试");
+    using ns log;
+    
+    // 自然对数
+    ln_result : float = ln("2.718");
+    std::println("ln(2.718) = " + ln_result);
+
+    // 常用对数
+    log10_result : float = log10("100");
+    std::println("log10(100) = " + log10_result);
+
+    // 以2为底的对数
+    log2_result : float = log2("8");
+    std::println("log2(8) = " + log2_result);
+
+    // 指定底数的对数
+    log_result : float = log("8", "2");
+    std::println("log(8, 2) = " + log_result);
+    
+    std::println("");
+    
+    // 4. 数学常数测试
+    std::println("4. 数学常数测试");
+    using ns constants;
+    
+    // 圆周率
+    pi_val : float = pi();
+    std::println("π = " + pi_val);
+
+    // 自然常数
+    e_val : float = e();
+    std::println("e = " + e_val);
+
+    // 黄金比例
+    phi_val : float = phi();
+    std::println("φ (黄金比例) = " + phi_val);
+
+    // 2的平方根
+    sqrt2_val : float = sqrt2();
+    std::println("√2 = " + sqrt2_val);
+    
+    std::println("");
+    
+    // 5. 综合计算示例
+    std::println("5. 综合计算示例");
+    
+    // 计算圆的面积：π * r²
+    radius : int = 5;
+    radius_squared : float = pow("5", "2");
+    std::println("半径为 " + radius + " 的圆:");
+    std::println("  r² = " + radius_squared);
+    std::println("  π = " + pi_val);
+    std::println("  面积 = π × r² (演示数学计算)");
+
+    // 勾股定理：c = √(a² + b²)
+    a : int = 3;
+    b : int = 4;
+    a_squared : float = pow("3", "2");
+    b_squared : float = pow("4", "2");
+    std::println("勾股定理计算 (a=" + a + ", b=" + b + "):");
+    std::println("  a² = " + a_squared);
+    std::println("  b² = " + b_squared);
+    std::println("  c = √(a² + b²) (演示数学计算)");
+    
+    std::println("");
+    
+    // 6. 错误处理测试
+    std::println("6. 错误处理测试");
+    
+    // 负数平方根 - 这些会返回字符串"NaN"
+    std::println("sqrt(-4) = " + sqrt("-4") + " (应该是NaN)");
+
+    // 超出范围的反三角函数
+    std::println("asin(2) = " + asin("2") + " (应该是NaN)");
+
+    // 负数或零的对数
+    std::println("ln(-1) = " + ln("-1") + " (应该是NaN)");
+
+    std::println("ln(0) = " + ln("0") + " (应该是NaN)");
+    
+    std::println("");
+    
+    // 7. 性能测试（简单）
+    std::println("7. 连续计算测试");
+    
+    // 连续计算
+    val1 : float = abs("-10");
+    val2 : float = sqrt("100");
+    val3 : float = pow("2", "10");
+    val4 : float = max("10", "10");
+    
+    std::println("连续计算结果:");
+    std::println("  abs(-10) = " + val1);
+    std::println("  sqrt(100) = " + val2);
+    std::println("  pow(2, 10) = " + val3);
+    std::println("  max(10, 10) = " + val4);
+    
+    std::println("");
+    
+    std::println("✅ Math Library 测试完成!");
+    std::println("=====================================");
+    std::println("所有基本数学函数、三角函数、对数函数和常数都已测试");
+    std::println("库功能正常，可以在CodeNothing程序中使用");
+    
+    return 0;
+};

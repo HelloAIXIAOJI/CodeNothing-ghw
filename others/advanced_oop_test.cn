@@ -1,0 +1,350 @@
+// CodeNothing 高级OOP特性测试
+// 测试抽象类、接口、友元类等高级特性
+
+using lib <io>;
+using ns std;
+
+// 抽象基类 - 车辆
+abstract class Vehicle {
+    protected brand : string;
+    protected model : string;
+    protected year : int;
+    private vin : string;
+    
+    constructor(brand : string, model : string, year : int) {
+        this.brand = brand;
+        this.model = model;
+        this.year = year;
+        this.vin = this.generate_vin();
+        std::println("创建车辆: " + brand + " " + model + " (" + year + ")");
+    };
+    
+    // 抽象方法 - 必须被子类实现
+    abstract fn start_engine() : string;
+    abstract fn get_fuel_type() : string;
+    
+    // 虚方法 - 可以被重写
+    virtual fn get_max_speed() : int {
+        return 120; // 默认最大速度
+    };
+    
+    // 普通方法
+    fn get_vehicle_info() : string {
+        return this.year + " " + this.brand + " " + this.model;
+    };
+    
+    // 受保护方法 - 只能被子类访问
+    protected fn get_vin() : string {
+        return this.vin;
+    };
+    
+    // 私有方法
+    private fn generate_vin() : string {
+        return "VIN" + this.year + this.brand.substring(0, 2);
+    };
+    
+    // 静态方法
+    static fn get_vehicle_regulations() : string {
+        return "遵守交通法规";
+    };
+};
+
+// 接口 - 电动车特性
+interface Electric {
+    fn charge_battery() : string;
+    fn get_battery_level() : int;
+    fn get_range() : int;
+};
+
+// 接口 - 自动驾驶
+interface Autonomous {
+    fn enable_autopilot() : string;
+    fn disable_autopilot() : string;
+    fn is_autopilot_active() : bool;
+};
+
+// 具体类 - 汽油车
+class GasolineCar extends Vehicle {
+    private fuel_capacity : float;
+    private current_fuel : float;
+
+    constructor(brand : string, model : string, year : int, capacity : float) {
+        this.brand = brand;
+        this.model = model;
+        this.year = year;
+        this.fuel_capacity = capacity;
+        this.current_fuel = capacity; // 满油状态
+        std::println("创建汽油车，油箱容量: " + capacity + "L");
+    };
+    
+    // 实现抽象方法
+    override fn start_engine() : string {
+        if (this.current_fuel > 0.0) {
+            return "汽油发动机启动: " + this.get_vehicle_info();
+        } else {
+            return "燃油不足，无法启动";
+        };
+    };
+    
+    override fn get_fuel_type() : string {
+        return "汽油";
+    };
+    
+    // 重写虚方法
+    override fn get_max_speed() : int {
+        return 180;
+    };
+    
+    // 汽油车特有方法
+    fn refuel(amount : float) : string {
+        old_fuel : float = this.current_fuel;
+        this.current_fuel = this.current_fuel + amount;
+        if (this.current_fuel > this.fuel_capacity) {
+            this.current_fuel = this.fuel_capacity;
+        };
+        return "加油: " + old_fuel + "L -> " + this.current_fuel + "L";
+    };
+    
+    fn get_fuel_level() : float {
+        return this.current_fuel;
+    };
+};
+
+// 具体类 - 电动车（实现多个接口）
+class ElectricCar extends Vehicle implements Electric, Autonomous {
+    private battery_capacity : int;
+    private current_battery : int;
+    private autopilot_enabled : bool;
+
+    constructor(brand : string, model : string, year : int, battery : int) {
+        this.brand = brand;
+        this.model = model;
+        this.year = year;
+        this.battery_capacity = battery;
+        this.current_battery = battery; // 满电状态
+        this.autopilot_enabled = false;
+        std::println("创建电动车，电池容量: " + battery + "kWh");
+    };
+    
+    // 实现抽象方法
+    override fn start_engine() : string {
+        if (this.current_battery > 0) {
+            return "电动机启动: " + this.get_vehicle_info();
+        } else {
+            return "电池电量不足，无法启动";
+        };
+    };
+    
+    override fn get_fuel_type() : string {
+        return "电力";
+    };
+    
+    // 重写虚方法
+    override fn get_max_speed() : int {
+        return 200;
+    };
+    
+    // 实现Electric接口
+    fn charge_battery() : string {
+        this.current_battery = this.battery_capacity;
+        return "电池充电完成: " + this.current_battery + "kWh";
+    };
+    
+    fn get_battery_level() : int {
+        return this.current_battery;
+    };
+    
+    fn get_range() : int {
+        return this.current_battery * 5; // 假设每kWh可行驶5km
+    };
+    
+    // 实现Autonomous接口
+    fn enable_autopilot() : string {
+        this.autopilot_enabled = true;
+        return "自动驾驶已启用";
+    };
+    
+    fn disable_autopilot() : string {
+        this.autopilot_enabled = false;
+        return "自动驾驶已关闭";
+    };
+    
+    fn is_autopilot_active() : bool {
+        return this.autopilot_enabled;
+    };
+    
+    // 电动车特有方法
+    fn use_battery(amount : int) : string {
+        old_battery : int = this.current_battery;
+        this.current_battery = this.current_battery - amount;
+        if (this.current_battery < 0) {
+            this.current_battery = 0;
+        };
+        return "电池使用: " + old_battery + "kWh -> " + this.current_battery + "kWh";
+    };
+};
+
+// 混合动力车 - 多重继承示例
+class HybridCar extends Vehicle implements Electric {
+    private fuel_capacity : float;
+    private current_fuel : float;
+    private battery_capacity : int;
+    private current_battery : int;
+    private is_electric_mode : bool;
+
+    constructor(brand : string, model : string, year : int, fuel_cap : float, battery_cap : int) {
+        this.brand = brand;
+        this.model = model;
+        this.year = year;
+        this.fuel_capacity = fuel_cap;
+        this.current_fuel = fuel_cap;
+        this.battery_capacity = battery_cap;
+        this.current_battery = battery_cap;
+        this.is_electric_mode = true; // 默认电动模式
+        std::println("创建混合动力车，油箱: " + fuel_cap + "L, 电池: " + battery_cap + "kWh");
+    };
+    
+    // 实现抽象方法
+    override fn start_engine() : string {
+        if (this.is_electric_mode && this.current_battery > 0) {
+            return "电动模式启动: " + this.get_vehicle_info();
+        } else if (!this.is_electric_mode && this.current_fuel > 0.0) {
+            return "汽油模式启动: " + this.get_vehicle_info();
+        } else {
+            return "燃料和电力都不足，无法启动";
+        };
+    };
+    
+    override fn get_fuel_type() : string {
+        if (this.is_electric_mode) {
+            return "电力";
+        } else {
+            return "汽油";
+        };
+    };
+    
+    // 实现Electric接口
+    fn charge_battery() : string {
+        this.current_battery = this.battery_capacity;
+        return "混动车电池充电完成: " + this.current_battery + "kWh";
+    };
+    
+    fn get_battery_level() : int {
+        return this.current_battery;
+    };
+    
+    fn get_range() : int {
+        electric_range : int = this.current_battery * 3; // 电动续航
+        fuel_range : int = this.current_fuel * 15; // 汽油续航（假设每升15km）
+        return electric_range + fuel_range;
+    };
+    
+    // 混动车特有方法
+    fn switch_to_electric() : string {
+        this.is_electric_mode = true;
+        return "切换到电动模式";
+    };
+    
+    fn switch_to_gasoline() : string {
+        this.is_electric_mode = false;
+        return "切换到汽油模式";
+    };
+    
+    fn get_current_mode() : string {
+        if (this.is_electric_mode) {
+            return "电动模式";
+        } else {
+            return "汽油模式";
+        };
+    };
+};
+
+// 车队管理类
+class Fleet {
+    private vehicles : []Vehicle;
+    private fleet_name : string;
+    
+    constructor(name : string) {
+        this.fleet_name = name;
+        this.vehicles = [];
+        std::println("创建车队: " + name);
+    };
+    
+    fn add_vehicle(vehicle : Vehicle) : void {
+        this.vehicles.push(vehicle);
+        std::println("车队添加车辆: " + vehicle.get_vehicle_info());
+        return;
+    };
+    
+    fn start_all_vehicles() : void {
+        std::println("=== 启动所有车辆 ===");
+        foreach (vehicle in this.vehicles) {
+            std::println(vehicle.start_engine());
+        };
+        return;
+    };
+    
+    fn get_fleet_info() : string {
+        return "车队: " + this.fleet_name + ", 车辆数量: " + this.vehicles.length();
+    };
+};
+
+// 主函数
+fn main() : int {
+    std::println("🚗 CodeNothing 高级OOP特性测试");
+    std::println("=====================================");
+    
+    // 1. 创建不同类型的车辆
+    std::println("1. 创建车辆实例");
+    gas_car : GasolineCar = new GasolineCar("丰田", "卡罗拉", 2023, 50.0);
+    electric_car : ElectricCar = new ElectricCar("特斯拉", "Model 3", 2023, 75);
+    hybrid_car : HybridCar = new HybridCar("丰田", "普锐斯", 2023, 45.0, 30);
+    std::println("");
+    
+    // 2. 测试抽象方法实现
+    std::println("2. 抽象方法测试");
+    std::println(gas_car.start_engine());
+    std::println(electric_car.start_engine());
+    std::println(hybrid_car.start_engine());
+    std::println("");
+    
+    // 3. 测试接口实现
+    std::println("3. 接口测试");
+    std::println(electric_car.charge_battery());
+    std::println("电动车电池电量: " + electric_car.get_battery_level());
+    std::println("电动车续航: " + electric_car.get_range() + "km");
+    
+    std::println(electric_car.enable_autopilot());
+    std::println("自动驾驶状态: " + electric_car.is_autopilot_active());
+    std::println("");
+    
+    // 4. 测试多重继承
+    std::println("4. 混合动力车测试");
+    std::println("当前模式: " + hybrid_car.get_current_mode());
+    std::println(hybrid_car.switch_to_gasoline());
+    std::println("切换后模式: " + hybrid_car.get_current_mode());
+    std::println("混动车续航: " + hybrid_car.get_range() + "km");
+    std::println("");
+    
+    // 5. 车队管理测试
+    std::println("5. 车队管理测试");
+    fleet : Fleet = new Fleet("测试车队");
+    fleet.add_vehicle(gas_car);
+    fleet.add_vehicle(electric_car);
+    fleet.add_vehicle(hybrid_car);
+    
+    std::println(fleet.get_fleet_info());
+    fleet.start_all_vehicles();
+    std::println("");
+    
+    // 6. 静态方法测试
+    std::println("6. 静态方法测试");
+    regulations : string = Vehicle::get_vehicle_regulations();
+    std::println("车辆法规: " + regulations);
+    std::println("");
+    
+    std::println("🎉 高级OOP测试完成!");
+    std::println("=====================================");
+    
+    return 0;
+};

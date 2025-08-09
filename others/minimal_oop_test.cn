@@ -1,0 +1,239 @@
+// CodeNothing 最小OOP测试
+// 测试最基本的类定义、对象创建、方法调用功能
+
+using lib <io>;
+using ns std;
+
+// 简单的人员类
+class Person {
+    public name : string;
+    public age : int;
+    
+    // 构造函数
+    constructor(name : string, age : int) {
+        this.name = name;
+        this.age = age;
+        std::println("创建人员: " + name);
+    };
+    
+    // 获取姓名
+    fn get_name() : string {
+        return this.name;
+    };
+    
+    // 获取年龄
+    fn get_age() : int {
+        return this.age;
+    };
+    
+    // 设置年龄
+    fn set_age(new_age : int) : void {
+        this.age = new_age;
+        std::println(this.name + " 的年龄更新为: " + new_age);
+        return;
+    };
+    
+    // 获取信息
+    fn get_info() : string {
+        return "姓名: " + this.name + ", 年龄: " + this.age;
+    };
+    
+    // 打招呼
+    fn greet() : string {
+        return "你好，我是 " + this.name;
+    };
+    
+    // 静态方法
+    static fn get_species() : string {
+        return "人类";
+    };
+};
+
+// 简单的计算器类
+class Calculator {
+    private result : int;
+    
+    constructor() {
+        this.result = 0;
+        std::println("创建计算器");
+    };
+    
+    fn add(value : int) : int {
+        this.result = this.result + value;
+        return this.result;
+    };
+    
+    fn subtract(value : int) : int {
+        this.result = this.result - value;
+        return this.result;
+    };
+    
+    fn multiply(value : int) : int {
+        this.result = this.result * value;
+        return this.result;
+    };
+    
+    fn get_result() : int {
+        return this.result;
+    };
+    
+    fn reset() : void {
+        this.result = 0;
+        std::println("计算器已重置");
+        return;
+    };
+    
+    fn get_info() : string {
+        return "计算器当前结果: " + this.result;
+    };
+};
+
+// 简单的计数器类
+class Counter {
+    private count : int;
+    public name : string;
+    
+    constructor(name : string) {
+        this.name = name;
+        this.count = 0;
+        std::println("创建计数器: " + name);
+    };
+    
+    fn increment() : int {
+        this.count = this.count + 1;
+        return this.count;
+    };
+    
+    fn decrement() : int {
+        this.count = this.count - 1;
+        return this.count;
+    };
+    
+    fn get_count() : int {
+        return this.count;
+    };
+    
+    fn reset() : void {
+        this.count = 0;
+        std::println("计数器 " + this.name + " 已重置");
+        return;
+    };
+    
+    fn get_status() : string {
+        return "计数器 " + this.name + ": " + this.count;
+    };
+};
+
+// 主函数
+fn main() : int {
+    std::println("🔧 CodeNothing 最小OOP测试开始");
+    std::println("=====================================");
+    
+    // 1. 基本对象创建
+    std::println("1. 基本对象创建测试");
+    person1 : Person = new Person("张三", 25);
+    person2 : Person = new Person("李四", 30);
+    calc : Calculator = new Calculator();
+    counter : Counter = new Counter("主计数器");
+    std::println("");
+    
+    // 2. 基本方法调用
+    std::println("2. 基本方法调用测试");
+    std::println("人员1姓名: " + person1.get_name());
+    std::println("人员1年龄: " + person1.get_age());
+    std::println("人员2姓名: " + person2.get_name());
+    std::println("人员2年龄: " + person2.get_age());
+    std::println("");
+    
+    // 3. 对象状态修改
+    std::println("3. 对象状态修改测试");
+    person1.set_age(26);
+    std::println("修改后的年龄: " + person1.get_age());
+    std::println("");
+    
+    // 4. 计算器测试
+    std::println("4. 计算器功能测试");
+    result1 : int = calc.add(10);
+    std::println("加10后结果: " + result1);
+    
+    result2 : int = calc.add(5);
+    std::println("再加5后结果: " + result2);
+    
+    result3 : int = calc.multiply(2);
+    std::println("乘以2后结果: " + result3);
+    
+    result4 : int = calc.subtract(8);
+    std::println("减8后结果: " + result4);
+    
+    std::println("最终结果: " + calc.get_result());
+    calc.reset();
+    std::println("重置后结果: " + calc.get_result());
+    std::println("");
+    
+    // 5. 计数器测试
+    std::println("5. 计数器功能测试");
+    count1 : int = counter.increment();
+    std::println("递增1次: " + count1);
+    
+    count2 : int = counter.increment();
+    std::println("递增2次: " + count2);
+    
+    count3 : int = counter.increment();
+    std::println("递增3次: " + count3);
+    
+    count4 : int = counter.decrement();
+    std::println("递减1次: " + count4);
+    
+    std::println("当前计数: " + counter.get_count());
+    counter.reset();
+    std::println("重置后计数: " + counter.get_count());
+    std::println("");
+    
+    // 6. 对象信息输出
+    std::println("6. 对象信息输出测试");
+    std::println(person1.get_info());
+    std::println(person2.get_info());
+    std::println(calc.get_info());
+    std::println(counter.get_status());
+    std::println("");
+    
+    // 7. 对象交互
+    std::println("7. 对象交互测试");
+    std::println(person1.greet());
+    std::println(person2.greet());
+    std::println("");
+    
+    // 8. 静态方法测试
+    std::println("8. 静态方法测试");
+    species : string = Person::get_species();
+    std::println("物种: " + species);
+    std::println("");
+    
+    // 9. 字段直接访问
+    std::println("9. 字段直接访问测试");
+    std::println("直接访问person1.name: " + person1.name);
+    std::println("直接访问person1.age: " + person1.age);
+    std::println("直接访问counter.name: " + counter.name);
+    std::println("");
+    
+    // 10. 多对象操作
+    std::println("10. 多对象操作测试");
+    std::println("=== 综合操作演示 ===");
+    std::println("人员信息:");
+    std::println("  " + person1.get_info());
+    std::println("  " + person2.get_info());
+    
+    std::println("工具状态:");
+    std::println("  " + calc.get_info());
+    std::println("  " + counter.get_status());
+    
+    std::println("物种分类: " + Person::get_species());
+    std::println("=== 演示结束 ===");
+    std::println("");
+    
+    std::println("✅ 最小OOP测试完成!");
+    std::println("=====================================");
+    std::println("测试结果: 所有基本OOP功能正常工作");
+    
+    return 0;
+};

@@ -1,0 +1,64 @@
+// CodeNothing OOP测试运行器
+// 用于运行所有OOP相关的测试
+
+using lib <io>;
+using ns std;
+
+fn main() : int {
+    std::println("🧪 CodeNothing OOP测试套件");
+    std::println("=====================================");
+    std::println("本测试套件包含以下测试文件:");
+    std::println("1. simple_oop_test.cn - 基础OOP特性测试");
+    std::println("2. advanced_oop_test.cn - 高级OOP特性测试");
+    std::println("3. oop_test.cn - 完整OOP综合测试");
+    std::println("");
+    
+    std::println("📋 测试覆盖的OOP特性:");
+    std::println("✅ 类定义和实例化");
+    std::println("✅ 构造函数");
+    std::println("✅ 继承 (单继承和多重继承)");
+    std::println("✅ 抽象类和抽象方法");
+    std::println("✅ 虚方法和方法重写");
+    std::println("✅ 接口定义和实现");
+    std::println("✅ 访问控制 (public, private, protected)");
+    std::println("✅ 静态方法和静态字段");
+    std::println("✅ 多态性");
+    std::println("✅ 封装");
+    std::println("✅ 组合和聚合");
+    std::println("✅ 设计模式 (单例、工厂、观察者)");
+    std::println("");
+    
+    std::println("🚀 运行测试的命令:");
+    std::println("cargo run simple_oop_test.cn");
+    std::println("cargo run advanced_oop_test.cn");
+    std::println("cargo run oop_test.cn");
+    std::println("");
+    
+    std::println("📝 测试说明:");
+    std::println("- simple_oop_test.cn: 适合初学者，包含基础的类、继承、接口等");
+    std::println("- advanced_oop_test.cn: 包含抽象类、多重继承、复杂接口等高级特性");
+    std::println("- oop_test.cn: 完整的OOP测试，包含设计模式和复杂的类层次结构");
+    std::println("");
+    
+    std::println("🔍 预期测试结果:");
+    std::println("- 所有类应该能正确实例化");
+    std::println("- 继承关系应该正确建立");
+    std::println("- 方法重写应该正确工作");
+    std::println("- 接口实现应该正确");
+    std::println("- 多态调用应该正确分发");
+    std::println("- 访问控制应该正确限制");
+    std::println("");
+    
+    std::println("⚠️ 注意事项:");
+    std::println("- 确保CodeNothing解释器支持所有使用的OOP特性");
+    std::println("- 如果某些特性尚未实现，相关测试可能会失败");
+    std::println("- 测试文件使用了CodeNothing的标准语法规范");
+    std::println("- 所有花括号后都正确添加了分号");
+    std::println("");
+    
+    std::println("🎯 测试目标:");
+    std::println("验证CodeNothing语言的面向对象编程能力是否完整和正确");
+    std::println("");
+    
+    return 0;
+};

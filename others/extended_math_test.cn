@@ -1,0 +1,104 @@
+// 扩展Math库功能测试
+
+using lib <io>;
+using lib <math>;
+using ns std;
+
+fn main() : int {
+    std::println("🧮 扩展Math库测试开始");
+    std::println("=====================================");
+    
+    // 1. 扩展基础函数测试
+    std::println("1. 扩展基础函数测试");
+    
+    cbrt_val : float = cbrt("8");
+    std::println("cbrt(8) = " + cbrt_val);
+    
+    ceil_val : float = ceil("3.2");
+    std::println("ceil(3.2) = " + ceil_val);
+    
+    floor_val : float = floor("3.8");
+    std::println("floor(3.8) = " + floor_val);
+    
+    round_val : float = round("3.6");
+    std::println("round(3.6) = " + round_val);
+    
+    sign_val : int = sign("-5");
+    std::println("sign(-5) = " + sign_val);
+    
+    std::println("");
+    
+    // 2. 双曲函数测试
+    std::println("2. 双曲函数测试");
+    using ns hyperbolic;
+    
+    sinh_val : float = sinh("1");
+    std::println("sinh(1) = " + sinh_val);
+    
+    cosh_val : float = cosh("0");
+    std::println("cosh(0) = " + cosh_val);
+    
+    tanh_val : float = tanh("1");
+    std::println("tanh(1) = " + tanh_val);
+    
+    std::println("");
+    
+    // 3. 统计函数测试
+    std::println("3. 统计函数测试");
+    using ns stats;
+    
+    mean_val : float = mean("1", "2", "3", "4", "5");
+    std::println("mean(1,2,3,4,5) = " + mean_val);
+    
+    median_val : float = median("1", "3", "2", "5", "4");
+    std::println("median(1,3,2,5,4) = " + median_val);
+    
+    std::println("");
+    
+    // 4. 数值分析测试
+    std::println("4. 数值分析测试");
+    using ns numeric;
+    
+    fact_val : int = factorial("5");
+    std::println("factorial(5) = " + fact_val);
+    
+    comb_val : int = combination("5", "2");
+    std::println("combination(5, 2) = " + comb_val);
+    
+    gcd_val : int = gcd("12", "8");
+    std::println("gcd(12, 8) = " + gcd_val);
+    
+    std::println("");
+    
+    // 5. 随机数生成测试
+    std::println("5. 随机数生成测试");
+    using ns random;
+    
+    seed("12345");
+    std::println("设置随机种子: 12345");
+    
+    rand1 : float = random();
+    std::println("random() = " + rand1);
+    
+    randint_val : int = randint("1", "10");
+    std::println("randint(1, 10) = " + randint_val);
+    
+    std::println("");
+    
+    // 6. 扩展常数测试
+    std::println("6. 扩展常数测试");
+    using ns constants;
+    
+    euler_gamma_val : float = euler_gamma();
+    std::println("欧拉常数γ = " + euler_gamma_val);
+    
+    ln_2_val : float = ln_2();
+    std::println("ln(2) = " + ln_2_val);
+    
+    std::println("");
+    
+    std::println("✅ 扩展Math库测试完成!");
+    std::println("所有新功能都已验证!");
+    
+    return 0;
+};

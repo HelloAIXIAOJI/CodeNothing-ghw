@@ -1,0 +1,217 @@
+// CodeNothing 简化OOP测试程序
+// 测试基本的面向对象编程特性
+
+using lib <io>;
+using ns std;
+
+// 基础类 - 形状
+class Shape {
+    protected name : string;
+    protected color : string;
+    
+    // 构造函数
+    constructor(name : string, color : string) {
+        this.name = name;
+        this.color = color;
+        std::println("创建形状: " + name + " (颜色: " + color + ")");
+    };
+    
+    // 虚方法 - 可以被重写
+    virtual fn get_area() : float {
+        return 0.0;
+    };
+    
+    // 普通方法
+    fn get_info() : string {
+        return "形状: " + this.name + ", 颜色: " + this.color;
+    };
+    
+    // 静态方法
+    static fn get_shape_count() : int {
+        return 10; // 模拟形状总数
+    };
+};
+
+// 具体类 - 圆形
+class Circle extends Shape {
+    private radius : float;
+
+    // 构造函数
+    constructor(color : string, radius : float) {
+        this.name = "圆形";
+        this.color = color;
+        this.radius = radius;
+        std::println("创建圆形，半径: " + radius);
+    };
+    
+    // 重写虚方法
+    override fn get_area() : float {
+        return 3.14159 * this.radius * this.radius;
+    };
+    
+    // 圆形特有方法
+    fn get_radius() : float {
+        return this.radius;
+    };
+    
+    fn set_radius(new_radius : float) : void {
+        this.radius = new_radius;
+        std::println("圆形半径更新为: " + new_radius);
+        return;
+    };
+};
+
+// 具体类 - 矩形
+class Rectangle extends Shape {
+    private width : float;
+    private height : float;
+
+    // 构造函数
+    constructor(color : string, width : float, height : float) {
+        this.name = "矩形";
+        this.color = color;
+        this.width = width;
+        this.height = height;
+        std::println("创建矩形，宽: " + width + ", 高: " + height);
+    };
+    
+    // 重写虚方法
+    override fn get_area() : float {
+        return this.width * this.height;
+    };
+    
+    // 矩形特有方法
+    fn get_perimeter() : float {
+        return 2.0 * (this.width + this.height);
+    };
+    
+    fn is_square() : bool {
+        return this.width == this.height;
+    };
+};
+
+// 接口定义 - 可绘制的
+interface Drawable {
+    fn draw() : string;
+};
+
+// 实现接口的类 - 彩色圆形
+class ColoredCircle extends Circle implements Drawable {
+    private border_width : float;
+
+    constructor(color : string, radius : float, border : float) {
+        this.name = "圆形";
+        this.color = color;
+        this.radius = radius;
+        this.border_width = border;
+        std::println("创建彩色圆形，边框宽度: " + border);
+    };
+    
+    // 实现接口方法
+    fn draw() : string {
+        return "绘制彩色圆形: " + this.get_info() + ", 面积: " + this.get_area() + ", 边框: " + this.border_width;
+    };
+    
+    fn get_border_width() : float {
+        return this.border_width;
+    };
+};
+
+// 工具类 - 图形计算器
+class GeometryCalculator {
+    private calculation_count : int;
+    
+    constructor() {
+        this.calculation_count = 0;
+        std::println("创建几何计算器");
+    };
+    
+    fn calculate_total_area(shapes : []Shape) : float {
+        total : float = 0.0;
+        foreach (shape in shapes) {
+            area : float = shape.get_area();
+            total = total + area;
+            this.calculation_count = this.calculation_count + 1;
+        };
+        return total;
+    };
+    
+    fn get_calculation_count() : int {
+        return this.calculation_count;
+    };
+};
+
+// 主函数 - 测试OOP特性
+fn main() : int {
+    std::println("🔷 CodeNothing 简化OOP测试开始");
+    std::println("=====================================");
+    
+    // 1. 基本类实例化
+    std::println("1. 创建形状实例");
+    circle1 : Circle = new Circle("红色", 5.0);
+    rectangle1 : Rectangle = new Rectangle("蓝色", 4.0, 6.0);
+    colored_circle : ColoredCircle = new ColoredCircle("绿色", 3.0, 1.5);
+    std::println("");
+    
+    // 2. 方法调用测试
+    std::println("2. 方法调用测试");
+    std::println(circle1.get_info());
+    std::println("圆形面积: " + circle1.get_area());
+    std::println("圆形半径: " + circle1.get_radius());
+    
+    std::println(rectangle1.get_info());
+    std::println("矩形面积: " + rectangle1.get_area());
+    std::println("矩形周长: " + rectangle1.get_perimeter());
+    std::println("是否为正方形: " + rectangle1.is_square());
+    std::println("");
+    
+    // 3. 多态测试
+    std::println("3. 多态测试");
+    test_shape_area(circle1);
+    test_shape_area(rectangle1);
+    test_shape_area(colored_circle);
+    std::println("");
+    
+    // 4. 接口测试
+    std::println("4. 接口测试");
+    std::println(colored_circle.draw());
+    std::println("彩色圆形边框宽度: " + colored_circle.get_border_width());
+    std::println("");
+    
+    // 5. 静态方法测试
+    std::println("5. 静态方法测试");
+    shape_count : int = Shape::get_shape_count();
+    std::println("形状总数: " + shape_count);
+    std::println("");
+    
+    // 6. 组合测试
+    std::println("6. 几何计算器测试");
+    calculator : GeometryCalculator = new GeometryCalculator();
+    
+    shapes : []Shape = [circle1, rectangle1, colored_circle];
+    total_area : float = calculator.calculate_total_area(shapes);
+    
+    std::println("所有形状总面积: " + total_area);
+    std::println("计算次数: " + calculator.get_calculation_count());
+    std::println("");
+    
+    // 7. 对象修改测试
+    std::println("7. 对象修改测试");
+    std::println("修改前圆形面积: " + circle1.get_area());
+    circle1.set_radius(8.0);
+    std::println("修改后圆形面积: " + circle1.get_area());
+    std::println("");
+    
+    std::println("🎉 简化OOP测试完成!");
+    std::println("=====================================");
+    
+    return 0;
+};
+
+// 辅助函数 - 测试形状面积（多态）
+fn test_shape_area(shape : Shape) : void {
+    std::println("形状信息: " + shape.get_info());
+    std::println("面积: " + shape.get_area());
+    std::println("---");
+    return;
+};

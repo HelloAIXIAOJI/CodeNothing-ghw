@@ -1,0 +1,436 @@
+// CodeNothing OOP综合测试程序
+// 测试类定义、继承、多态、封装等面向对象特性
+
+using lib <io>;
+using ns std;
+
+// 基础抽象类 - 动物
+abstract class Animal {
+    protected name : string;
+    protected age : int;
+    private id : int;
+    
+    // 构造函数
+    constructor(name : string, age : int) {
+        this.name = name;
+        this.age = age;
+        this.id = generate_id();
+        std::println("创建动物: " + name);
+    };
+    
+    // 抽象方法 - 子类必须实现
+    abstract fn make_sound() : string;
+    
+    // 虚方法 - 可以被重写
+    virtual fn move() : string {
+        return this.name + " 正在移动";
+    };
+    
+    // 普通方法
+    fn get_info() : string {
+        return "名字: " + this.name + ", 年龄: " + this.age;
+    };
+    
+    // 静态方法
+    static fn get_species_count() : int {
+        return 42; // 模拟物种数量
+    };
+    
+    // 私有方法
+    private fn generate_id() : int {
+        return 12345; // 简化的ID生成
+    };
+};
+
+// 具体类 - 狗
+class Dog extends Animal {
+    private breed : string;
+    private is_trained : bool;
+
+    // 构造函数
+    constructor(name : string, age : int, breed : string) {
+        this.name = name;
+        this.age = age;
+        this.breed = breed;
+        this.is_trained = false;
+        std::println("创建狗: " + name + " (" + breed + ")");
+    };
+    
+    // 实现抽象方法
+    override fn make_sound() : string {
+        return "汪汪! 我是 " + this.name;
+    };
+    
+    // 重写虚方法
+    override fn move() : string {
+        return this.name + " 正在奔跑";
+    };
+    
+    // 狗特有的方法
+    fn train() : void {
+        this.is_trained = true;
+        std::println(this.name + " 已经训练完成!");
+        return;
+    };
+    
+    fn fetch(item : string) : string {
+        if (this.is_trained) {
+            return this.name + " 捡回了 " + item;
+        } else {
+            return this.name + " 还没有训练，不会捡东西";
+        };
+    };
+    
+    // 获取品种信息
+    fn get_breed() : string {
+        return this.breed;
+    };
+};
+
+// 具体类 - 猫
+class Cat extends Animal {
+    private indoor : bool;
+    private lives_remaining : int;
+
+    // 构造函数
+    constructor(name : string, age : int, indoor : bool) {
+        this.name = name;
+        this.age = age;
+        this.indoor = indoor;
+        this.lives_remaining = 9;
+        std::println("创建猫: " + name + (indoor ? " (室内)" : " (室外)"));
+    };
+    
+    // 实现抽象方法
+    override fn make_sound() : string {
+        return "喵喵~ 我是 " + this.name;
+    };
+    
+    // 重写虚方法
+    override fn move() : string {
+        return this.name + " 正在优雅地踱步";
+    };
+    
+    // 猫特有的方法
+    fn climb() : string {
+        return this.name + " 爬到了高处";
+    };
+    
+    fn use_life() : void {
+        if (this.lives_remaining > 0) {
+            this.lives_remaining = this.lives_remaining - 1;
+            std::println(this.name + " 用掉了一条命，还剩 " + this.lives_remaining + " 条");
+        };
+        return;
+    };
+    
+    fn get_lives() : int {
+        return this.lives_remaining;
+    };
+};
+
+// 接口定义 - 可训练的
+interface Trainable {
+    fn train() : void;
+    fn is_trained() : bool;
+};
+
+// 实现接口的类 - 警犬
+class PoliceDog extends Dog implements Trainable {
+    private badge_number : string;
+    private specialized_training : bool;
+
+    constructor(name : string, age : int, breed : string, badge : string) {
+        this.name = name;
+        this.age = age;
+        this.breed = breed;
+        this.is_trained = false;
+        this.badge_number = badge;
+        this.specialized_training = false;
+        std::println("创建警犬: " + name + " 徽章号: " + badge);
+    };
+    
+    // 实现接口方法
+    override fn train() : void {
+        // 调用父类方法
+        super.train();
+        this.specialized_training = true;
+        std::println(this.badge_number + " 号警犬专业训练完成!");
+        return;
+    };
+    
+    fn is_trained() : bool {
+        return this.specialized_training;
+    };
+    
+    // 警犬特有方法
+    fn patrol() : string {
+        if (this.specialized_training) {
+            return "警犬 " + this.name + " 正在巡逻";
+        } else {
+            return "警犬 " + this.name + " 需要先完成训练";
+        };
+    };
+    
+    fn get_badge() : string {
+        return this.badge_number;
+    };
+};
+
+// 工具类 - 动物园管理
+class Zoo {
+    private animals : []Animal;
+    private name : string;
+    
+    constructor(zoo_name : string) {
+        this.name = zoo_name;
+        this.animals = [];
+        std::println("创建动物园: " + zoo_name);
+    };
+    
+    fn add_animal(animal : Animal) : void {
+        this.animals.push(animal);
+        std::println("动物园添加了新动物");
+        return;
+    };
+    
+    fn make_all_sounds() : void {
+        std::println("=== " + this.name + " 的动物们在叫 ===");
+        foreach (animal in this.animals) {
+            std::println(animal.make_sound());
+        };
+        return;
+    };
+    
+    fn exercise_animals() : void {
+        std::println("=== 动物们在运动 ===");
+        foreach (animal in this.animals) {
+            std::println(animal.move());
+        };
+        return;
+    };
+    
+    fn get_animal_count() : int {
+        return this.animals.length();
+    };
+};
+
+// 主函数 - 测试所有OOP特性
+fn main() : int {
+    std::println("🐾 CodeNothing OOP综合测试开始");
+    std::println("=====================================");
+    
+    // 1. 基本类实例化和方法调用
+    std::println("1. 创建动物实例");
+    dog1 : Dog = new Dog("旺财", 3, "金毛");
+    cat1 : Cat = new Cat("咪咪", 2, true);
+    police_dog : PoliceDog = new PoliceDog("雷克斯", 4, "德牧", "K9-001");
+    
+    std::println("");
+    
+    // 2. 多态测试
+    std::println("2. 多态测试 - 动物叫声");
+    std::println(dog1.make_sound());
+    std::println(cat1.make_sound());
+    std::println(police_dog.make_sound());
+    std::println("");
+    
+    // 3. 方法重写测试
+    std::println("3. 方法重写测试 - 移动方式");
+    std::println(dog1.move());
+    std::println(cat1.move());
+    std::println(police_dog.move());
+    std::println("");
+    
+    // 4. 特有方法测试
+    std::println("4. 类特有方法测试");
+    dog1.train();
+    std::println(dog1.fetch("球"));
+    std::println(cat1.climb());
+    cat1.use_life();
+    std::println("猫咪剩余生命: " + cat1.get_lives());
+    std::println("");
+    
+    // 5. 接口和继承测试
+    std::println("5. 接口和继承测试");
+    police_dog.train();
+    std::println("警犬训练状态: " + police_dog.is_trained());
+    std::println(police_dog.patrol());
+    std::println("警犬徽章: " + police_dog.get_badge());
+    std::println("");
+    
+    // 6. 静态方法测试
+    std::println("6. 静态方法测试");
+    species_count : int = Animal::get_species_count();
+    std::println("动物物种总数: " + species_count);
+    std::println("");
+    
+    // 7. 组合和聚合测试
+    std::println("7. 动物园管理测试");
+    zoo : Zoo = new Zoo("CodeNothing动物园");
+    zoo.add_animal(dog1);
+    zoo.add_animal(cat1);
+    zoo.add_animal(police_dog);
+    
+    std::println("动物园动物数量: " + zoo.get_animal_count());
+    zoo.make_all_sounds();
+    zoo.exercise_animals();
+    std::println("");
+    
+    std::println("🎉 OOP测试完成!");
+    std::println("=====================================");
+    
+    // 8. 封装测试 - 访问控制
+    std::println("8. 封装测试 - 访问控制");
+    std::println("狗的信息: " + dog1.get_info()); // public方法
+    std::println("狗的品种: " + dog1.get_breed()); // public方法
+    // dog1.name; // 这会报错，因为name是protected
+    // dog1.id;   // 这会报错，因为id是private
+    std::println("");
+
+    // 9. 类型转换和instanceof测试
+    std::println("9. 类型检查测试");
+    test_animal_type(dog1);
+    test_animal_type(cat1);
+    test_animal_type(police_dog);
+    std::println("");
+
+    // 10. 设计模式测试
+    std::println("10. 设计模式测试");
+
+    // 单例模式测试
+    std::println("--- 单例模式测试 ---");
+    hospital1 : AnimalHospital = AnimalHospital::get_instance();
+    hospital2 : AnimalHospital = AnimalHospital::get_instance();
+    // hospital1 和 hospital2 应该是同一个实例
+
+    std::println(hospital1.treat_animal(dog1));
+    std::println(hospital2.treat_animal(cat1));
+    std::println("医院患者总数: " + hospital1.get_patient_count());
+
+    // 工厂模式测试
+    std::println("--- 工厂模式测试 ---");
+    dog_factory : DogFactory = new DogFactory("拉布拉多");
+    cat_factory : CatFactory = new CatFactory(true);
+
+    factory_dog : Animal = dog_factory.create_and_register("工厂狗", 2);
+    factory_cat : Animal = cat_factory.create_and_register("工厂猫", 1);
+
+    std::println("工厂创建的动物叫声:");
+    std::println(factory_dog.make_sound());
+    std::println(factory_cat.make_sound());
+
+    // 观察者模式测试
+    std::println("--- 观察者模式测试 ---");
+    logger : AnimalBehaviorLogger = new AnimalBehaviorLogger();
+
+    // 模拟动物行为并记录
+    logger.on_animal_action(dog1, "摇尾巴");
+    logger.on_animal_action(cat1, "打呼噜");
+    logger.on_animal_action(police_dog, "执行任务");
+
+    std::println("行为日志总数: " + logger.get_log_count());
+    std::println("");
+
+    return 0;
+};
+
+// 辅助函数 - 测试动物类型
+fn test_animal_type(animal : Animal) : void {
+    std::println("测试动物: " + animal.get_info());
+    std::println("叫声: " + animal.make_sound());
+    std::println("移动: " + animal.move());
+    std::println("---");
+    return;
+};
+
+// ========== 设计模式示例 ==========
+
+// 单例模式 - 动物医院
+class AnimalHospital {
+    private static instance : AnimalHospital;
+    private name : string;
+    private patient_count : int;
+
+    // 私有构造函数
+    private constructor() {
+        this.name = "CodeNothing动物医院";
+        this.patient_count = 0;
+    };
+
+    // 获取单例实例
+    static fn get_instance() : AnimalHospital {
+        if (AnimalHospital::instance == null) {
+            AnimalHospital::instance = new AnimalHospital();
+        };
+        return AnimalHospital::instance;
+    };
+
+    fn treat_animal(animal : Animal) : string {
+        this.patient_count = this.patient_count + 1;
+        return "在" + this.name + "治疗了 " + animal.get_info() + " (第" + this.patient_count + "位患者)";
+    };
+
+    fn get_patient_count() : int {
+        return this.patient_count;
+    };
+};
+
+// 工厂模式 - 动物工厂
+abstract class AnimalFactory {
+    abstract fn create_animal(name : string, age : int) : Animal;
+
+    // 模板方法
+    fn create_and_register(name : string, age : int) : Animal {
+        animal : Animal = this.create_animal(name, age);
+        std::println("动物工厂注册了新动物: " + animal.get_info());
+        return animal;
+    };
+};
+
+class DogFactory extends AnimalFactory {
+    private default_breed : string;
+
+    constructor(breed : string) {
+        this.default_breed = breed;
+    };
+
+    override fn create_animal(name : string, age : int) : Animal {
+        return new Dog(name, age, this.default_breed);
+    };
+};
+
+class CatFactory extends AnimalFactory {
+    private default_indoor : bool;
+
+    constructor(indoor : bool) {
+        this.default_indoor = indoor;
+    };
+
+    override fn create_animal(name : string, age : int) : Animal {
+        return new Cat(name, age, this.default_indoor);
+    };
+};
+
+// 观察者模式 - 动物行为观察
+interface AnimalObserver {
+    fn on_animal_action(animal : Animal, action : string) : void;
+};
+
+class AnimalBehaviorLogger : AnimalObserver {
+    private log_count : int;
+
+    constructor() {
+        this.log_count = 0;
+    };
+
+    fn on_animal_action(animal : Animal, action : string) : void {
+        this.log_count = this.log_count + 1;
+        std::println("[日志 #" + this.log_count + "] " + animal.get_info() + " 执行了: " + action);
+        return;
+    };
+
+    fn get_log_count() : int {
+        return this.log_count;
+    };
+};

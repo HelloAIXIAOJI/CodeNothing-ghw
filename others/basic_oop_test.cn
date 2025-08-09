@@ -1,0 +1,221 @@
+// CodeNothing 基础OOP测试
+// 测试基本的类定义、对象创建、方法调用等功能
+
+using lib <io>;
+using ns std;
+
+// 简单的学生类
+class Student {
+    public name : string;
+    public age : int;
+    private score : int;
+    
+    // 构造函数
+    constructor(name : string, age : int) {
+        this.name = name;
+        this.age = age;
+        this.score = 0;
+        std::println("创建学生: " + name + ", 年龄: " + age);
+    };
+    
+    // 公共方法
+    fn get_name() : string {
+        return this.name;
+    };
+    
+    fn get_age() : int {
+        return this.age;
+    };
+    
+    fn get_score() : int {
+        return this.score;
+    };
+    
+    fn add_score(points : int) : void {
+        this.score = this.score + points;
+        std::println(this.name + " 获得 " + points + " 分，总分: " + this.score);
+        return;
+    };
+    
+    fn get_info() : string {
+        return this.name + " (年龄: " + this.age + ", 分数: " + this.score + ")";
+    };
+    
+    // 静态方法
+    static fn get_school_name() : string {
+        return "CodeNothing学校";
+    };
+};
+
+// 教师类
+class Teacher {
+    public name : string;
+    public subject : string;
+    private years_experience : int;
+    
+    constructor(name : string, subject : string, experience : int) {
+        this.name = name;
+        this.subject = subject;
+        this.years_experience = experience;
+        std::println("创建教师: " + name + ", 科目: " + subject);
+    };
+    
+    fn get_name() : string {
+        return this.name;
+    };
+    
+    fn get_subject() : string {
+        return this.subject;
+    };
+    
+    fn get_experience() : int {
+        return this.years_experience;
+    };
+    
+    fn teach(student_name : string) : string {
+        return "教师 " + this.name + " 正在教 " + student_name + " 学习 " + this.subject;
+    };
+    
+    fn get_info() : string {
+        return "教师: " + this.name + " (科目: " + this.subject + ", 经验: " + this.years_experience + "年)";
+    };
+};
+
+// 课程类
+class Course {
+    public course_name : string;
+    public teacher_name : string;
+    private max_students : int;
+    private current_students : int;
+    
+    constructor(name : string, teacher : string, max_size : int) {
+        this.course_name = name;
+        this.teacher_name = teacher;
+        this.max_students = max_size;
+        this.current_students = 0;
+        std::println("创建课程: " + name + " (教师: " + teacher + ")");
+    };
+    
+    fn add_student() : bool {
+        if (this.current_students < this.max_students) {
+            this.current_students = this.current_students + 1;
+            std::println("学生加入课程 " + this.course_name + ", 当前人数: " + this.current_students);
+            return true;
+        } else {
+            std::println("课程 " + this.course_name + " 已满员");
+            return false;
+        };
+    };
+    
+    fn get_enrollment_info() : string {
+        return "课程: " + this.course_name + " (" + this.current_students + "/" + this.max_students + ")";
+    };
+    
+    fn is_full() : bool {
+        return this.current_students >= this.max_students;
+    };
+};
+
+// 主函数
+fn main() : int {
+    std::println("🎓 CodeNothing 基础OOP测试开始");
+    std::println("=====================================");
+    
+    // 1. 创建对象测试
+    std::println("1. 创建对象测试");
+    student1 : Student = new Student("张三", 18);
+    student2 : Student = new Student("李四", 19);
+    teacher1 : Teacher = new Teacher("王老师", "数学", 5);
+    course1 : Course = new Course("高等数学", "王老师", 30);
+    std::println("");
+    
+    // 2. 方法调用测试
+    std::println("2. 方法调用测试");
+    std::println("学生姓名: " + student1.get_name());
+    std::println("学生年龄: " + student1.get_age());
+    std::println("学生分数: " + student1.get_score());
+    
+    std::println("教师姓名: " + teacher1.get_name());
+    std::println("教师科目: " + teacher1.get_subject());
+    std::println("教师经验: " + teacher1.get_experience() + "年");
+    std::println("");
+    
+    // 3. 对象状态修改测试
+    std::println("3. 对象状态修改测试");
+    student1.add_score(85);
+    student1.add_score(15);
+    student2.add_score(92);
+    std::println("");
+    
+    // 4. 对象信息输出测试
+    std::println("4. 对象信息输出测试");
+    std::println(student1.get_info());
+    std::println(student2.get_info());
+    std::println(teacher1.get_info());
+    std::println("");
+    
+    // 5. 对象交互测试
+    std::println("5. 对象交互测试");
+    std::println(teacher1.teach(student1.get_name()));
+    std::println(teacher1.teach(student2.get_name()));
+    std::println("");
+    
+    // 6. 课程管理测试
+    std::println("6. 课程管理测试");
+    std::println(course1.get_enrollment_info());
+    course1.add_student(); // 张三加入
+    course1.add_student(); // 李四加入
+    course1.add_student(); // 其他学生加入
+    std::println(course1.get_enrollment_info());
+    std::println("课程是否已满: " + course1.is_full());
+    std::println("");
+    
+    // 7. 静态方法测试
+    std::println("7. 静态方法测试");
+    school_name : string = Student::get_school_name();
+    std::println("学校名称: " + school_name);
+    std::println("");
+    
+    // 8. 字段访问测试
+    std::println("8. 字段访问测试");
+    std::println("直接访问学生姓名: " + student1.name);
+    std::println("直接访问学生年龄: " + student1.age);
+    std::println("直接访问教师姓名: " + teacher1.name);
+    std::println("直接访问教师科目: " + teacher1.subject);
+    std::println("");
+    
+    // 9. 多个对象操作测试
+    std::println("9. 多个对象操作测试");
+    students_count : int = 0;
+    teachers_count : int = 0;
+    courses_count : int = 0;
+    
+    // 模拟统计
+    students_count = students_count + 1; // student1
+    students_count = students_count + 1; // student2
+    teachers_count = teachers_count + 1; // teacher1
+    courses_count = courses_count + 1;   // course1
+    
+    std::println("统计结果:");
+    std::println("学生数量: " + students_count);
+    std::println("教师数量: " + teachers_count);
+    std::println("课程数量: " + courses_count);
+    std::println("");
+    
+    // 10. 综合测试
+    std::println("10. 综合测试 - 模拟上课场景");
+    std::println("=== 上课场景模拟 ===");
+    std::println("学校: " + Student::get_school_name());
+    std::println("课程: " + course1.get_enrollment_info());
+    std::println("授课: " + teacher1.teach("全班同学"));
+    std::println("学生表现:");
+    std::println("  " + student1.get_info());
+    std::println("  " + student2.get_info());
+    std::println("=== 场景结束 ===");
+    std::println("");
+    
+    std::println("🎉 基础OOP测试完成!");
+    std::println("=====================================");
+    
+    return 0;
+};

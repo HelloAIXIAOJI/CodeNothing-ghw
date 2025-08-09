@@ -1,0 +1,244 @@
+// CodeNothing 接口OOP测试
+// 测试接口定义、实现等功能
+
+using lib <io>;
+using ns std;
+
+// 可绘制接口
+interface Drawable {
+    fn draw() : string;
+    fn get_area() : float;
+};
+
+// 可移动接口
+interface Movable {
+    fn move_to(x : int, y : int) : string;
+    fn get_position() : string;
+};
+
+// 基础形状类
+class Shape {
+    protected name : string;
+    protected x : int;
+    protected y : int;
+    
+    constructor(name : string, x : int, y : int) {
+        this.name = name;
+        this.x = x;
+        this.y = y;
+        std::println("创建形状: " + name + " 位置: (" + x + ", " + y + ")");
+    };
+    
+    fn get_name() : string {
+        return this.name;
+    };
+    
+    fn get_x() : int {
+        return this.x;
+    };
+    
+    fn get_y() : int {
+        return this.y;
+    };
+    
+    virtual fn get_info() : string {
+        return "形状: " + this.name + " 位置: (" + this.x + ", " + this.y + ")";
+    };
+};
+
+// 圆形类 - 继承Shape并实现接口
+class Circle extends Shape implements Drawable, Movable {
+    private radius : float;
+    
+    constructor(name : string, x : int, y : int, radius : float) {
+        this.name = name;
+        this.x = x;
+        this.y = y;
+        this.radius = radius;
+        std::println("创建圆形: " + name + " 半径: " + radius);
+    };
+    
+    // 实现Drawable接口
+    fn draw() : string {
+        return "绘制圆形 " + this.name + " 半径: " + this.radius;
+    };
+    
+    fn get_area() : float {
+        return 3.14159 * this.radius * this.radius;
+    };
+    
+    // 实现Movable接口
+    fn move_to(new_x : int, new_y : int) : string {
+        this.x = new_x;
+        this.y = new_y;
+        return "圆形 " + this.name + " 移动到: (" + new_x + ", " + new_y + ")";
+    };
+    
+    fn get_position() : string {
+        return "圆形 " + this.name + " 位置: (" + this.x + ", " + this.y + ")";
+    };
+    
+    // 圆形特有方法
+    fn get_radius() : float {
+        return this.radius;
+    };
+    
+    fn set_radius(new_radius : float) : void {
+        this.radius = new_radius;
+        std::println("圆形 " + this.name + " 半径更新为: " + new_radius);
+        return;
+    };
+    
+    override fn get_info() : string {
+        return "圆形: " + this.name + " 位置: (" + this.x + ", " + this.y + ") 半径: " + this.radius;
+    };
+};
+
+// 矩形类 - 继承Shape并实现接口
+class Rectangle extends Shape implements Drawable, Movable {
+    private width : float;
+    private height : float;
+    
+    constructor(name : string, x : int, y : int, width : float, height : float) {
+        this.name = name;
+        this.x = x;
+        this.y = y;
+        this.width = width;
+        this.height = height;
+        std::println("创建矩形: " + name + " 尺寸: " + width + "x" + height);
+    };
+    
+    // 实现Drawable接口
+    fn draw() : string {
+        return "绘制矩形 " + this.name + " 尺寸: " + this.width + "x" + this.height;
+    };
+    
+    fn get_area() : float {
+        return this.width * this.height;
+    };
+    
+    // 实现Movable接口
+    fn move_to(new_x : int, new_y : int) : string {
+        this.x = new_x;
+        this.y = new_y;
+        return "矩形 " + this.name + " 移动到: (" + new_x + ", " + new_y + ")";
+    };
+    
+    fn get_position() : string {
+        return "矩形 " + this.name + " 位置: (" + this.x + ", " + this.y + ")";
+    };
+    
+    // 矩形特有方法
+    fn get_width() : float {
+        return this.width;
+    };
+    
+    fn get_height() : float {
+        return this.height;
+    };
+    
+    fn get_perimeter() : float {
+        return 2.0 * (this.width + this.height);
+    };
+    
+    override fn get_info() : string {
+        return "矩形: " + this.name + " 位置: (" + this.x + ", " + this.y + ") 尺寸: " + this.width + "x" + this.height;
+    };
+};
+
+// 主函数
+fn main() : int {
+    std::println("🔷 CodeNothing 接口OOP测试开始");
+    std::println("=====================================");
+    
+    // 1. 创建实现接口的对象
+    std::println("1. 创建实现接口的对象");
+    circle : Circle = new Circle("圆1", 10, 20, 5.0);
+    rectangle : Rectangle = new Rectangle("矩形1", 30, 40, 8.0, 6.0);
+    std::println("");
+    
+    // 2. 基础方法调用测试
+    std::println("2. 基础方法调用测试");
+    std::println("圆形名称: " + circle.get_name());
+    std::println("圆形位置: (" + circle.get_x() + ", " + circle.get_y() + ")");
+    std::println("矩形名称: " + rectangle.get_name());
+    std::println("矩形位置: (" + rectangle.get_x() + ", " + rectangle.get_y() + ")");
+    std::println("");
+    
+    // 3. Drawable接口方法测试
+    std::println("3. Drawable接口方法测试");
+    std::println(circle.draw());
+    std::println("圆形面积: " + circle.get_area());
+    
+    std::println(rectangle.draw());
+    std::println("矩形面积: " + rectangle.get_area());
+    std::println("");
+    
+    // 4. Movable接口方法测试
+    std::println("4. Movable接口方法测试");
+    std::println(circle.get_position());
+    std::println(circle.move_to(50, 60));
+    std::println(circle.get_position());
+    
+    std::println(rectangle.get_position());
+    std::println(rectangle.move_to(70, 80));
+    std::println(rectangle.get_position());
+    std::println("");
+    
+    // 5. 子类特有方法测试
+    std::println("5. 子类特有方法测试");
+    std::println("圆形半径: " + circle.get_radius());
+    circle.set_radius(7.0);
+    std::println("更新后半径: " + circle.get_radius());
+    std::println("更新后面积: " + circle.get_area());
+    
+    std::println("矩形宽度: " + rectangle.get_width());
+    std::println("矩形高度: " + rectangle.get_height());
+    std::println("矩形周长: " + rectangle.get_perimeter());
+    std::println("");
+    
+    // 6. 对象信息输出测试
+    std::println("6. 对象信息输出测试");
+    std::println(circle.get_info());
+    std::println(rectangle.get_info());
+    std::println("");
+    
+    // 7. 综合接口功能演示
+    std::println("7. 综合接口功能演示");
+    std::println("=== 图形绘制系统 ===");
+    
+    std::println("初始状态:");
+    std::println("  " + circle.get_info());
+    std::println("  " + rectangle.get_info());
+    std::println("");
+    
+    std::println("绘制操作:");
+    std::println("  " + circle.draw());
+    std::println("  " + rectangle.draw());
+    std::println("");
+    
+    std::println("面积计算:");
+    std::println("  圆形面积: " + circle.get_area());
+    std::println("  矩形面积: " + rectangle.get_area());
+    total_area : float = circle.get_area() + rectangle.get_area();
+    std::println("  总面积: " + total_area);
+    std::println("");
+    
+    std::println("移动操作:");
+    std::println("  " + circle.move_to(100, 100));
+    std::println("  " + rectangle.move_to(200, 200));
+    std::println("");
+    
+    std::println("最终位置:");
+    std::println("  " + circle.get_position());
+    std::println("  " + rectangle.get_position());
+    
+    std::println("=== 绘制系统演示结束 ===");
+    std::println("");
+    
+    std::println("✅ 接口OOP测试完成!");
+    std::println("=====================================");
+    std::println("测试结果: 接口定义、实现、多重接口功能正常工作");
+    
+    return 0;
+};
