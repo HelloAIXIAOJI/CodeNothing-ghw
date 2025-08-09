@@ -1,9 +1,10 @@
 // 导入必要的模块
-use crate::ast::{Statement, Expression, Type, Parameter, Function, BinaryOperator, NamespaceType, SwitchCase, CasePattern, SwitchType};
+use crate::ast::{Statement, Expression, Type, Parameter, Function, BinaryOperator, NamespaceType, SwitchCase, CasePattern, SwitchType, MatchArm};
 use crate::parser::parser_base::ParserBase;
 use crate::parser::expression_parser::ExpressionParser;
 use crate::parser::enum_parser::EnumParser;
 use crate::parser::pointer_parser::PointerParser;
+use crate::parser::pattern_parser::PatternParser;
 use crate::interpreter::debug_println;
 
 pub trait StatementParser {
@@ -96,6 +97,9 @@ impl<'a> StatementParser for ParserBase<'a> {
                 },
                 "throw" => {
                     self.parse_throw_statement()
+                },
+                "match" => {
+                    self.parse_match_statement()
                 },
                 "switch" => {
                     self.parse_switch_statement()
@@ -832,5 +836,14 @@ impl<'a> StatementParser for ParserBase<'a> {
         
         // 默认是值匹配
         Ok(CasePattern::Value(first_expr))
+    }
+
+    /// 解析match语句
+    fn parse_match_statement(&mut self) -> Result<Statement, String> {
+        self.debug_println("开始解析match语句");
+
+        let (match_expr, arms) = self.parse_match_statement()?;
+
+        Ok(Statement::Match(match_expr, arms))
     }
 }
