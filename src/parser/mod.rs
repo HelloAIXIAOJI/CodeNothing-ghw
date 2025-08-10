@@ -12,6 +12,7 @@ pub mod interface_parser;
 pub mod enum_parser;
 pub mod pointer_parser;
 pub mod pattern_parser;
+pub mod generic_parser;
 
 use crate::ast::Program;
 use lexer::{remove_comments, tokenize};
