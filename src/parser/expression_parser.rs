@@ -459,11 +459,17 @@ impl<'a> ExpressionParser for ParserBase<'a> {
                     Ok(Expression::BoolLiteral(false))
                 },
                 "new" => {
-                    // 解析对象创建: new ClassName(args)
+                    // 解析对象创建: new ClassName(args) 或 new ClassName<T>(args)
                     self.consume(); // 消费 "new"
                     let class_name = self.consume().ok_or_else(|| "期望类名".to_string())?;
+
+                    // 检查是否有泛型类型参数
+                    if self.peek() == Some(&"<".to_string()) {
+                        return self.parse_generic_object_creation(class_name);
+                    }
+
                     self.expect("(")?;
-                    
+
                     let mut args = Vec::new();
                     if self.peek() != Some(&")".to_string()) {
                         loop {
@@ -475,7 +481,7 @@ impl<'a> ExpressionParser for ParserBase<'a> {
                         }
                     }
                     self.expect(")")?;
-                    
+
                     Ok(Expression::ObjectCreation(class_name, args))
                 },
                 "match" => {
@@ -561,28 +567,31 @@ impl<'a> ExpressionParser for ParserBase<'a> {
                         return Ok(Expression::This);
                     }
                     
-                    if self.peek() == Some(&"(".to_string()) {
-                        // 函数调用
+                    if self.peek() == Some(&"<".to_string()) {
+                        // 泛型函数调用
+                        return self.parse_generic_function_call(name);
+                    } else if self.peek() == Some(&"(".to_string()) {
+                        // 普通函数调用
                         self.consume(); // 消费 "("
-                        
+
                         let mut args = Vec::new();
-                        
+
                         if self.peek() != Some(&")".to_string()) {
                             // 解析参数列表
                             loop {
                                 let arg = self.parse_expression()?;
                                 args.push(arg);
-                                
+
                                 if self.peek() != Some(&",".to_string()) {
                                     break;
                                 }
-                                
+
                                 self.consume(); // 消费 ","
                             }
                         }
-                        
+
                         self.expect(")")?;
-                        
+
                         Ok(Expression::FunctionCall(name, args))
                     } else if self.peek() == Some(&"::".to_string()) {
                         // 静态访问、命名空间函数调用或库函数调用
@@ -769,7 +778,45 @@ impl<'a> ExpressionParser for ParserBase<'a> {
                         
                         // 获取方法名
                         let method_name = self.consume().ok_or_else(|| "期望方法名".to_string())?;
-                        
+
+                        // 检查是否有泛型类型参数
+                        if self.peek() == Some(&"<".to_string()) {
+                            // 泛型方法调用
+                            let type_args = self.parse_generic_type_arguments()?;
+
+                            if self.peek() == Some(&"(".to_string()) {
+                                self.consume(); // 消费 "("
+
+                                let mut args = Vec::new();
+
+                                if self.peek() != Some(&")".to_string()) {
+                                    // 解析参数列表
+                                    loop {
+                                        let arg = self.parse_expression()?;
+                                        args.push(arg);
+
+                                        if self.peek() != Some(&",".to_string()) {
+                                            break;
+                                        }
+
+                                        self.consume(); // 消费 ","
+                                    }
+                                }
+
+                                self.expect(")")?;
+
+                                let obj_expr = if name == "this" {
+                                    Expression::This
+                                } else {
+                                    Expression::Variable(name.clone())
+                                };
+
+                                return Ok(Expression::GenericMethodCall(Box::new(obj_expr), method_name, type_args, args));
+                            } else {
+                                return Err("期望 '(' 在泛型方法调用中".to_string());
+                            }
+                        }
+
                         // 检查是否有参数
                         if self.peek() == Some(&"(".to_string()) {
                             self.consume(); // 消费 "("
