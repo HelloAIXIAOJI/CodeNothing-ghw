@@ -723,6 +723,34 @@ impl<'a> ExpressionEvaluator for Interpreter<'a> {
                 // Match 表达式求值
                 self.evaluate_match_expression(*match_expr.clone(), arms.clone())
             },
+
+            // 泛型相关表达式
+            Expression::GenericFunctionCall(func_name, _type_args, args) => {
+                // 暂时忽略类型参数，直接调用函数
+                // TODO: 实现真正的泛型函数调用
+                self.handle_function_call(func_name, args)
+            },
+            Expression::GenericMethodCall(obj_expr, method_name, _type_args, args) => {
+                // 暂时忽略类型参数，直接调用方法
+                // TODO: 实现真正的泛型方法调用
+                self.handle_method_call(obj_expr, method_name, args)
+            },
+            Expression::GenericObjectCreation(class_name, _type_args, args) => {
+                // 暂时忽略类型参数，直接创建对象
+                // TODO: 实现真正的泛型对象创建
+                self.create_object(class_name, args)
+            },
+            Expression::TypeCast(expr, _target_type) => {
+                // 暂时只是求值表达式，不进行实际的类型转换
+                // TODO: 实现真正的类型转换
+                self.evaluate_expression(expr)
+            },
+            Expression::TypeOf(expr) => {
+                // 暂时返回字符串表示的类型
+                // TODO: 实现真正的类型查询
+                let _value = self.evaluate_expression(expr);
+                Value::String("unknown".to_string())
+            },
         }
     }
     
