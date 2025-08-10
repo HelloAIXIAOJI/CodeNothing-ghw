@@ -1,5 +1,78 @@
 # CodeNothing 更新日志
 
+## [v0.8.3] - 2025-08-10 - 泛型系统基础架构
+
+### 新增功能
+
+#### 泛型 AST 支持
+- 新增 `GenericParameter` 结构体：类型参数名、约束、默认类型
+- 新增 `TypeConstraint` 枚举：Trait、Sized、Copy、Send、Sync 约束
+- 扩展 `Type` 枚举：
+  - `Type::Generic(String)` - 泛型类型参数
+  - `Type::GenericClass(String, Vec<Type>)` - 泛型类
+  - `Type::GenericEnum(String, Vec<Type>)` - 泛型枚举
+
+#### 泛型表达式
+- 新增 `GenericFunctionCall` - 泛型函数调用
+- 新增 `GenericMethodCall` - 泛型方法调用
+- 新增 `GenericObjectCreation` - 泛型对象创建
+- 新增 `TypeCast` - 类型转换表达式
+- 新增 `TypeOf` - 类型查询表达式
+
+#### 泛型解析器
+- 新增 `generic_parser.rs` 模块
+- 实现解析方法：
+  - `parse_generic_parameters()` - 解析 `<T, U, K>` 参数列表
+  - `parse_generic_parameter()` - 解析单个泛型参数
+  - `parse_type_constraints()` - 解析类型约束
+  - `parse_where_clause()` - 解析 where 子句
+  - `parse_generic_type_arguments()` - 解析泛型类型实例化
+  - `parse_generic_function_call()` - 解析泛型函数调用
+  - `parse_generic_object_creation()` - 解析泛型对象创建
+
+#### 运行时支持
+- 扩展表达式求值器，支持泛型表达式求值
+- 实现类型转换和类型查询的运行时处理
+
+#### 语法示例
+```codenothing
+// 泛型函数
+fn max<T>(a: T, b: T) : T {
+    if (a > b) { return a; } else { return b; };
+};
+
+// 泛型类
+class Container<T> {
+    private T value;
+    constructor<T>(T initial_value) {
+        this.value = initial_value;
+    };
+};
+
+// 带约束的泛型
+fn sort<T: Comparable<T>>(items: array<T>) : array<T> where T: Copy {
+    return items;
+};
+```
+
+### 技术细节
+
+#### 修复和改进
+- 修复 `auto` 类型解析：将 `"Auto"` 改为 `"auto"`（小写）
+- 保持现有变量声明语法：`name: type = value` 和 `name: auto = value`
+
+#### 编译状态
+- 项目成功编译（316个警告，0个错误）
+- 基本类型推断功能验证通过
+- 向后兼容现有代码
+
+### 当前限制
+- 泛型解析器集成尚未完成
+- 类型检查和约束验证待实现
+- 运行时类型擦除，主要用于编译时检查
+
+---
+
 ## [v0.8.2] - 2025-08-10 - 解释器稳定性提升
 
 ### 🎯 主要改进
