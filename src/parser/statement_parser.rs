@@ -142,15 +142,15 @@ impl<'a> StatementParser for ParserBase<'a> {
                 "const" => {
                     // 解析常量声明
                     self.consume(); // 消费 "const"
-                    
+
                     // 获取常量名
                     let const_name = self.consume().ok_or_else(|| "期望常量名".to_string())?;
-                    
+
                     self.expect(":")?;
-                    
+
                     // 解析类型
                     let type_name = self.consume().ok_or_else(|| "期望类型名".to_string())?;
-                    
+
                     // 转换为内部类型
                     let const_type = match type_name.as_str() {
                         "int" => crate::ast::Type::Int,
@@ -160,16 +160,17 @@ impl<'a> StatementParser for ParserBase<'a> {
                         "long" => crate::ast::Type::Long,
                         _ => return Err(format!("不支持的常量类型: {}", type_name))
                     };
-                    
+
                     self.expect("=")?;
-                    
+
                     // 解析初始值表达式
                     let init_expr = self.parse_expression()?;
-                    
+
                     self.expect(";")?;
-                    
+
                     Ok(Statement::ConstantDeclaration(const_name, const_type, init_expr))
                 },
+
                 _ => {
                 // 检查是否是变量声明、赋值或函数调用
                 let var_name = self.consume().unwrap();
@@ -611,7 +612,7 @@ impl<'a> StatementParser for ParserBase<'a> {
             "string" => Ok(Type::String),
             "long" => Ok(Type::Long),
             "void" => Ok(Type::Void),
-            "Auto" => Ok(Type::Auto), // 添加Auto类型支持
+            "auto" => Ok(Type::Auto), // 添加auto类型支持
             "Exception" => Ok(Type::Exception),
             "array" => {
                 // 解析数组元素类型
@@ -629,7 +630,28 @@ impl<'a> StatementParser for ParserBase<'a> {
                 self.expect(">")?;
                 Ok(Type::Map(Box::new(key_type), Box::new(value_type)))
             },
-            _ => Ok(Type::Class(type_name)), // 假设是类类型
+            _ => {
+                // 检查是否为泛型类型参数 (单个大写字母)
+                if self.is_generic_type(&type_name) {
+                    Ok(Type::Generic(type_name))
+                } else {
+                    // 检查是否有泛型类型参数 <T, U, ...>
+                    if self.peek() == Some(&"<".to_string()) {
+                        let type_args = self.parse_generic_type_arguments()?;
+
+                        // 根据类型名判断是类还是枚举
+                        // 这里可以根据上下文或命名约定来判断
+                        // 暂时假设首字母大写的是类，其他的是枚举
+                        if type_name.chars().next().unwrap().is_uppercase() {
+                            Ok(Type::GenericClass(type_name, type_args))
+                        } else {
+                            Ok(Type::GenericEnum(type_name, type_args))
+                        }
+                    } else {
+                        Ok(Type::Class(type_name)) // 假设是普通类类型
+                    }
+                }
+            }
         }
     }
 
