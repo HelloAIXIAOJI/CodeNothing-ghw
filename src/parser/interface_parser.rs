@@ -55,8 +55,10 @@ impl<'a> InterfaceParser for ParserBase<'a> {
         
         Ok(Interface {
             name: interface_name,
+            generic_parameters: Vec::new(), // 暂时不支持泛型
             methods,
             extends,
+            where_clause: Vec::new(),
         })
     }
     
