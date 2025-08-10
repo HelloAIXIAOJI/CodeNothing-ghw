@@ -1,0 +1,18 @@
+// 简单的类型推断测试
+
+// 测试自动类型推断
+fn test_auto_inference() : void {
+    x: auto = 42;
+    y: auto = 3.14;
+    z: auto = "Hello";
+
+    // 测试显式类型声明
+    a: int = 100;
+    b: float = 2.71;
+    c: string = "World";
+};
+
+// 主函数
+fn main() : void {
+    test_auto_inference();
+};
