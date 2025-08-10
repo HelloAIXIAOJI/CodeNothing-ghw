@@ -18,7 +18,40 @@ pub enum Type {
     FunctionPointer(Vec<Type>, Box<Type>), // 新增：函数指针类型 (*fn(args) : ret)
     ArrayPointer(Box<Type>, usize), // 新增：数组指针类型 (*[size]Type)
     PointerArray(Box<Type>, usize), // 新增：指针数组类型 ([size]*Type)
+
+    // 泛型类型支持
+    Generic(String), // 泛型类型参数 (T, U, K, V等)
+    GenericClass(String, Vec<Type>), // 泛型类实例化 (Container<T>, Map<K,V>)
+    GenericEnum(String, Vec<Type>), // 泛型枚举实例化 (Option<T>, Result<T,E>)
+    GenericFunction(String, Vec<Type>), // 泛型函数实例化 (max<i32>, sort<String>)
+
     // 未来可以扩展更多类型
+}
+
+// 泛型参数定义
+#[derive(Debug, Clone, PartialEq)]
+pub struct GenericParameter {
+    pub name: String,                    // 类型参数名 (T, U, K, V等)
+    pub constraints: Vec<TypeConstraint>, // 类型约束列表
+    pub default_type: Option<Type>,      // 默认类型 (可选)
+}
+
+// 类型约束
+#[derive(Debug, Clone, PartialEq)]
+pub enum TypeConstraint {
+    Trait(String),                       // trait约束 (Comparable, Clone等)
+    Lifetime(String),                    // 生命周期约束 (暂时保留)
+    Sized,                              // 大小约束
+    Copy,                               // 复制约束
+    Send,                               // 发送约束 (多线程)
+    Sync,                               // 同步约束 (多线程)
+}
+
+// 泛型实例化信息
+#[derive(Debug, Clone, PartialEq)]
+pub struct GenericInstantiation {
+    pub type_arguments: Vec<Type>,       // 类型参数实例化
+    pub inferred: bool,                  // 是否为类型推导得出
 }
 
 #[derive(Debug, Clone)]
@@ -87,6 +120,14 @@ pub enum Expression {
     // 函数指针相关表达式
     FunctionReference(String), // 函数引用 (函数名)
     LambdaFunction(Vec<Parameter>, Box<Type>, Box<Statement>), // Lambda函数表达式
+
+    // 泛型相关表达式
+    GenericFunctionCall(String, Vec<Type>, Vec<Expression>), // 泛型函数调用 (函数名, 类型参数, 参数)
+    GenericMethodCall(Box<Expression>, String, Vec<Type>, Vec<Expression>), // 泛型方法调用
+    GenericObjectCreation(String, Vec<Type>, Vec<Expression>), // 泛型对象创建
+    TypeCast(Box<Expression>, Type), // 类型转换 (expression as Type)
+    TypeOf(Box<Expression>), // 类型查询 (typeof(expression))
+
     None, // 空表达式（用于未初始化的变量）
     // 未来可以扩展更多表达式类型
 }
@@ -234,9 +275,11 @@ pub struct Parameter {
 #[derive(Debug, Clone)]
 pub struct Function {
     pub name: String,
+    pub generic_parameters: Vec<GenericParameter>, // 泛型参数列表
     pub parameters: Vec<Parameter>,
     pub return_type: Type,
     pub body: Vec<Statement>,
+    pub where_clause: Vec<TypeConstraint>, // where子句中的约束
 }
 
 #[derive(Debug, Clone)]
@@ -279,6 +322,7 @@ pub struct Field {
 #[derive(Debug, Clone)]
 pub struct Method {
     pub name: String,
+    pub generic_parameters: Vec<GenericParameter>, // 泛型参数列表
     pub parameters: Vec<Parameter>,
     pub return_type: Type,
     pub body: Vec<Statement>,
@@ -287,10 +331,12 @@ pub struct Method {
     pub is_virtual: bool, // 是否为虚方法
     pub is_override: bool, // 是否重写父类方法
     pub is_abstract: bool, // 是否为抽象方法
+    pub where_clause: Vec<TypeConstraint>, // where子句中的约束
 }
 
 #[derive(Debug, Clone)]
 pub struct Constructor {
+    pub generic_parameters: Vec<GenericParameter>, // 泛型参数
     pub parameters: Vec<Parameter>,
     pub body: Vec<Statement>,
 }
@@ -298,8 +344,10 @@ pub struct Constructor {
 #[derive(Debug, Clone)]
 pub struct Interface {
     pub name: String,
+    pub generic_parameters: Vec<GenericParameter>, // 泛型参数列表
     pub methods: Vec<InterfaceMethod>, // 接口方法声明
     pub extends: Vec<String>, // 接口可以继承多个接口
+    pub where_clause: Vec<TypeConstraint>, // where子句中的约束
 }
 
 #[derive(Debug, Clone)]
@@ -313,6 +361,7 @@ pub struct InterfaceMethod {
 #[derive(Debug, Clone)]
 pub struct Class {
     pub name: String,
+    pub generic_parameters: Vec<GenericParameter>, // 泛型参数列表
     pub super_class: Option<String>, // 父类名
     pub implements: Vec<String>, // 实现的接口列表
     pub fields: Vec<Field>,
@@ -320,6 +369,7 @@ pub struct Class {
     pub constructors: Vec<Constructor>,
     pub is_abstract: bool, // 是否为抽象类
     pub friends: Vec<FriendDeclaration>, // v0.7.2新增：友元声明
+    pub where_clause: Vec<TypeConstraint>, // where子句中的约束
 }
 
 #[derive(Debug, Clone)]
@@ -374,7 +424,9 @@ pub struct SwitchCase {
 #[derive(Debug, Clone)]
 pub struct Enum {
     pub name: String,
+    pub generic_parameters: Vec<GenericParameter>, // 泛型参数列表
     pub variants: Vec<EnumVariant>,
+    pub where_clause: Vec<TypeConstraint>, // where子句中的约束
 }
 
 #[derive(Debug, Clone)]
