@@ -1,7 +1,7 @@
 // 函数解析模块
 // 包含函数解析相关函数
 
-use crate::ast::{Function, Parameter};
+use crate::ast::{Function, Parameter, GenericParameter, TypeConstraint};
 use crate::parser::parser_base::ParserBase;
 use crate::parser::parser_utils::skip_to_next_statement_or_end;
 use crate::parser::statement_parser::StatementParser;
@@ -10,11 +10,14 @@ use crate::parser::expression_parser::ExpressionParser;
 /// 解析函数
 pub fn parse_function(parser: &mut ParserBase) -> Result<Function, String> {
     parser.expect("fn")?;
-    
+
     let name = match parser.consume() {
         Some(name) => name,
         None => return Err("期望函数名".to_string()),
     };
+
+    // 解析泛型参数 (可选)
+    let generic_parameters = parser.parse_generic_parameters()?;
     
     parser.expect("(")?;
     
@@ -67,7 +70,10 @@ pub fn parse_function(parser: &mut ParserBase) -> Result<Function, String> {
     
     parser.expect(":")?;
     let return_type = parser.parse_type()?;
-    
+
+    // 解析 where 子句 (可选)
+    let where_clause = parser.parse_where_clause()?;
+
     parser.expect("{")?;
     
     let mut body = Vec::new();
@@ -90,9 +96,11 @@ pub fn parse_function(parser: &mut ParserBase) -> Result<Function, String> {
     
     Ok(Function {
         name,
+        generic_parameters,
         parameters,
         return_type,
         body,
+        where_clause,
     })
 }
 
@@ -274,8 +282,10 @@ pub fn parse_function_collect_errors(parser: &mut ParserBase, errors: &mut Vec<S
     
     Ok(Function {
         name,
+        generic_parameters: Vec::new(), // 暂时不支持泛型
         parameters,
         return_type,
         body,
+        where_clause: Vec::new(),
     })
 } 
