@@ -223,9 +223,11 @@ fn parse_function(parser: &mut ParserBase) -> Result<Function, String> {
     
     Ok(Function {
         name,
+        generic_parameters: Vec::new(), // 命名空间函数暂时不支持泛型
         parameters,
         return_type,
         body,
+        where_clause: Vec::new(),
     })
 }
 
@@ -379,8 +381,10 @@ fn parse_function_collect_errors(parser: &mut ParserBase, errors: &mut Vec<Strin
     
     Ok(Function {
         name,
+        generic_parameters: Vec::new(), // 命名空间函数暂时不支持泛型
         parameters,
         return_type,
         body,
+        where_clause: Vec::new(),
     })
 } 
