@@ -1,4 +1,4 @@
-use crate::ast::{Enum, EnumVariant, EnumField, Type};
+use crate::ast::{Enum, EnumVariant, EnumField, Type, GenericParameter, TypeConstraint};
 use crate::parser::parser_base::ParserBase;
 use crate::parser::statement_parser::StatementParser;
 use crate::interpreter::debug_println;
@@ -19,6 +19,9 @@ impl<'a> EnumParser for ParserBase<'a> {
         // 获取枚举名
         let enum_name = self.consume().ok_or_else(|| "期望枚举名".to_string())?;
         debug_println(&format!("解析枚举: {}", enum_name));
+
+        // 解析泛型参数 (可选)
+        let generic_parameters = self.parse_generic_parameters()?;
         
         // 期望 "{"
         self.expect("{")?;
@@ -40,13 +43,19 @@ impl<'a> EnumParser for ParserBase<'a> {
         
         // 期望 "}"
         self.expect("}")?;
+
+        // 解析 where 子句 (可选)
+        let where_clause = self.parse_where_clause()?;
+
         self.expect(";")?;
-        
+
         debug_println(&format!("枚举解析完成: {} (变体数: {})", enum_name, variants.len()));
-        
+
         Ok(Enum {
             name: enum_name,
+            generic_parameters,
             variants,
+            where_clause,
         })
     }
     
