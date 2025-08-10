@@ -1,5 +1,5 @@
 // 类解析模块
-use crate::ast::{Class, Field, Method, Constructor, Parameter, Type, Visibility};
+use crate::ast::{Class, Field, Method, Constructor, Parameter, Type, Visibility, GenericParameter, TypeConstraint};
 use crate::parser::parser_base::ParserBase;
 use crate::parser::statement_parser::StatementParser;
 use crate::parser::expression_parser::ExpressionParser;
@@ -29,6 +29,9 @@ impl<'a> ClassParser for ParserBase<'a> {
         
         // 获取类名
         let class_name = self.consume().ok_or_else(|| "期望类名".to_string())?;
+
+        // 解析泛型参数 (可选)
+        let generic_parameters = self.parse_generic_parameters()?;
         
         // 检查是否有继承
         let super_class = if self.peek() == Some(&"extends".to_string()) {
@@ -103,12 +106,17 @@ impl<'a> ClassParser for ParserBase<'a> {
                 }
             }
         }
-        
+
         self.expect("}")?;
+
+        // 解析 where 子句 (可选)
+        let where_clause = self.parse_where_clause()?;
+
         self.expect(";")?;
-        
+
         Ok(Class {
             name: class_name,
+            generic_parameters,
             super_class,
             implements,
             fields,
@@ -116,6 +124,7 @@ impl<'a> ClassParser for ParserBase<'a> {
             constructors,
             is_abstract,
             friends: Vec::new(), // v0.7.2新增：暂时为空，后续实现友元解析
+            where_clause,
         })
     }
     
@@ -257,6 +266,9 @@ impl<'a> ClassParser for ParserBase<'a> {
         
         // 方法名
         let method_name = self.consume().ok_or_else(|| "期望方法名".to_string())?;
+
+        // 解析泛型参数 (可选)
+        let generic_parameters = self.parse_generic_parameters()?;
         
         // 解析参数列表
         self.expect("(")?;
@@ -286,7 +298,10 @@ impl<'a> ClassParser for ParserBase<'a> {
         
         // 返回类型
         let return_type = self.parse_type()?;
-        
+
+        // 解析 where 子句 (可选)
+        let where_clause = self.parse_where_clause()?;
+
         // 方法体（抽象方法可能没有方法体）
         let body = if self.peek() == Some(&";".to_string()) {
             // 抽象方法，没有方法体
@@ -309,6 +324,7 @@ impl<'a> ClassParser for ParserBase<'a> {
         
         Ok(Method {
             name: method_name,
+            generic_parameters,
             parameters,
             return_type,
             body,
@@ -317,12 +333,16 @@ impl<'a> ClassParser for ParserBase<'a> {
             is_virtual: false, // 将在调用处设置
             is_override: false, // 将在调用处设置
             is_abstract: false, // 将在调用处设置
+            where_clause,
         })
     }
     
     fn parse_constructor(&mut self) -> Result<Constructor, String> {
         self.consume(); // 消费 "constructor"
-        
+
+        // 解析泛型参数 (可选)
+        let generic_parameters = self.parse_generic_parameters()?;
+
         // 解析参数列表
         self.expect("(")?;
         let mut parameters = Vec::new();
@@ -361,6 +381,7 @@ impl<'a> ClassParser for ParserBase<'a> {
         self.expect(";")?;
         
         Ok(Constructor {
+            generic_parameters,
             parameters,
             body,
         })
