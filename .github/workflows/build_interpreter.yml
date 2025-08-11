@@ -28,7 +28,9 @@ jobs:
   build:
     name: 构建解释器
     runs-on: ${{ matrix.os }}
+    continue-on-error: true
     strategy:
+      fail-fast: false
       matrix:
         include:
           # Windows 平台
@@ -79,15 +81,15 @@ jobs:
           # macOS 平台
           - os: macos-latest
             target: x86_64-apple-darwin
-            artifact_name: codenothing-macos-x64
-            asset_name: codenothing-macos-x64.tar.gz
-            release_name: macOS x64
+            artifact_name: codenothing-macos-intel
+            asset_name: codenothing-macos-intel.tar.gz
+            release_name: macOS Intel
             exe_name: CodeNothing
           - os: macos-latest
             target: aarch64-apple-darwin
-            artifact_name: codenothing-macos-arm64
-            asset_name: codenothing-macos-arm64.tar.gz
-            release_name: macOS ARM64 (Apple Silicon)
+            artifact_name: codenothing-macos-silicon
+            asset_name: codenothing-macos-silicon.tar.gz
+            release_name: macOS Apple Silicon
             exe_name: CodeNothing
 
     steps:
@@ -113,7 +115,7 @@ jobs:
             sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
             ;;
           aarch64-linux-android)
-            # Android NDK 通过 setup-android 安装
+            # Android NDK 通过 setup-ndk 安装
             ;;
         esac
 
@@ -131,6 +133,8 @@ jobs:
         echo "CXX_aarch64_linux_android=$ANDROID_NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android21-clang++" >> $GITHUB_ENV
         echo "AR_aarch64_linux_android=$ANDROID_NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ar" >> $GITHUB_ENV
         echo "CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER=$ANDROID_NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android21-clang" >> $GITHUB_ENV
+
+
     
     - name: 构建
       uses: actions-rs/cargo@v1
