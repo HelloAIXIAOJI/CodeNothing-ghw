@@ -30,7 +30,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        build: [windows-x64, linux-x64, linux-musl-x64, linux-aarch64, linux-armv7, macos-x64, macos-arm64, android-aarch64, android-armv7]
+        build: [windows-x64, linux-x64, linux-aarch64, linux-armv7, macos-x64, macos-arm64, android-aarch64, android-armv7, freebsd-x64]
         include:
           # Windows x64 原生
           - build: windows-x64
@@ -49,15 +49,6 @@ jobs:
             asset_name: codenothing-linux-x64.tar.gz
             release_name: Linux x64
             binary_path: target/release/CodeNothing
-
-          # Linux x64 (musl) 静态链接
-          - build: linux-musl-x64
-            os: ubuntu-latest
-            target: x86_64-unknown-linux-musl
-            artifact_name: codenothing-linux-musl-x64
-            asset_name: codenothing-linux-musl-x64.tar.gz
-            release_name: Linux musl x64
-            binary_path: target/x86_64-unknown-linux-musl/release/CodeNothing
 
           # Linux aarch64 (GNU)
           - build: linux-aarch64
@@ -113,6 +104,15 @@ jobs:
             release_name: Android armv7
             binary_path: target/armv7-linux-androideabi/release/CodeNothing
 
+          # FreeBSD x64
+          - build: freebsd-x64
+            os: ubuntu-latest
+            target: x86_64-unknown-freebsd
+            artifact_name: codenothing-freebsd-x64
+            asset_name: codenothing-freebsd-x64.tar.gz
+            release_name: FreeBSD x64
+            binary_path: target/x86_64-unknown-freebsd/release/CodeNothing
+
     steps:
     - uses: actions/checkout@v3
     
@@ -134,11 +134,6 @@ jobs:
       run: echo "ANDROID_NDK_HOME=${{ steps.setup-ndk.outputs.ndk-path }}" >> $GITHUB_ENV
       shell: bash
 
-    - name: 安装交叉编译依赖 (Linux musl)
-      if: matrix.target == 'x86_64-unknown-linux-musl'
-      run: sudo apt-get update && sudo apt-get install -y musl-tools
-      shell: bash
-
     - name: 安装交叉编译依赖 (Linux aarch64)
       if: matrix.target == 'aarch64-unknown-linux-gnu'
       run: sudo apt-get update && sudo apt-get install -y gcc-aarch64-linux-gnu
@@ -149,6 +144,13 @@ jobs:
       run: |
         sudo apt-get update
         sudo apt-get install -y gcc-arm-linux-gnueabihf g++-arm-linux-gnueabihf
+      shell: bash
+
+    - name: 安装 FreeBSD 交叉编译工具链
+      if: matrix.target == 'x86_64-unknown-freebsd'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y clang llvm-dev
       shell: bash
 
     - name: 添加Rust目标
@@ -170,9 +172,6 @@ jobs:
           echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc" >> $GITHUB_ENV
           echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_AR=aarch64-linux-gnu-ar" >> $GITHUB_ENV
           echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_RANLIB=aarch64-linux-gnu-ranlib" >> $GITHUB_ENV
-        elif [ "${{ matrix.target }}" = "x86_64-unknown-linux-musl" ]; then
-          echo "CC_x86_64_unknown_linux_musl=musl-gcc" >> $GITHUB_ENV
-          echo "CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER=musl-gcc" >> $GITHUB_ENV
         fi
       shell: bash
 
@@ -189,15 +188,10 @@ jobs:
       env:
         CC_aarch64_unknown_linux_gnu: aarch64-linux-gnu-gcc
         CC_armv7_unknown_linux_gnueabihf: arm-linux-gnueabihf-gcc
-        CXX_armv7_unknown_linux_gnueabihf: arm-linux-gnueabihf-g++
-        CC_x86_64_unknown_linux_musl: musl-gcc
         CC_aarch64_linux_android: ${{ env.ANDROID_NDK_HOME }}/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android24-clang
         CC_armv7_linux_androideabi: ${{ env.ANDROID_NDK_HOME }}/toolchains/llvm/prebuilt/linux-x86_64/bin/armv7a-linux-androideabi24-clang
         CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER: ${{ env.ANDROID_NDK_HOME }}/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android24-clang
         CARGO_TARGET_ARMV7_LINUX_ANDROIDEABI_LINKER: ${{ env.ANDROID_NDK_HOME }}/toolchains/llvm/prebuilt/linux-x86_64/bin/armv7a-linux-androideabi24-clang
-        CARGO_TARGET_ARMV7_UNKNOWN_LINUX_GNUEABIHF_LINKER: arm-linux-gnueabihf-gcc
-        CARGO_TARGET_ARMV7_UNKNOWN_LINUX_GNUEABIHF_AR: arm-linux-gnueabihf-ar
-        CARGO_TARGET_ARMV7_UNKNOWN_LINUX_GNUEABIHF_RANLIB: arm-linux-gnueabihf-ranlib
       with:
         command: build
         args: --release --target ${{ matrix.target }}
