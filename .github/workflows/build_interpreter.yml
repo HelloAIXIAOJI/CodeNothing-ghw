@@ -30,20 +30,88 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [windows-latest, ubuntu-latest, macos-latest]
+        build: [windows-x64, linux-x64, linux-musl-x64, linux-aarch64, linux-armv7, macos-x64, macos-arm64, android-aarch64, android-armv7]
         include:
-          - os: windows-latest
-            artifact_name: codenothing-windows
-            asset_name: codenothing-windows.zip
-            release_name: Windows
-          - os: ubuntu-latest
-            artifact_name: codenothing-linux
-            asset_name: codenothing-linux.tar.gz
-            release_name: Linux
-          - os: macos-latest
-            artifact_name: codenothing-macos
-            asset_name: codenothing-macos.tar.gz
-            release_name: macOS
+          # Windows x64 原生
+          - build: windows-x64
+            os: windows-latest
+            target: ""
+            artifact_name: codenothing-windows-x64
+            asset_name: codenothing-windows-x64.zip
+            release_name: Windows x64
+            binary_path: target/release/CodeNothing.exe
+
+          # Linux x64 (glibc) 原生
+          - build: linux-x64
+            os: ubuntu-latest
+            target: ""
+            artifact_name: codenothing-linux-x64
+            asset_name: codenothing-linux-x64.tar.gz
+            release_name: Linux x64
+            binary_path: target/release/CodeNothing
+
+          # Linux x64 (musl) 静态链接
+          - build: linux-musl-x64
+            os: ubuntu-latest
+            target: x86_64-unknown-linux-musl
+            artifact_name: codenothing-linux-musl-x64
+            asset_name: codenothing-linux-musl-x64.tar.gz
+            release_name: Linux musl x64
+            binary_path: target/x86_64-unknown-linux-musl/release/CodeNothing
+
+          # Linux aarch64 (GNU)
+          - build: linux-aarch64
+            os: ubuntu-latest
+            target: aarch64-unknown-linux-gnu
+            artifact_name: codenothing-linux-aarch64
+            asset_name: codenothing-linux-aarch64.tar.gz
+            release_name: Linux aarch64
+            binary_path: target/aarch64-unknown-linux-gnu/release/CodeNothing
+
+          # Linux ARMv7 (gnueabihf)
+          - build: linux-armv7
+            os: ubuntu-latest
+            target: armv7-unknown-linux-gnueabihf
+            artifact_name: codenothing-linux-armv7
+            asset_name: codenothing-linux-armv7.tar.gz
+            release_name: Linux ARMv7
+            binary_path: target/armv7-unknown-linux-gnueabihf/release/CodeNothing
+
+          # macOS x64 (Intel)
+          - build: macos-x64
+            os: macos-13
+            target: ""
+            artifact_name: codenothing-macos-x64
+            asset_name: codenothing-macos-x64.tar.gz
+            release_name: macOS x64
+            binary_path: target/release/CodeNothing
+
+          # macOS arm64 (Apple Silicon)
+          - build: macos-arm64
+            os: macos-14
+            target: ""
+            artifact_name: codenothing-macos-arm64
+            asset_name: codenothing-macos-arm64.tar.gz
+            release_name: macOS arm64
+            binary_path: target/release/CodeNothing
+
+          # Android aarch64
+          - build: android-aarch64
+            os: ubuntu-latest
+            target: aarch64-linux-android
+            artifact_name: codenothing-android-aarch64
+            asset_name: codenothing-android-aarch64.tar.gz
+            release_name: Android aarch64
+            binary_path: target/aarch64-linux-android/release/CodeNothing
+
+          # Android armv7
+          - build: android-armv7
+            os: ubuntu-latest
+            target: armv7-linux-androideabi
+            artifact_name: codenothing-android-armv7
+            asset_name: codenothing-android-armv7.tar.gz
+            release_name: Android armv7
+            binary_path: target/armv7-linux-androideabi/release/CodeNothing
 
     steps:
     - uses: actions/checkout@v3
@@ -53,12 +121,60 @@ jobs:
       with:
         toolchain: stable
         override: true
-    
-    - name: 构建
+
+    - name: 设置 Android NDK
+      if: contains(matrix.target, '-android')
+      id: setup-ndk
+      uses: nttld/setup-ndk@v1
+      with:
+        ndk-version: r26d
+
+    - name: 导出 NDK 路径到环境
+      if: contains(matrix.target, '-android')
+      run: echo "ANDROID_NDK_HOME=${{ steps.setup-ndk.outputs.ndk-path }}" >> $GITHUB_ENV
+      shell: bash
+
+    - name: 安装交叉编译依赖 (Linux musl)
+      if: matrix.target == 'x86_64-unknown-linux-musl'
+      run: sudo apt-get update && sudo apt-get install -y musl-tools
+      shell: bash
+
+    - name: 安装交叉编译依赖 (Linux aarch64)
+      if: matrix.target == 'aarch64-unknown-linux-gnu'
+      run: sudo apt-get update && sudo apt-get install -y gcc-aarch64-linux-gnu
+      shell: bash
+
+    - name: 安装交叉编译依赖 (Linux ARMv7)
+      if: matrix.target == 'armv7-unknown-linux-gnueabihf'
+      run: sudo apt-get update && sudo apt-get install -y gcc-arm-linux-gnueabihf
+      shell: bash
+
+    - name: 添加Rust目标
+      if: matrix.target != ''
+      run: rustup target add ${{ matrix.target }}
+      shell: bash
+
+    - name: 构建 (本机架构)
+      if: matrix.target == ''
       uses: actions-rs/cargo@v1
       with:
         command: build
         args: --release
+
+    - name: 构建 (交叉编译)
+      if: matrix.target != ''
+      uses: actions-rs/cargo@v1
+      env:
+        CC_aarch64_unknown_linux_gnu: aarch64-linux-gnu-gcc
+        CC_armv7_unknown_linux_gnueabihf: arm-linux-gnueabihf-gcc
+        CC_x86_64_unknown_linux_musl: musl-gcc
+        CC_aarch64_linux_android: ${{ env.ANDROID_NDK_HOME }}/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android24-clang
+        CC_armv7_linux_androideabi: ${{ env.ANDROID_NDK_HOME }}/toolchains/llvm/prebuilt/linux-x86_64/bin/armv7a-linux-androideabi24-clang
+        CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER: ${{ env.ANDROID_NDK_HOME }}/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android24-clang
+        CARGO_TARGET_ARMV7_LINUX_ANDROIDEABI_LINKER: ${{ env.ANDROID_NDK_HOME }}/toolchains/llvm/prebuilt/linux-x86_64/bin/armv7a-linux-androideabi24-clang
+      with:
+        command: build
+        args: --release --target ${{ matrix.target }}
     
     - name: 创建输出目录
       run: mkdir -p release-package
@@ -67,10 +183,12 @@ jobs:
     - name: 打包Windows
       if: matrix.os == 'windows-latest'
       run: |
-        cp target/release/codenothing.exe release-package/
-        # 如果examples目录存在，则复制
+        cp ${{ matrix.binary_path }} release-package/
+        # 如果examples或example目录存在，则复制
         if [ -d "examples" ]; then
           cp -r examples release-package/
+        elif [ -d "example" ]; then
+          cp -r example release-package/
         else
           echo "警告：examples目录不存在，跳过复制"
           # 创建一个空的examples目录，确保有内容
@@ -83,10 +201,12 @@ jobs:
     - name: 打包Linux/macOS
       if: matrix.os != 'windows-latest'
       run: |
-        cp target/release/CodeNothing release-package/
-        # 如果examples目录存在，则复制
+        cp ${{ matrix.binary_path }} release-package/
+        # 如果examples或example目录存在，则复制
         if [ -d "examples" ]; then
           cp -r examples release-package/
+        elif [ -d "example" ]; then
+          cp -r example release-package/
         else
           echo "警告：examples目录不存在，跳过复制"
           # 创建一个空的examples目录，确保有内容
@@ -110,3 +230,136 @@ jobs:
         tag_name: ${{ github.ref_name }}
         draft: false
         generate_release_notes: true 
+
+  build_freebsd:
+    name: 构建 FreeBSD
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: 在 FreeBSD VM 中构建
+        uses: vmactions/freebsd-vm@v0
+        with:
+          usesh: true
+          copyback: true
+          prepare: |
+            pkg update -f
+            pkg install -y rust cargo bash gtar
+          run: |
+            echo "开始在 FreeBSD 上构建"
+            cargo --version
+            rustc --version
+            cargo build --release
+            mkdir -p release-package
+            cp target/release/CodeNothing release-package/
+            if [ -d "examples" ]; then
+              cp -r examples release-package/
+            elif [ -d "example" ]; then
+              cp -r example release-package/
+            else
+              mkdir -p release-package/examples
+              echo "# CodeNothing 示例" > release-package/examples/README.md
+            fi
+            tar -czvf codenothing-freebsd-x64.tar.gz -C release-package .
+
+      - name: 上传构建产物 (FreeBSD)
+        uses: actions/upload-artifact@v4
+        with:
+          name: codenothing-freebsd-x64
+          path: codenothing-freebsd-x64.tar.gz
+
+      - name: 创建发布 (FreeBSD)
+        uses: softprops/action-gh-release@v1
+        if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'release'
+        with:
+          files: codenothing-freebsd-x64.tar.gz
+          tag_name: ${{ github.ref_name }}
+          draft: false
+          generate_release_notes: true
+
+  build_openbsd:
+    name: 构建 OpenBSD
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: 在 OpenBSD VM 中构建
+        uses: vmactions/openbsd-vm@v0
+        with:
+          usesh: true
+          copyback: true
+          prepare: |
+            pkg_add rust bash gtar
+          run: |
+            echo "开始在 OpenBSD 上构建"
+            cargo --version
+            rustc --version
+            cargo build --release
+            mkdir -p release-package
+            cp target/release/CodeNothing release-package/
+            if [ -d "examples" ]; then
+              cp -r examples release-package/
+            elif [ -d "example" ]; then
+              cp -r example release-package/
+            else
+              mkdir -p release-package/examples
+              echo "# CodeNothing 示例" > release-package/examples/README.md
+            fi
+            gtar -czvf codenothing-openbsd-amd64.tar.gz -C release-package .
+
+      - name: 上传构建产物 (OpenBSD)
+        uses: actions/upload-artifact@v4
+        with:
+          name: codenothing-openbsd-amd64
+          path: codenothing-openbsd-amd64.tar.gz
+
+      - name: 创建发布 (OpenBSD)
+        uses: softprops/action-gh-release@v1
+        if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'release'
+        with:
+          files: codenothing-openbsd-amd64.tar.gz
+          tag_name: ${{ github.ref_name }}
+          draft: false
+          generate_release_notes: true
+
+  build_netbsd:
+    name: 构建 NetBSD
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: 在 NetBSD VM 中构建
+        uses: vmactions/netbsd-vm@v0
+        with:
+          usesh: true
+          copyback: true
+          prepare: |
+            /usr/sbin/pkg_add -v rust gtar bash
+          run: |
+            echo "开始在 NetBSD 上构建"
+            cargo --version
+            rustc --version
+            cargo build --release
+            mkdir -p release-package
+            cp target/release/CodeNothing release-package/
+            if [ -d "examples" ]; then
+              cp -r examples release-package/
+            elif [ -d "example" ]; then
+              cp -r example release-package/
+            else
+              mkdir -p release-package/examples
+              echo "# CodeNothing 示例" > release-package/examples/README.md
+            fi
+            gtar -czvf codenothing-netbsd-amd64.tar.gz -C release-package .
+
+      - name: 上传构建产物 (NetBSD)
+        uses: actions/upload-artifact@v4
+        with:
+          name: codenothing-netbsd-amd64
+          path: codenothing-netbsd-amd64.tar.gz
+
+      - name: 创建发布 (NetBSD)
+        uses: softprops/action-gh-release@v1
+        if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'release'
+        with:
+          files: codenothing-netbsd-amd64.tar.gz
+          tag_name: ${{ github.ref_name }}
+          draft: false
+          generate_release_notes: true
