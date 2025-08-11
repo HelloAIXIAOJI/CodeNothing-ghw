@@ -27,102 +27,124 @@ env:
 jobs:
   build:
     name: 构建解释器
-    runs-on: ${{ matrix.os }}
+    runs-on: ${{ matrix.runner }}
     strategy:
       matrix:
         include:
-          # 原有平台
-          - os: windows-latest
+          # Windows 架构
+          - runner: windows-latest
             target: x86_64-pc-windows-msvc
             artifact_name: codenothing-windows-x64
             asset_name: codenothing-windows-x64.zip
             release_name: Windows x64
-          
-          - os: ubuntu-latest
-            target: x86_64-unknown-linux-gnu
-            artifact_name: codenothing-linux-x64
-            asset_name: codenothing-linux-x64.tar.gz
-            release_name: Linux x64
-          
-          - os: macos-latest
-            target: x86_64-apple-darwin
-            artifact_name: codenothing-macos-x64
-            asset_name: codenothing-macos-x64.tar.gz
-            release_name: macOS x64
-          
-          # 新增平台
-          - os: ubuntu-latest
-            target: aarch64-linux-android
-            artifact_name: codenothing-android-arm64
-            asset_name: codenothing-android-arm64.tar.gz
-            release_name: Android ARM64
-          
-          - os: windows-latest
+            exe_name: CodeNothing.exe
+          - runner: windows-latest
             target: i686-pc-windows-msvc
             artifact_name: codenothing-windows-x32
             asset_name: codenothing-windows-x32.zip
             release_name: Windows x32
-          
-          - os: windows-latest
+            exe_name: CodeNothing.exe
+          - runner: windows-latest
             target: aarch64-pc-windows-msvc
             artifact_name: codenothing-windows-arm64
             asset_name: codenothing-windows-arm64.zip
             release_name: Windows ARM64
-          
-          - os: ubuntu-latest
+            exe_name: CodeNothing.exe
+
+          # Linux 架构
+          - runner: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            artifact_name: codenothing-linux-x64
+            asset_name: codenothing-linux-x64.tar.gz
+            release_name: Linux x64
+            exe_name: CodeNothing
+          - runner: ubuntu-latest
             target: i686-unknown-linux-gnu
             artifact_name: codenothing-linux-x32
             asset_name: codenothing-linux-x32.tar.gz
             release_name: Linux x32
-          
-          - os: ubuntu-latest
+            exe_name: CodeNothing
+          - runner: ubuntu-latest
             target: aarch64-unknown-linux-gnu
             artifact_name: codenothing-linux-arm64
             asset_name: codenothing-linux-arm64.tar.gz
             release_name: Linux ARM64
-          
-          - os: macos-latest
-            target: aarch64-apple-darwin
-            artifact_name: codenothing-macos-arm64
-            asset_name: codenothing-macos-arm64.tar.gz
-            release_name: macOS ARM64
-          
-          - os: ubuntu-latest
+            exe_name: CodeNothing
+          - runner: ubuntu-latest
             target: armv7-unknown-linux-gnueabihf
             artifact_name: codenothing-linux-arm32
             asset_name: codenothing-linux-arm32.tar.gz
             release_name: Linux ARM32
+            exe_name: CodeNothing
+
+          # macOS 架构
+          - runner: macos-latest
+            target: x86_64-apple-darwin
+            artifact_name: codenothing-macos-x64
+            asset_name: codenothing-macos-x64.tar.gz
+            release_name: macOS x64
+            exe_name: CodeNothing
+          - runner: macos-latest
+            target: aarch64-apple-darwin
+            artifact_name: codenothing-macos-arm64
+            asset_name: codenothing-macos-arm64.tar.gz
+            release_name: macOS ARM64 (Apple Silicon)
+            exe_name: CodeNothing
+
+          # Android 架构
+          - runner: ubuntu-latest
+            target: aarch64-linux-android
+            artifact_name: codenothing-android-arm64
+            asset_name: codenothing-android-arm64.tar.gz
+            release_name: Android ARM64
+            exe_name: CodeNothing
 
     steps:
     - uses: actions/checkout@v3
-    
+
     - name: 设置Rust工具链
       uses: actions-rs/toolchain@v1
       with:
         toolchain: stable
-        override: true
         target: ${{ matrix.target }}
-    
-    # 为Android目标安装Android NDK
-    - name: 安装Android NDK (Android目标)
-      if: contains(matrix.target, 'android')
+        override: true
+
+    # 安装交叉编译依赖
+    - name: 安装交叉编译依赖 (Linux)
+      if: matrix.runner == 'ubuntu-latest'
       run: |
-        sudo apt-get update
-        sudo apt-get install -y android-ndk
-        echo "ANDROID_NDK_HOME=/usr/lib/android-ndk" >> $GITHUB_ENV
-      shell: bash
-    
-    # 为ARM目标安装交叉编译工具
-    - name: 安装ARM交叉编译工具 (Linux ARM目标)
-      if: contains(matrix.target, 'arm') && contains(matrix.target, 'linux') && !contains(matrix.target, 'android')
+        case "${{ matrix.target }}" in
+          i686-unknown-linux-gnu)
+            sudo apt-get update
+            sudo apt-get install -y gcc-multilib g++-multilib
+            ;;
+          aarch64-unknown-linux-gnu)
+            sudo apt-get update
+            sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
+            ;;
+          armv7-unknown-linux-gnueabihf)
+            sudo apt-get update
+            sudo apt-get install -y gcc-arm-linux-gnueabihf g++-arm-linux-gnueabihf
+            ;;
+          aarch64-linux-android)
+            # Android NDK 将通过 cargo 自动处理
+            echo "Android target will be handled by cargo"
+            ;;
+        esac
+
+    # 设置 Android NDK (如果需要)
+    - name: 设置 Android NDK
+      if: matrix.target == 'aarch64-linux-android'
       run: |
-        sudo apt-get update
-        if [[ "${{ matrix.target }}" == "aarch64-unknown-linux-gnu" ]]; then
-          sudo apt-get install -y gcc-aarch64-linux-gnu
-        elif [[ "${{ matrix.target }}" == "armv7-unknown-linux-gnueabihf" ]]; then
-          sudo apt-get install -y gcc-arm-linux-gnueabihf
-        fi
-      shell: bash
+        # 下载并设置 Android NDK
+        wget -q https://dl.google.com/android/repository/android-ndk-r25c-linux.zip
+        unzip -q android-ndk-r25c-linux.zip
+        export ANDROID_NDK_HOME=$PWD/android-ndk-r25c
+        echo "ANDROID_NDK_HOME=$ANDROID_NDK_HOME" >> $GITHUB_ENV
+        echo "CC_aarch64_linux_android=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android21-clang" >> $GITHUB_ENV
+        echo "CXX_aarch64_linux_android=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android21-clang++" >> $GITHUB_ENV
+        echo "AR_aarch64_linux_android=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ar" >> $GITHUB_ENV
+        echo "CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android21-clang" >> $GITHUB_ENV
     
     - name: 构建
       uses: actions-rs/cargo@v1
@@ -135,9 +157,9 @@ jobs:
       shell: bash
     
     - name: 打包Windows
-      if: contains(matrix.os, 'windows')
+      if: contains(matrix.target, 'windows')
       run: |
-        cp target/${{ matrix.target }}/release/codenothing.exe release-package/
+        cp target/${{ matrix.target }}/release/${{ matrix.exe_name }} release-package/
         # 如果examples目录存在，则复制
         if [ -d "examples" ]; then
           cp -r examples release-package/
@@ -149,11 +171,11 @@ jobs:
         fi
         7z a ${{ matrix.asset_name }} ./release-package/*
       shell: bash
-    
-    - name: 打包Linux/macOS
-      if: !contains(matrix.os, 'windows')
+
+    - name: 打包Linux/macOS/Android
+      if: "!contains(matrix.target, 'windows')"
       run: |
-        cp target/${{ matrix.target }}/release/CodeNothing release-package/
+        cp target/${{ matrix.target }}/release/${{ matrix.exe_name }} release-package/
         # 如果examples目录存在，则复制
         if [ -d "examples" ]; then
           cp -r examples release-package/
