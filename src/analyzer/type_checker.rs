@@ -1,7 +1,7 @@
 // CodeNothing 编译时类型检查器
 // 在代码执行前进行静态类型分析和验证
 
-use crate::ast::{Statement, Expression, Type, Function, Parameter, Program, Class, Enum};
+use crate::ast::{Statement, Expression, Type, Function, Parameter, Program, Class, Enum, GenericParameter, TypeConstraint};
 use std::collections::HashMap;
 
 #[derive(Debug, Clone)]
@@ -42,6 +42,13 @@ pub struct TypeChecker {
     class_methods: HashMap<String, HashMap<String, (Vec<Type>, Type)>>, // 类名 -> 方法名 -> (参数类型, 返回类型)
     // 枚举定义表
     enum_definitions: HashMap<String, Vec<String>>, // 枚举名 -> 变体列表
+    // 🚀 v0.8.4 新增：泛型支持
+    // 泛型函数签名表
+    generic_function_signatures: HashMap<String, (Vec<GenericParameter>, Vec<Type>, Type)>, // 函数名 -> (泛型参数, 参数类型, 返回类型)
+    // 泛型类定义表
+    generic_class_definitions: HashMap<String, (Vec<GenericParameter>, HashMap<String, Type>)>, // 类名 -> (泛型参数, 字段类型)
+    // 当前泛型上下文
+    current_generic_context: HashMap<String, Type>, // 泛型参数名 -> 具体类型
     // 错误收集
     errors: Vec<TypeCheckError>,
     // 当前函数的返回类型
@@ -57,6 +64,10 @@ impl TypeChecker {
             class_definitions: HashMap::new(),
             class_methods: HashMap::new(),
             enum_definitions: HashMap::new(),
+            // 🚀 v0.8.4 新增：泛型支持
+            generic_function_signatures: HashMap::new(),
+            generic_class_definitions: HashMap::new(),
+            current_generic_context: HashMap::new(),
             errors: Vec::new(),
             current_function_return_type: None,
         }
@@ -875,7 +886,134 @@ impl TypeChecker {
                 self.types_compatible(expected_element, actual_element)
             },
 
+            // 🚀 v0.8.4 新增：泛型类型兼容性
+            (Type::Generic(name1), Type::Generic(name2)) => name1 == name2,
+            (Type::Generic(name), actual_type) => {
+                // 检查泛型参数是否已绑定到具体类型
+                if let Some(bound_type) = self.current_generic_context.get(name) {
+                    self.types_compatible(bound_type, actual_type)
+                } else {
+                    // 泛型参数可以绑定到任何类型
+                    true
+                }
+            },
+            (expected_type, Type::Generic(name)) => {
+                if let Some(bound_type) = self.current_generic_context.get(name) {
+                    self.types_compatible(expected_type, bound_type)
+                } else {
+                    true
+                }
+            },
+            (Type::GenericClass(name1, args1), Type::GenericClass(name2, args2)) => {
+                name1 == name2 && args1.len() == args2.len() &&
+                args1.iter().zip(args2.iter()).all(|(a1, a2)| self.types_compatible(a1, a2))
+            },
+            (Type::GenericEnum(name1, args1), Type::GenericEnum(name2, args2)) => {
+                name1 == name2 && args1.len() == args2.len() &&
+                args1.iter().zip(args2.iter()).all(|(a1, a2)| self.types_compatible(a1, a2))
+            },
+
             _ => false
         }
+    }
+
+    // 🚀 v0.8.4 新增：泛型类型检查方法
+
+    /// 检查泛型约束是否满足
+    pub fn check_generic_constraints(&self, type_param: &str, actual_type: &Type, constraints: &[TypeConstraint]) -> bool {
+        for constraint in constraints {
+            if !self.satisfies_constraint(actual_type, constraint) {
+                return false;
+            }
+        }
+        true
+    }
+
+    /// 检查类型是否满足约束
+    fn satisfies_constraint(&self, type_: &Type, constraint: &TypeConstraint) -> bool {
+        match constraint {
+            TypeConstraint::Trait(trait_name) => {
+                // 简化实现：假设基本类型满足常见约束
+                match trait_name.as_str() {
+                    "Comparable" => matches!(type_, Type::Int | Type::Float | Type::String | Type::Long),
+                    "Display" => true, // 所有类型都可以显示
+                    "Clone" => true,   // 所有类型都可以克隆
+                    _ => false,
+                }
+            },
+            TypeConstraint::Sized => {
+                // 大多数类型都是 Sized 的
+                !matches!(type_, Type::Void)
+            },
+            TypeConstraint::Copy => {
+                // 基本类型是 Copy 的
+                matches!(type_, Type::Int | Type::Float | Type::Bool | Type::Long)
+            },
+            TypeConstraint::Send => true,  // 简化：假设所有类型都是 Send
+            TypeConstraint::Sync => true,  // 简化：假设所有类型都是 Sync
+            TypeConstraint::Lifetime(_) => true,  // 简化：暂时忽略生命周期约束
+        }
+    }
+
+    /// 实例化泛型类型
+    pub fn instantiate_generic_type(&self, generic_type: &Type, type_args: &[Type]) -> Type {
+        match generic_type {
+            Type::Generic(name) => {
+                // 查找对应的类型参数
+                if let Some(bound_type) = self.current_generic_context.get(name) {
+                    bound_type.clone()
+                } else {
+                    generic_type.clone()
+                }
+            },
+            Type::GenericClass(class_name, _) => {
+                Type::GenericClass(class_name.clone(), type_args.to_vec())
+            },
+            Type::GenericEnum(enum_name, _) => {
+                Type::GenericEnum(enum_name.clone(), type_args.to_vec())
+            },
+            _ => generic_type.clone(),
+        }
+    }
+
+    /// 推断泛型类型参数
+    pub fn infer_generic_types(&mut self, generic_params: &[GenericParameter], arg_types: &[Type], param_types: &[Type]) -> Result<HashMap<String, Type>, String> {
+        let mut inferred_types = HashMap::new();
+
+        // 简化的类型推断：基于参数类型匹配
+        for (param_type, arg_type) in param_types.iter().zip(arg_types.iter()) {
+            if let Type::Generic(param_name) = param_type {
+                if let Some(existing_type) = inferred_types.get(param_name) {
+                    if !self.types_compatible(existing_type, arg_type) {
+                        return Err(format!("类型参数 {} 的推断类型冲突", param_name));
+                    }
+                } else {
+                    inferred_types.insert(param_name.clone(), arg_type.clone());
+                }
+            }
+        }
+
+        // 检查所有泛型参数是否都被推断出来
+        for generic_param in generic_params {
+            if !inferred_types.contains_key(&generic_param.name) {
+                if let Some(default_type) = &generic_param.default_type {
+                    inferred_types.insert(generic_param.name.clone(), default_type.clone());
+                } else {
+                    return Err(format!("无法推断泛型参数 {} 的类型", generic_param.name));
+                }
+            }
+        }
+
+        Ok(inferred_types)
+    }
+
+    /// 设置泛型上下文
+    pub fn set_generic_context(&mut self, context: HashMap<String, Type>) {
+        self.current_generic_context = context;
+    }
+
+    /// 清除泛型上下文
+    pub fn clear_generic_context(&mut self) {
+        self.current_generic_context.clear();
     }
 }
