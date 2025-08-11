@@ -30,88 +30,88 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        build: [windows-x64, linux-x64, linux-aarch64, linux-armv7, macos-x64, macos-arm64, android-aarch64, android-armv7, freebsd-x64]
         include:
-          # Windows x64 原生
-          - build: windows-x64
-            os: windows-latest
-            target: ""
+          # 原有平台
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
             artifact_name: codenothing-windows-x64
             asset_name: codenothing-windows-x64.zip
             release_name: Windows x64
-            binary_path: target/release/CodeNothing.exe
-
-          # Linux x64 (glibc) 原生
-          - build: linux-x64
-            os: ubuntu-latest
-            target: ""
+            binary_name: codenothing.exe
+            archive_cmd: 7z a ${{ matrix.asset_name }} ./release-package/*
+          
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
             artifact_name: codenothing-linux-x64
             asset_name: codenothing-linux-x64.tar.gz
             release_name: Linux x64
-            binary_path: target/release/CodeNothing
-
-          # Linux aarch64 (GNU)
-          - build: linux-aarch64
-            os: ubuntu-latest
-            target: aarch64-unknown-linux-gnu
-            artifact_name: codenothing-linux-aarch64
-            asset_name: codenothing-linux-x64.tar.gz
-            release_name: Linux aarch64
-            binary_path: target/aarch64-unknown-linux-gnu/release/CodeNothing
-
-          # Linux ARMv7 (gnueabihf)
-          - build: linux-armv7
-            os: ubuntu-latest
-            target: armv7-unknown-linux-gnueabihf
-            artifact_name: codenothing-linux-armv7
-            asset_name: codenothing-linux-armv7.tar.gz
-            release_name: Linux ARMv7
-            binary_path: target/armv7-unknown-linux-gnueabihf/release/CodeNothing
-
-          # macOS x64 (Intel)
-          - build: macos-x64
-            os: macos-13
-            target: ""
+            binary_name: CodeNothing
+            archive_cmd: tar -czvf ${{ matrix.asset_name }} -C release-package .
+          
+          - os: macos-latest
+            target: x86_64-apple-darwin
             artifact_name: codenothing-macos-x64
             asset_name: codenothing-macos-x64.tar.gz
             release_name: macOS x64
-            binary_path: target/release/CodeNothing
-
-          # macOS arm64 (Apple Silicon)
-          - build: macos-arm64
-            os: macos-14
-            target: ""
+            binary_name: CodeNothing
+            archive_cmd: tar -czvf ${{ matrix.asset_name }} -C release-package .
+          
+          # 新增平台
+          - os: ubuntu-latest
+            target: aarch64-linux-android
+            artifact_name: codenothing-android-arm64
+            asset_name: codenothing-android-arm64.tar.gz
+            release_name: Android ARM64
+            binary_name: CodeNothing
+            archive_cmd: tar -czvf ${{ matrix.asset_name }} -C release-package .
+          
+          - os: windows-latest
+            target: i686-pc-windows-msvc
+            artifact_name: codenothing-windows-x32
+            asset_name: codenothing-windows-x32.zip
+            release_name: Windows x32
+            binary_name: codenothing.exe
+            archive_cmd: 7z a ${{ matrix.asset_name }} ./release-package/*
+          
+          - os: windows-latest
+            target: aarch64-pc-windows-msvc
+            artifact_name: codenothing-windows-arm64
+            asset_name: codenothing-windows-arm64.zip
+            release_name: Windows ARM64
+            binary_name: codenothing.exe
+            archive_cmd: 7z a ${{ matrix.asset_name }} ./release-package/*
+          
+          - os: ubuntu-latest
+            target: i686-unknown-linux-gnu
+            artifact_name: codenothing-linux-x32
+            asset_name: codenothing-linux-x32.tar.gz
+            release_name: Linux x32
+            binary_name: CodeNothing
+            archive_cmd: tar -czvf ${{ matrix.asset_name }} -C release-package .
+          
+          - os: ubuntu-latest
+            target: aarch64-unknown-linux-gnu
+            artifact_name: codenothing-linux-arm64
+            asset_name: codenothing-linux-arm64.tar.gz
+            release_name: Linux ARM64
+            binary_name: CodeNothing
+            archive_cmd: tar -czvf ${{ matrix.asset_name }} -C release-package .
+          
+          - os: macos-latest
+            target: aarch64-apple-darwin
             artifact_name: codenothing-macos-arm64
             asset_name: codenothing-macos-arm64.tar.gz
-            release_name: macOS arm64
-            binary_path: target/release/CodeNothing
-
-          # Android aarch64
-          - build: android-aarch64
-            os: ubuntu-latest
-            target: aarch64-linux-android
-            artifact_name: codenothing-android-aarch64
-            asset_name: codenothing-android-aarch64.tar.gz
-            release_name: Android aarch64
-            binary_path: target/aarch64-linux-android/release/CodeNothing
-
-          # Android armv7
-          - build: android-armv7
-            os: ubuntu-latest
-            target: armv7-linux-androideabi
-            artifact_name: codenothing-android-armv7
-            asset_name: codenothing-android-armv7.tar.gz
-            release_name: Android armv7
-            binary_path: target/armv7-linux-androideabi/release/CodeNothing
-
-          # FreeBSD x64
-          - build: freebsd-x64
-            os: ubuntu-latest
-            target: x86_64-unknown-freebsd
-            artifact_name: codenothing-freebsd-x64
-            asset_name: codenothing-freebsd-x64.tar.gz
-            release_name: FreeBSD x64
-            binary_path: target/x86_64-unknown-freebsd/release/CodeNothing
+            release_name: macOS ARM64
+            binary_name: CodeNothing
+            archive_cmd: tar -czvf ${{ matrix.asset_name }} -C release-package .
+          
+          - os: ubuntu-latest
+            target: armv7-unknown-linux-gnueabihf
+            artifact_name: codenothing-linux-arm32
+            asset_name: codenothing-linux-arm32.tar.gz
+            release_name: Linux ARM32
+            binary_name: CodeNothing
+            archive_cmd: tar -czvf ${{ matrix.asset_name }} -C release-package .
 
     steps:
     - uses: actions/checkout@v3
@@ -121,77 +121,31 @@ jobs:
       with:
         toolchain: stable
         override: true
-
-    - name: 设置 Android NDK
-      if: contains(matrix.target, '-android')
-      id: setup-ndk
-      uses: nttld/setup-ndk@v1
-      with:
-        ndk-version: r26d
-
-    - name: 导出 NDK 路径到环境
-      if: contains(matrix.target, '-android')
-      run: echo "ANDROID_NDK_HOME=${{ steps.setup-ndk.outputs.ndk-path }}" >> $GITHUB_ENV
-      shell: bash
-
-    - name: 安装交叉编译依赖 (Linux aarch64)
-      if: matrix.target == 'aarch64-unknown-linux-gnu'
-      run: sudo apt-get update && sudo apt-get install -y gcc-aarch64-linux-gnu
-      shell: bash
-
-    - name: 安装交叉编译依赖 (Linux ARMv7)
-      if: matrix.target == 'armv7-unknown-linux-gnueabihf'
+        target: ${{ matrix.target }}
+    
+    # 为Android目标安装Android NDK
+    - name: 安装Android NDK (Android目标)
+      if: contains(matrix.target, 'android')
       run: |
         sudo apt-get update
-        sudo apt-get install -y gcc-arm-linux-gnueabihf g++-arm-linux-gnueabihf
+        sudo apt-get install -y android-ndk
+        echo "ANDROID_NDK_HOME=/usr/lib/android-ndk" >> $GITHUB_ENV
       shell: bash
-
-    - name: 安装 FreeBSD 交叉编译工具链
-      if: matrix.target == 'x86_64-unknown-freebsd'
+    
+    # 为ARM目标安装交叉编译工具
+    - name: 安装ARM交叉编译工具 (Linux ARM目标)
+      if: contains(matrix.target, 'arm') && contains(matrix.target, 'linux') && !contains(matrix.target, 'android')
       run: |
         sudo apt-get update
-        sudo apt-get install -y clang llvm-dev
-      shell: bash
-
-    - name: 添加Rust目标
-      if: matrix.target != ''
-      run: rustup target add ${{ matrix.target }}
-      shell: bash
-
-    - name: 设置交叉编译环境变量
-      if: matrix.target != ''
-      run: |
-        if [ "${{ matrix.target }}" = "armv7-unknown-linux-gnueabihf" ]; then
-          echo "CC_armv7_unknown_linux_gnueabihf=arm-linux-gnueabihf-gcc" >> $GITHUB_ENV
-          echo "CXX_armv7_unknown_linux_gnueabihf=arm-linux-gnueabihf-g++" >> $GITHUB_ENV
-          echo "CARGO_TARGET_ARMV7_UNKNOWN_LINUX_GNUEABIHF_LINKER=arm-linux-gnueabihf-gcc" >> $GITHUB_ENV
-          echo "CARGO_TARGET_ARMV7_UNKNOWN_LINUX_GNUEABIHF_AR=arm-linux-gnueabihf-ar" >> $GITHUB_ENV
-          echo "CARGO_TARGET_ARMV7_UNKNOWN_LINUX_GNUEABIHF_RANLIB=arm-linux-gnueabihf-ranlib" >> $GITHUB_ENV
-        elif [ "${{ matrix.target }}" = "aarch64-unknown-linux-gnu" ]; then
-          echo "CC_aarch64_unknown_linux_gnu=aarch64-linux-gnu-gcc" >> $GITHUB_ENV
-          echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc" >> $GITHUB_ENV
-          echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_AR=aarch64-linux-gnu-ar" >> $GITHUB_ENV
-          echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_RANLIB=aarch64-linux-gnu-ranlib" >> $GITHUB_ENV
+        if [[ "${{ matrix.target }}" == "aarch64-unknown-linux-gnu" ]]; then
+          sudo apt-get install -y gcc-aarch64-linux-gnu
+        elif [[ "${{ matrix.target }}" == "armv7-unknown-linux-gnueabihf" ]]; then
+          sudo apt-get install -y gcc-arm-linux-gnueabihf
         fi
       shell: bash
-
-    - name: 构建 (本机架构)
-      if: matrix.target == ''
+    
+    - name: 构建
       uses: actions-rs/cargo@v1
-      with:
-        command: build
-        args: --release
-
-    - name: 构建 (交叉编译)
-      if: matrix.target != ''
-      uses: actions-rs/cargo@v1
-      env:
-        CC_aarch64_unknown_linux_gnu: aarch64-linux-gnu-gcc
-        CC_armv7_unknown_linux_gnueabihf: arm-linux-gnueabihf-gcc
-        CC_aarch64_linux_android: ${{ env.ANDROID_NDK_HOME }}/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android24-clang
-        CC_armv7_linux_androideabi: ${{ env.ANDROID_NDK_HOME }}/toolchains/llvm/prebuilt/linux-x86_64/bin/armv7a-linux-androideabi24-clang
-        CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER: ${{ env.ANDROID_NDK_HOME }}/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android24-clang
-        CARGO_TARGET_ARMV7_LINUX_ANDROIDEABI_LINKER: ${{ env.ANDROID_NDK_HOME }}/toolchains/llvm/prebuilt/linux-x86_64/bin/armv7a-linux-androideabi24-clang
       with:
         command: build
         args: --release --target ${{ matrix.target }}
@@ -200,40 +154,22 @@ jobs:
       run: mkdir -p release-package
       shell: bash
     
-    - name: 打包Windows
-      if: matrix.os == 'windows-latest'
+    - name: 复制可执行文件
       run: |
-        cp ${{ matrix.binary_path }} release-package/
-        # 如果examples或example目录存在，则复制
+        cp target/${{ matrix.target }}/release/${{ matrix.binary_name }} release-package/
+        # 如果examples目录存在，则复制
         if [ -d "examples" ]; then
           cp -r examples release-package/
-        elif [ -d "example" ]; then
-          cp -r example release-package/
         else
           echo "警告：examples目录不存在，跳过复制"
           # 创建一个空的examples目录，确保有内容
           mkdir -p release-package/examples
           echo "# CodeNothing 示例" > release-package/examples/README.md
         fi
-        7z a ${{ matrix.asset_name }} ./release-package/*
       shell: bash
     
-    - name: 打包Linux/macOS
-      if: matrix.os != 'windows-latest'
-      run: |
-        cp ${{ matrix.binary_path }} release-package/
-        # 如果examples或example目录存在，则复制
-        if [ -d "examples" ]; then
-          cp -r examples release-package/
-        elif [ -d "example" ]; then
-          cp -r example release-package/
-        else
-          echo "警告：examples目录不存在，跳过复制"
-          # 创建一个空的examples目录，确保有内容
-          mkdir -p release-package/examples
-          echo "# CodeNothing 示例" > release-package/examples/README.md
-        fi
-        tar -czvf ${{ matrix.asset_name }} -C release-package .
+    - name: 打包
+      run: ${{ matrix.archive_cmd }}
       shell: bash
     
     - name: 上传构建产物
@@ -250,294 +186,3 @@ jobs:
         tag_name: ${{ github.ref_name }}
         draft: false
         generate_release_notes: true 
-
-  # 新增：更多平台交叉编译构建
-  build_advanced_platforms:
-    name: 高级平台构建
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        build: [linux-riscv64, linux-mips64, linux-ppc64le, ios-arm64, ios-x64, windows-gnu, android-x86, android-x86_64, openbsd-x64, netbsd-x64]
-        include:
-          # Linux RISC-V 64
-          - build: linux-riscv64
-            target: riscv64gc-unknown-linux-gnu
-            artifact_name: codenothing-linux-riscv64
-            asset_name: codenothing-linux-riscv64.tar.gz
-            release_name: Linux RISC-V 64
-            binary_path: target/riscv64gc-unknown-linux-gnu/release/CodeNothing
-            install_deps: 'gcc-riscv64-linux-gnu'
-            needs_cross: true
-
-          # Linux MIPS64
-          - build: linux-mips64
-            target: mips64el-unknown-linux-gnuabi64
-            artifact_name: codenothing-linux-mips64
-            asset_name: codenothing-linux-mips64.tar.gz
-            release_name: Linux MIPS64
-            binary_path: target/mips64el-unknown-linux-gnuabi64/release/CodeNothing
-            install_deps: 'gcc-mips64el-linux-gnuabi64'
-            needs_cross: true
-
-          # Linux PowerPC 64 LE
-          - build: linux-ppc64le
-            target: powerpc64le-unknown-linux-gnu
-            artifact_name: codenothing-linux-ppc64le
-            asset_name: codenothing-linux-ppc64le.tar.gz
-            release_name: Linux PowerPC 64 LE
-            binary_path: target/powerpc64le-unknown-linux-gnu/release/CodeNothing
-            install_deps: 'gcc-powerpc64le-linux-gnu'
-            needs_cross: true
-
-          # iOS ARM64
-          - build: ios-arm64
-            target: aarch64-apple-ios
-            artifact_name: codenothing-ios-arm64
-            asset_name: codenothing-ios-arm64.tar.gz
-            release_name: iOS ARM64
-            binary_path: target/aarch64-apple-ios/release/CodeNothing
-            install_deps: 'clang'
-            needs_cross: true
-
-          # iOS x64 (模拟器)
-          - build: ios-x64
-            target: x86_64-apple-ios
-            artifact_name: codenothing-ios-x64
-            asset_name: codenothing-ios-x64.tar.gz
-            release_name: iOS x64
-            binary_path: target/x86_64-apple-ios/release/CodeNothing
-            install_deps: 'clang'
-            needs_cross: true
-
-          # Windows GNU 工具链
-          - build: windows-gnu
-            target: x86_64-pc-windows-gnu
-            artifact_name: codenothing-windows-gnu
-            asset_name: codenothing-windows-gnu.zip
-            release_name: Windows GNU
-            binary_path: target/x86_64-pc-windows-gnu/release/CodeNothing.exe
-            install_deps: 'mingw-w64'
-            needs_cross: true
-
-          # Android x86
-          - build: android-x86
-            target: i686-linux-android
-            artifact_name: codenothing-android-x86
-            asset_name: codenothing-android-x86.tar.gz
-            release_name: Android x86
-            binary_path: target/i686-linux-android/release/CodeNothing
-            install_deps: 'android-ndk'
-            needs_cross: true
-
-          # Android x86_64
-          - build: android-x86_64
-            target: x86_64-linux-android
-            artifact_name: codenothing-android-x86_64
-            asset_name: codenothing-android-x86_64.tar.gz
-            release_name: Android x86_64
-            binary_path: target/x86_64-linux-android/release/CodeNothing
-            install_deps: 'android-ndk'
-            needs_cross: true
-
-          # OpenBSD x64
-          - build: openbsd-x64
-            target: x86_64-unknown-openbsd
-            artifact_name: codenothing-openbsd-x64
-            asset_name: codenothing-openbsd-x64.tar.gz
-            release_name: OpenBSD x64
-            binary_path: target/x86_64-unknown-openbsd/release/CodeNothing
-            install_deps: 'clang llvm-dev'
-            needs_cross: true
-
-          # NetBSD x64
-          - build: netbsd-x64
-            target: x86_64-unknown-netbsd
-            artifact_name: codenothing-netbsd-x64
-            asset_name: codenothing-netbsd-x64.tar.gz
-            release_name: NetBSD x64
-            binary_path: target/x86_64-unknown-netbsd/release/CodeNothing
-            install_deps: 'clang llvm-dev'
-            needs_cross: true
-
-    steps:
-    - uses: actions/checkout@v3
-    
-    - name: 设置Rust工具链
-      uses: actions-rs/toolchain@v1
-      with:
-        toolchain: stable
-        override: true
-
-    - name: 安装交叉编译依赖
-      if: matrix.needs_cross == 'true'
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y ${{ matrix.install_deps }}
-      shell: bash
-
-    - name: 设置 Android NDK
-      if: contains(matrix.target, '-android')
-      id: setup-ndk
-      uses: nttld/setup-ndk@v1
-      with:
-        ndk-version: r26d
-
-    - name: 添加Rust目标
-      run: rustup target add ${{ matrix.target }}
-      shell: bash
-
-    - name: 设置交叉编译环境变量
-      if: matrix.needs_cross == 'true'
-      run: |
-        if [ "${{ matrix.target }}" = "riscv64gc-unknown-linux-gnu" ]; then
-          echo "CC_riscv64gc_unknown_linux_gnu=riscv64-linux-gnu-gcc" >> $GITHUB_ENV
-          echo "CARGO_TARGET_RISCV64GC_UNKNOWN_LINUX_GNU_LINKER=riscv64-linux-gnu-gcc" >> $GITHUB_ENV
-        elif [ "${{ matrix.target }}" = "mips64el-unknown-linux-gnuabi64" ]; then
-          echo "CC_mips64el_unknown_linux_gnuabi64=mips64el-linux-gnuabi64-gcc" >> $GITHUB_ENV
-          echo "CARGO_TARGET_MIPS64EL_UNKNOWN_LINUX_GNUABI64_LINKER=mips64el-linux-gnuabi64-gcc" >> $GITHUB_ENV
-        elif [ "${{ matrix.target }}" = "powerpc64le-unknown-linux-gnu" ]; then
-          echo "CC_powerpc64le_unknown_linux_gnu=powerpc64le-linux-gnu-gcc" >> $GITHUB_ENV
-          echo "CARGO_TARGET_POWERPC64LE_UNKNOWN_LINUX_GNU_LINKER=powerpc64le-linux-gnu-gcc" >> $GITHUB_ENV
-        elif [ "${{ matrix.target }}" = "x86_64-pc-windows-gnu" ]; then
-          echo "CC_x86_64_pc_windows_gnu=x86_64-w64-mingw32-gcc" >> $GITHUB_ENV
-          echo "CARGO_TARGET_X86_64_PC_WINDOWS_GNU_LINKER=x86_64-w64-mingw32-gcc" >> $GITHUB_ENV
-        elif [ "${{ matrix.target }}" = "i686-linux-android" ]; then
-          echo "CC_i686_linux_android=${{ env.ANDROID_NDK_HOME }}/toolchains/llvm/prebuilt/linux-x86_64/bin/i686-linux-android24-clang" >> $GITHUB_ENV
-          echo "CARGO_TARGET_I686_LINUX_ANDROID_LINKER=${{ env.ANDROID_NDK_HOME }}/toolchains/llvm/prebuilt/linux-x86_64/bin/i686-linux-android24-clang" >> $GITHUB_ENV
-        elif [ "${{ matrix.target }}" = "x86_64-linux-android" ]; then
-          echo "CC_x86_64_linux_android=${{ env.ANDROID_NDK_HOME }}/toolchains/llvm/prebuilt/linux-x86_64/bin/x86_64-linux-android24-clang" >> $GITHUB_ENV
-          echo "CARGO_TARGET_X86_64_LINUX_ANDROID_LINKER=${{ env.ANDROID_NDK_HOME }}/toolchains/llvm/prebuilt/linux-x86_64/bin/x86_64-linux-android24-clang" >> $GITHUB_ENV
-        fi
-      shell: bash
-
-    - name: 构建 (交叉编译)
-      uses: actions-rs/cargo@v1
-      env:
-        CC_riscv64gc_unknown_linux_gnu: riscv64-linux-gnu-gcc
-        CC_mips64el_unknown_linux_gnuabi64: mips64el-linux-gnuabi64-gcc
-        CC_powerpc64le_unknown_linux_gnu: powerpc64le-linux-gnu-gcc
-        CC_x86_64_pc_windows_gnu: x86_64-w64-mingw32-gcc
-        CC_i686_linux_android: ${{ env.ANDROID_NDK_HOME }}/toolchains/llvm/prebuilt/linux-x86_64/bin/i686-linux-android24-clang
-        CC_x86_64_linux_android: ${{ env.ANDROID_NDK_HOME }}/toolchains/llvm/prebuilt/linux-x86_64/bin/x86_64-linux-android24-clang
-        CARGO_TARGET_RISCV64GC_UNKNOWN_LINUX_GNU_LINKER: riscv64-linux-gnu-gcc
-        CARGO_TARGET_MIPS64EL_UNKNOWN_LINUX_GNUABI64_LINKER: mips64el-linux-gnuabi64-gcc
-        CARGO_TARGET_POWERPC64LE_UNKNOWN_LINUX_GNU_LINKER: powerpc64le-linux-gnu-gcc
-        CARGO_TARGET_X86_64_PC_WINDOWS_GNU_LINKER: x86_64-w64-mingw32-gcc
-        CARGO_TARGET_I686_LINUX_ANDROID_LINKER: ${{ env.ANDROID_NDK_HOME }}/toolchains/llvm/prebuilt/linux-x86_64/bin/i686-linux-android24-clang
-        CARGO_TARGET_X86_64_LINUX_ANDROID_LINKER: ${{ env.ANDROID_NDK_HOME }}/toolchains/llvm/prebuilt/linux-x86_64/bin/x86_64-linux-android24-clang
-      with:
-        command: build
-        args: --release --target ${{ matrix.target }}
-
-    - name: 创建输出目录
-      run: mkdir -p release-package
-      shell: bash
-
-    - name: 复制构建产物
-      run: |
-        cp ${{ matrix.binary_path }} release-package/
-        # 如果examples或example目录存在，则复制
-        if [ -d "examples" ]; then
-          cp -r examples release-package/
-        elif [ -d "example" ]; then
-          cp -r example release-package/
-        else
-          echo "警告：examples目录不存在，跳过复制"
-          # 创建一个空的examples目录，确保有内容
-          mkdir -p release-package/examples
-          echo "# CodeNothing 示例" > release-package/examples/README.md
-        fi
-      shell: bash
-
-    - name: 打包 (Windows GNU)
-      if: matrix.build == 'windows-gnu'
-      run: |
-        cd release-package
-        7z a "../${{ matrix.asset_name }}" *
-      shell: bash
-
-    - name: 打包 (其他平台)
-      if: matrix.build != 'windows-gnu'
-      run: |
-        tar -czvf ${{ matrix.asset_name }} -C release-package .
-      shell: bash
-
-    - name: 上传构建产物
-      uses: actions/upload-artifact@v4
-      with:
-        name: ${{ matrix.artifact_name }}
-        path: ${{ matrix.asset_name }}
-
-    - name: 创建发布
-      uses: softprops/action-gh-release@v1
-      if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'release'
-      with:
-        files: ${{ matrix.asset_name }}
-        tag_name: ${{ github.ref_name }}
-        draft: false
-        generate_release_notes: true
-
-  build_freebsd:
-    name: 构建 FreeBSD
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - name: 设置Rust工具链
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          override: true
-
-      - name: 安装 cross 工具
-        run: cargo install cross
-        shell: bash
-
-      - name: 添加 FreeBSD 目标
-        run: rustup target add x86_64-unknown-freebsd
-        shell: bash
-
-      - name: 安装 FreeBSD 交叉编译工具链
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y clang llvm-dev
-        shell: bash
-
-      - name: 使用 cross 构建 FreeBSD 版本
-        run: cross build --target x86_64-unknown-freebsd --release
-        shell: bash
-
-      - name: 创建输出目录
-        run: mkdir -p release-package
-        shell: bash
-
-      - name: 打包 FreeBSD
-        run: |
-          cp target/x86_64-unknown-freebsd/release/CodeNothing release-package/
-          # 如果examples或example目录存在，则复制
-          if [ -d "examples" ]; then
-            cp -r examples release-package/
-          elif [ -d "example" ]; then
-            cp -r example release-package/
-          else
-            echo "警告：examples目录不存在，跳过复制"
-            # 创建一个空的examples目录，确保有内容
-            mkdir -p release-package/examples
-            echo "# CodeNothing 示例" > release-package/examples/README.md
-          fi
-          tar -czvf codenothing-freebsd-x64.tar.gz -C release-package .
-        shell: bash
-
-      - name: 上传构建产物 (FreeBSD)
-        uses: actions/upload-artifact@v4
-        with:
-          name: codenothing-freebsd-x64
-          path: codenothing-freebsd-x64.tar.gz
-
-      - name: 创建发布 (FreeBSD)
-        uses: softprops/action-gh-release@v1
-        if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'release'
-        with:
-          files: codenothing-freebsd-x64.tar.gz
-          tag_name: ${{ github.ref_name }}
-          draft: false
-          generate_release_notes: true
