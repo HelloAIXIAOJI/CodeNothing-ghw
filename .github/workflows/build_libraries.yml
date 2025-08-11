@@ -49,103 +49,115 @@ jobs:
   build:
     name: 构建库
     needs: prepare
-    runs-on: ${{ matrix.os }}
+    runs-on: ${{ matrix.runner }}
     strategy:
       matrix:
         library: ${{ fromJson(needs.prepare.outputs.library_matrix) }}
         include:
-          # 原有平台
-          - os: windows-latest
+          # Windows 架构
+          - runner: windows-latest
             target: x86_64-pc-windows-msvc
             lib_extension: 'dll'
             archive_format: 'zip'
-            platform_suffix: 'windows-x64'
-          
-          - os: ubuntu-latest
-            target: x86_64-unknown-linux-gnu
-            lib_extension: 'so'
-            archive_format: 'tar.gz'
-            platform_suffix: 'linux-x64'
-          
-          - os: macos-latest
-            target: x86_64-apple-darwin
-            lib_extension: 'dylib'
-            archive_format: 'tar.gz'
-            platform_suffix: 'macos-x64'
-          
-          # 新增平台
-          - os: ubuntu-latest
-            target: aarch64-linux-android
-            lib_extension: 'so'
-            archive_format: 'tar.gz'
-            platform_suffix: 'android-arm64'
-          
-          - os: windows-latest
+            platform_name: 'windows-x64'
+          - runner: windows-latest
             target: i686-pc-windows-msvc
             lib_extension: 'dll'
             archive_format: 'zip'
-            platform_suffix: 'windows-x32'
-          
-          - os: windows-latest
+            platform_name: 'windows-x32'
+          - runner: windows-latest
             target: aarch64-pc-windows-msvc
             lib_extension: 'dll'
             archive_format: 'zip'
-            platform_suffix: 'windows-arm64'
-          
-          - os: ubuntu-latest
+            platform_name: 'windows-arm64'
+
+          # Linux 架构
+          - runner: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            lib_extension: 'so'
+            archive_format: 'tar.gz'
+            platform_name: 'linux-x64'
+          - runner: ubuntu-latest
             target: i686-unknown-linux-gnu
             lib_extension: 'so'
             archive_format: 'tar.gz'
-            platform_suffix: 'linux-x32'
-          
-          - os: ubuntu-latest
+            platform_name: 'linux-x32'
+          - runner: ubuntu-latest
             target: aarch64-unknown-linux-gnu
             lib_extension: 'so'
             archive_format: 'tar.gz'
-            platform_suffix: 'linux-arm64'
-          
-          - os: macos-latest
-            target: aarch64-apple-darwin
-            lib_extension: 'dylib'
-            archive_format: 'tar.gz'
-            platform_suffix: 'macos-arm64'
-          
-          - os: ubuntu-latest
+            platform_name: 'linux-arm64'
+          - runner: ubuntu-latest
             target: armv7-unknown-linux-gnueabihf
             lib_extension: 'so'
             archive_format: 'tar.gz'
-            platform_suffix: 'linux-arm32'
+            platform_name: 'linux-arm32'
+
+          # macOS 架构
+          - runner: macos-latest
+            target: x86_64-apple-darwin
+            lib_extension: 'dylib'
+            archive_format: 'tar.gz'
+            platform_name: 'macos-x64'
+          - runner: macos-latest
+            target: aarch64-apple-darwin
+            lib_extension: 'dylib'
+            archive_format: 'tar.gz'
+            platform_name: 'macos-arm64'
+
+          # Android 架构
+          - runner: ubuntu-latest
+            target: aarch64-linux-android
+            lib_extension: 'so'
+            archive_format: 'tar.gz'
+            platform_name: 'android-arm64'
 
     steps:
     - uses: actions/checkout@v3
-    
+
     - name: 设置Rust工具链
       uses: actions-rs/toolchain@v1
       with:
         toolchain: stable
-        override: true
         target: ${{ matrix.target }}
-    
-    # 为Android目标安装Android NDK
-    - name: 安装Android NDK (Android目标)
-      if: contains(matrix.target, 'android')
+        override: true
+
+    # 安装交叉编译依赖
+    - name: 安装交叉编译依赖 (Linux)
+      if: matrix.runner == 'ubuntu-latest'
       run: |
-        sudo apt-get update
-        sudo apt-get install -y android-ndk
-        echo "ANDROID_NDK_HOME=/usr/lib/android-ndk" >> $GITHUB_ENV
-      shell: bash
-    
-    # 为ARM目标安装交叉编译工具
-    - name: 安装ARM交叉编译工具 (Linux ARM目标)
-      if: contains(matrix.target, 'arm') && contains(matrix.target, 'linux') && !contains(matrix.target, 'android')
+        case "${{ matrix.target }}" in
+          i686-unknown-linux-gnu)
+            sudo apt-get update
+            sudo apt-get install -y gcc-multilib g++-multilib
+            ;;
+          aarch64-unknown-linux-gnu)
+            sudo apt-get update
+            sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
+            ;;
+          armv7-unknown-linux-gnueabihf)
+            sudo apt-get update
+            sudo apt-get install -y gcc-arm-linux-gnueabihf g++-arm-linux-gnueabihf
+            ;;
+          aarch64-linux-android)
+            # Android NDK 将通过 cargo 自动处理
+            echo "Android target will be handled by cargo"
+            ;;
+        esac
+
+    # 设置 Android NDK (如果需要)
+    - name: 设置 Android NDK
+      if: matrix.target == 'aarch64-linux-android'
       run: |
-        sudo apt-get update
-        if [[ "${{ matrix.target }}" == "aarch64-unknown-linux-gnu" ]]; then
-          sudo apt-get install -y gcc-aarch64-linux-gnu
-        elif [[ "${{ matrix.target }}" == "armv7-unknown-linux-gnueabihf" ]]; then
-          sudo apt-get install -y gcc-arm-linux-gnueabihf
-        fi
-      shell: bash
+        # 下载并设置 Android NDK
+        wget -q https://dl.google.com/android/repository/android-ndk-r25c-linux.zip
+        unzip -q android-ndk-r25c-linux.zip
+        export ANDROID_NDK_HOME=$PWD/android-ndk-r25c
+        echo "ANDROID_NDK_HOME=$ANDROID_NDK_HOME" >> $GITHUB_ENV
+        echo "CC_aarch64_linux_android=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android21-clang" >> $GITHUB_ENV
+        echo "CXX_aarch64_linux_android=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android21-clang++" >> $GITHUB_ENV
+        echo "AR_aarch64_linux_android=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ar" >> $GITHUB_ENV
+        echo "CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android21-clang" >> $GITHUB_ENV
     
     - name: 检查库目录是否存在
       id: check_dir
@@ -183,7 +195,7 @@ jobs:
       shell: bash
     
     - name: 复制构建产物 (Windows)
-      if: steps.check_dir.outputs.exists == 'true' && contains(matrix.os, 'windows')
+      if: steps.check_dir.outputs.exists == 'true' && contains(matrix.target, 'windows')
       run: |
         LIB_PATH="library_${{ matrix.library }}/target/${{ matrix.target }}/release/${{ steps.get_config.outputs.output_name }}.dll"
         if [ -f "$LIB_PATH" ]; then
@@ -195,9 +207,9 @@ jobs:
           cp "library_${{ matrix.library }}/target/${{ matrix.target }}/release/${PACKAGE_NAME}.dll" "library-package/${{ matrix.library }}.${{ matrix.lib_extension }}"
         fi
       shell: bash
-    
-    - name: 复制构建产物 (Linux/macOS)
-      if: steps.check_dir.outputs.exists == 'true' && !contains(matrix.os, 'windows')
+
+    - name: 复制构建产物 (Linux/macOS/Android)
+      if: steps.check_dir.outputs.exists == 'true' && !contains(matrix.target, 'windows')
       run: |
         LIB_PATH="library_${{ matrix.library }}/target/${{ matrix.target }}/release/lib${{ steps.get_config.outputs.output_name }}.${{ matrix.lib_extension }}"
         if [ -f "$LIB_PATH" ]; then
@@ -211,30 +223,30 @@ jobs:
       shell: bash
     
     - name: 创建档案 (Windows)
-      if: steps.check_dir.outputs.exists == 'true' && contains(matrix.os, 'windows')
+      if: steps.check_dir.outputs.exists == 'true' && contains(matrix.target, 'windows')
       run: |
         cd library-package
-        7z a "../${{ matrix.library }}-${{ matrix.platform_suffix }}.${{ matrix.archive_format }}" *
+        7z a "../${{ matrix.library }}-${{ matrix.platform_name }}.${{ matrix.archive_format }}" *
       shell: bash
-    
-    - name: 创建档案 (Linux/macOS)
-      if: steps.check_dir.outputs.exists == 'true' && !contains(matrix.os, 'windows')
+
+    - name: 创建档案 (Linux/macOS/Android)
+      if: steps.check_dir.outputs.exists == 'true' && !contains(matrix.target, 'windows')
       run: |
-        tar -czvf "${{ matrix.library }}-${{ matrix.platform_suffix }}.${{ matrix.archive_format }}" -C library-package .
+        tar -czvf "${{ matrix.library }}-${{ matrix.platform_name }}.${{ matrix.archive_format }}" -C library-package .
       shell: bash
     
     - name: 上传构建产物
       if: steps.check_dir.outputs.exists == 'true'
       uses: actions/upload-artifact@v4
       with:
-        name: ${{ matrix.library }}-${{ matrix.platform_suffix }}
-        path: ${{ matrix.library }}-${{ matrix.platform_suffix }}.${{ matrix.archive_format }}
-    
+        name: ${{ matrix.library }}-${{ matrix.platform_name }}
+        path: ${{ matrix.library }}-${{ matrix.platform_name }}.${{ matrix.archive_format }}
+
     - name: 创建发布
       if: steps.check_dir.outputs.exists == 'true' && (startsWith(github.ref, 'refs/tags/') || github.event_name == 'release')
       uses: softprops/action-gh-release@v1
       with:
-        files: ${{ matrix.library }}-${{ matrix.platform_suffix }}.${{ matrix.archive_format }}
+        files: ${{ matrix.library }}-${{ matrix.platform_name }}.${{ matrix.archive_format }}
         tag_name: ${{ github.ref_name }}
         draft: false
         generate_release_notes: true
@@ -243,52 +255,48 @@ jobs:
   package-all:
     name: 打包所有库
     needs: build
-    runs-on: ${{ matrix.os }}
+    runs-on: ${{ matrix.runner }}
     # 在手动触发并指定'all'或发布版本时打包所有库
     if: ${{ github.event.inputs.libraries == 'all' || github.event_name == 'release' || startsWith(github.ref, 'refs/tags/') }}
     strategy:
       matrix:
         include:
-          # 原有平台
-          - os: windows-latest
-            platform_suffix: 'windows-x64'
+          # Windows 架构
+          - runner: windows-latest
+            platform_name: 'windows-x64'
             archive_format: 'zip'
-          
-          - os: ubuntu-latest
-            platform_suffix: 'linux-x64'
-            archive_format: 'tar.gz'
-          
-          - os: macos-latest
-            platform_suffix: 'macos-x64'
-            archive_format: 'tar.gz'
-          
-          # 新增平台
-          - os: ubuntu-latest
-            platform_suffix: 'android-arm64'
-            archive_format: 'tar.gz'
-          
-          - os: windows-latest
-            platform_suffix: 'windows-x32'
+          - runner: windows-latest
+            platform_name: 'windows-x32'
             archive_format: 'zip'
-          
-          - os: windows-latest
-            platform_suffix: 'windows-arm64'
+          - runner: windows-latest
+            platform_name: 'windows-arm64'
             archive_format: 'zip'
-          
-          - os: ubuntu-latest
-            platform_suffix: 'linux-x32'
+
+          # Linux 架构
+          - runner: ubuntu-latest
+            platform_name: 'linux-x64'
             archive_format: 'tar.gz'
-          
-          - os: ubuntu-latest
-            platform_suffix: 'linux-arm64'
+          - runner: ubuntu-latest
+            platform_name: 'linux-x32'
             archive_format: 'tar.gz'
-          
-          - os: macos-latest
-            platform_suffix: 'macos-arm64'
+          - runner: ubuntu-latest
+            platform_name: 'linux-arm64'
             archive_format: 'tar.gz'
-          
-          - os: ubuntu-latest
-            platform_suffix: 'linux-arm32'
+          - runner: ubuntu-latest
+            platform_name: 'linux-arm32'
+            archive_format: 'tar.gz'
+
+          # macOS 架构
+          - runner: macos-latest
+            platform_name: 'macos-x64'
+            archive_format: 'tar.gz'
+          - runner: macos-latest
+            platform_name: 'macos-arm64'
+            archive_format: 'tar.gz'
+
+          # Android 架构
+          - runner: ubuntu-latest
+            platform_name: 'android-arm64'
             archive_format: 'tar.gz'
     
     steps:
@@ -301,9 +309,9 @@ jobs:
       shell: bash
     
     - name: 解压所有库 (Windows)
-      if: contains(matrix.os, 'windows')
+      if: contains(matrix.platform_name, 'windows')
       run: |
-        for d in *-${{ matrix.platform_suffix }}; do
+        for d in *-${{ matrix.platform_name }}; do
           if [ -d "$d" ]; then
             cd "$d"
             7z x "*.zip" -o../all-libraries
@@ -311,11 +319,11 @@ jobs:
           fi
         done
       shell: bash
-    
-    - name: 解压所有库 (Linux/macOS)
-      if: !contains(matrix.os, 'windows')
+
+    - name: 解压所有库 (Linux/macOS/Android)
+      if: "!contains(matrix.platform_name, 'windows')"
       run: |
-        for d in *-${{ matrix.platform_suffix }}; do
+        for d in *-${{ matrix.platform_name }}; do
           if [ -d "$d" ]; then
             cd "$d"
             tar -xzvf *.tar.gz -C ../all-libraries
@@ -325,28 +333,28 @@ jobs:
       shell: bash
     
     - name: 创建合并档案 (Windows)
-      if: contains(matrix.os, 'windows')
+      if: contains(matrix.platform_name, 'windows')
       run: |
-        7z a "codenothing-all-libraries-${{ matrix.platform_suffix }}.${{ matrix.archive_format }}" ./all-libraries/*
+        7z a "codenothing-all-libraries-${{ matrix.platform_name }}.${{ matrix.archive_format }}" ./all-libraries/*
       shell: bash
-    
-    - name: 创建合并档案 (Linux/macOS)
-      if: !contains(matrix.os, 'windows')
+
+    - name: 创建合并档案 (Linux/macOS/Android)
+      if: "!contains(matrix.platform_name, 'windows')"
       run: |
-        tar -czvf "codenothing-all-libraries-${{ matrix.platform_suffix }}.${{ matrix.archive_format }}" -C all-libraries .
+        tar -czvf "codenothing-all-libraries-${{ matrix.platform_name }}.${{ matrix.archive_format }}" -C all-libraries .
       shell: bash
-    
+
     - name: 上传合并构建产物
       uses: actions/upload-artifact@v4
       with:
-        name: codenothing-all-libraries-${{ matrix.platform_suffix }}
-        path: codenothing-all-libraries-${{ matrix.platform_suffix }}.${{ matrix.archive_format }}
-    
+        name: codenothing-all-libraries-${{ matrix.platform_name }}
+        path: codenothing-all-libraries-${{ matrix.platform_name }}.${{ matrix.archive_format }}
+
     - name: 创建发布
       if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'release'
       uses: softprops/action-gh-release@v1
       with:
-        files: codenothing-all-libraries-${{ matrix.platform_suffix }}.${{ matrix.archive_format }}
+        files: codenothing-all-libraries-${{ matrix.platform_name }}.${{ matrix.archive_format }}
         tag_name: ${{ github.ref_name }}
         draft: false
-        generate_release_notes: true 
+        generate_release_notes: true
