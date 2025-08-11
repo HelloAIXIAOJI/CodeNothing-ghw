@@ -37,24 +37,18 @@ jobs:
             artifact_name: codenothing-windows-x64
             asset_name: codenothing-windows-x64.zip
             release_name: Windows x64
-            binary_name: codenothing.exe
-            archive_cmd: 7z a ${{ matrix.asset_name }} ./release-package/*
           
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
             artifact_name: codenothing-linux-x64
             asset_name: codenothing-linux-x64.tar.gz
             release_name: Linux x64
-            binary_name: CodeNothing
-            archive_cmd: tar -czvf ${{ matrix.asset_name }} -C release-package .
           
           - os: macos-latest
             target: x86_64-apple-darwin
             artifact_name: codenothing-macos-x64
             asset_name: codenothing-macos-x64.tar.gz
             release_name: macOS x64
-            binary_name: CodeNothing
-            archive_cmd: tar -czvf ${{ matrix.asset_name }} -C release-package .
           
           # 新增平台
           - os: ubuntu-latest
@@ -62,56 +56,42 @@ jobs:
             artifact_name: codenothing-android-arm64
             asset_name: codenothing-android-arm64.tar.gz
             release_name: Android ARM64
-            binary_name: CodeNothing
-            archive_cmd: tar -czvf ${{ matrix.asset_name }} -C release-package .
           
           - os: windows-latest
             target: i686-pc-windows-msvc
             artifact_name: codenothing-windows-x32
             asset_name: codenothing-windows-x32.zip
             release_name: Windows x32
-            binary_name: codenothing.exe
-            archive_cmd: 7z a ${{ matrix.asset_name }} ./release-package/*
           
           - os: windows-latest
             target: aarch64-pc-windows-msvc
             artifact_name: codenothing-windows-arm64
             asset_name: codenothing-windows-arm64.zip
             release_name: Windows ARM64
-            binary_name: codenothing.exe
-            archive_cmd: 7z a ${{ matrix.asset_name }} ./release-package/*
           
           - os: ubuntu-latest
             target: i686-unknown-linux-gnu
             artifact_name: codenothing-linux-x32
             asset_name: codenothing-linux-x32.tar.gz
             release_name: Linux x32
-            binary_name: CodeNothing
-            archive_cmd: tar -czvf ${{ matrix.asset_name }} -C release-package .
           
           - os: ubuntu-latest
             target: aarch64-unknown-linux-gnu
             artifact_name: codenothing-linux-arm64
             asset_name: codenothing-linux-arm64.tar.gz
             release_name: Linux ARM64
-            binary_name: CodeNothing
-            archive_cmd: tar -czvf ${{ matrix.asset_name }} -C release-package .
           
           - os: macos-latest
             target: aarch64-apple-darwin
             artifact_name: codenothing-macos-arm64
             asset_name: codenothing-macos-arm64.tar.gz
             release_name: macOS ARM64
-            binary_name: CodeNothing
-            archive_cmd: tar -czvf ${{ matrix.asset_name }} -C release-package .
           
           - os: ubuntu-latest
             target: armv7-unknown-linux-gnueabihf
             artifact_name: codenothing-linux-arm32
             asset_name: codenothing-linux-arm32.tar.gz
             release_name: Linux ARM32
-            binary_name: CodeNothing
-            archive_cmd: tar -czvf ${{ matrix.asset_name }} -C release-package .
 
     steps:
     - uses: actions/checkout@v3
@@ -154,9 +134,10 @@ jobs:
       run: mkdir -p release-package
       shell: bash
     
-    - name: 复制可执行文件
+    - name: 打包Windows
+      if: contains(matrix.os, 'windows')
       run: |
-        cp target/${{ matrix.target }}/release/${{ matrix.binary_name }} release-package/
+        cp target/${{ matrix.target }}/release/codenothing.exe release-package/
         # 如果examples目录存在，则复制
         if [ -d "examples" ]; then
           cp -r examples release-package/
@@ -166,10 +147,23 @@ jobs:
           mkdir -p release-package/examples
           echo "# CodeNothing 示例" > release-package/examples/README.md
         fi
+        7z a ${{ matrix.asset_name }} ./release-package/*
       shell: bash
     
-    - name: 打包
-      run: ${{ matrix.archive_cmd }}
+    - name: 打包Linux/macOS
+      if: !contains(matrix.os, 'windows')
+      run: |
+        cp target/${{ matrix.target }}/release/CodeNothing release-package/
+        # 如果examples目录存在，则复制
+        if [ -d "examples" ]; then
+          cp -r examples release-package/
+        else
+          echo "警告：examples目录不存在，跳过复制"
+          # 创建一个空的examples目录，确保有内容
+          mkdir -p release-package/examples
+          echo "# CodeNothing 示例" > release-package/examples/README.md
+        fi
+        tar -czvf ${{ matrix.asset_name }} -C release-package .
       shell: bash
     
     - name: 上传构建产物
