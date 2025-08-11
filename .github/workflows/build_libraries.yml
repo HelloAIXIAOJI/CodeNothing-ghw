@@ -53,7 +53,7 @@ jobs:
     strategy:
       matrix:
         library: ${{ fromJson(needs.prepare.outputs.library_matrix) }}
-        build: [windows-x64, linux-x64, linux-musl-x64, linux-aarch64, linux-armv7, macos-x64, macos-arm64, android-aarch64, android-armv7, freebsd-x64]
+        build: [windows-x64, linux-x64, linux-aarch64, linux-armv7, macos-x64, macos-arm64, android-aarch64, android-armv7, freebsd-x64]
         include:
           # Windows x64 原生
           - build: windows-x64
@@ -72,15 +72,6 @@ jobs:
             archive_format: 'tar.gz'
             binary_path: target/release
             release_name: Linux x64
-
-          # Linux x64 (musl) 静态链接
-          - build: linux-musl-x64
-            os: ubuntu-latest
-            target: x86_64-unknown-linux-musl
-            lib_extension: 'so'
-            archive_format: 'tar.gz'
-            binary_path: target/x86_64-unknown-linux-musl/release
-            release_name: Linux musl x64
 
           # Linux aarch64 (GNU)
           - build: linux-aarch64
@@ -166,11 +157,6 @@ jobs:
       run: echo "ANDROID_NDK_HOME=${{ steps.setup-ndk.outputs.ndk-path }}" >> $GITHUB_ENV
       shell: bash
 
-    - name: 安装交叉编译依赖 (Linux musl)
-      if: matrix.target == 'x86_64-unknown-linux-musl'
-      run: sudo apt-get update && sudo apt-get install -y musl-tools
-      shell: bash
-
     - name: 安装交叉编译依赖 (Linux aarch64)
       if: matrix.target == 'aarch64-unknown-linux-gnu'
       run: sudo apt-get update && sudo apt-get install -y gcc-aarch64-linux-gnu
@@ -209,9 +195,6 @@ jobs:
           echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc" >> $GITHUB_ENV
           echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_AR=aarch64-linux-gnu-ar" >> $GITHUB_ENV
           echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_RANLIB=aarch64-linux-gnu-ranlib" >> $GITHUB_ENV
-        elif [ "${{ matrix.target }}" = "x86_64-unknown-linux-musl" ]; then
-          echo "CC_x86_64_unknown_linux_musl=musl-gcc" >> $GITHUB_ENV
-          echo "CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER=musl-gcc" >> $GITHUB_ENV
         fi
       shell: bash
     
