@@ -236,30 +236,44 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      - name: 在 FreeBSD VM 中构建
-        uses: vmactions/freebsd-vm@v0
+      - name: 设置Rust工具链
+        uses: actions-rs/toolchain@v1
         with:
-          usesh: true
-          copyback: true
-          prepare: |
-            pkg update -f
-            pkg install -y rust cargo bash gtar
-          run: |
-            echo "开始在 FreeBSD 上构建"
-            cargo --version
-            rustc --version
-            cargo build --release
-            mkdir -p release-package
-            cp target/release/CodeNothing release-package/
-            if [ -d "examples" ]; then
-              cp -r examples release-package/
-            elif [ -d "example" ]; then
-              cp -r example release-package/
-            else
-              mkdir -p release-package/examples
-              echo "# CodeNothing 示例" > release-package/examples/README.md
-            fi
-            tar -czvf codenothing-freebsd-x64.tar.gz -C release-package .
+          toolchain: stable
+          override: true
+
+      - name: 安装 cross 工具
+        run: cargo install cross
+        shell: bash
+
+      - name: 添加 FreeBSD 目标
+        run: rustup target add x86_64-unknown-freebsd
+        shell: bash
+
+      - name: 使用 cross 构建 FreeBSD 版本
+        run: cross build --target x86_64-unknown-freebsd --release
+        shell: bash
+
+      - name: 创建输出目录
+        run: mkdir -p release-package
+        shell: bash
+
+      - name: 打包 FreeBSD
+        run: |
+          cp target/x86_64-unknown-freebsd/release/CodeNothing release-package/
+          # 如果examples或example目录存在，则复制
+          if [ -d "examples" ]; then
+            cp -r examples release-package/
+          elif [ -d "example" ]; then
+            cp -r example release-package/
+          else
+            echo "警告：examples目录不存在，跳过复制"
+            # 创建一个空的examples目录，确保有内容
+            mkdir -p release-package/examples
+            echo "# CodeNothing 示例" > release-package/examples/README.md
+          fi
+          tar -czvf codenothing-freebsd-x64.tar.gz -C release-package .
+        shell: bash
 
       - name: 上传构建产物 (FreeBSD)
         uses: actions/upload-artifact@v4
@@ -281,29 +295,44 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      - name: 在 OpenBSD VM 中构建
-        uses: vmactions/openbsd-vm@v0
+      - name: 设置Rust工具链
+        uses: actions-rs/toolchain@v1
         with:
-          usesh: true
-          copyback: true
-          prepare: |
-            pkg_add rust bash gtar
-          run: |
-            echo "开始在 OpenBSD 上构建"
-            cargo --version
-            rustc --version
-            cargo build --release
-            mkdir -p release-package
-            cp target/release/CodeNothing release-package/
-            if [ -d "examples" ]; then
-              cp -r examples release-package/
-            elif [ -d "example" ]; then
-              cp -r example release-package/
-            else
-              mkdir -p release-package/examples
-              echo "# CodeNothing 示例" > release-package/examples/README.md
-            fi
-            gtar -czvf codenothing-openbsd-amd64.tar.gz -C release-package .
+          toolchain: stable
+          override: true
+
+      - name: 安装 cross 工具
+        run: cargo install cross
+        shell: bash
+
+      - name: 添加 OpenBSD 目标
+        run: rustup target add x86_64-unknown-openbsd
+        shell: bash
+
+      - name: 使用 cross 构建 OpenBSD 版本
+        run: cross build --target x86_64-unknown-openbsd --release
+        shell: bash
+
+      - name: 创建输出目录
+        run: mkdir -p release-package
+        shell: bash
+
+      - name: 打包 OpenBSD
+        run: |
+          cp target/x86_64-unknown-openbsd/release/CodeNothing release-package/
+          # 如果examples或example目录存在，则复制
+          if [ -d "examples" ]; then
+            cp -r examples release-package/
+          elif [ -d "example" ]; then
+            cp -r example release-package/
+          else
+            echo "警告：examples目录不存在，跳过复制"
+            # 创建一个空的examples目录，确保有内容
+            mkdir -p release-package/examples
+            echo "# CodeNothing 示例" > release-package/examples/README.md
+          fi
+          tar -czvf codenothing-openbsd-amd64.tar.gz -C release-package .
+        shell: bash
 
       - name: 上传构建产物 (OpenBSD)
         uses: actions/upload-artifact@v4
@@ -325,29 +354,44 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      - name: 在 NetBSD VM 中构建
-        uses: vmactions/netbsd-vm@v0
+      - name: 设置Rust工具链
+        uses: actions-rs/toolchain@v1
         with:
-          usesh: true
-          copyback: true
-          prepare: |
-            /usr/sbin/pkg_add -v rust gtar bash
-          run: |
-            echo "开始在 NetBSD 上构建"
-            cargo --version
-            rustc --version
-            cargo build --release
-            mkdir -p release-package
-            cp target/release/CodeNothing release-package/
-            if [ -d "examples" ]; then
-              cp -r examples release-package/
-            elif [ -d "example" ]; then
-              cp -r example release-package/
-            else
-              mkdir -p release-package/examples
-              echo "# CodeNothing 示例" > release-package/examples/README.md
-            fi
-            gtar -czvf codenothing-netbsd-amd64.tar.gz -C release-package .
+          toolchain: stable
+          override: true
+
+      - name: 安装 cross 工具
+        run: cargo install cross
+        shell: bash
+
+      - name: 添加 NetBSD 目标
+        run: rustup target add x86_64-unknown-netbsd
+        shell: bash
+
+      - name: 使用 cross 构建 NetBSD 版本
+        run: cross build --target x86_64-unknown-netbsd --release
+        shell: bash
+
+      - name: 创建输出目录
+        run: mkdir -p release-package
+        shell: bash
+
+      - name: 打包 NetBSD
+        run: |
+          cp target/x86_64-unknown-netbsd/release/CodeNothing release-package/
+          # 如果examples或example目录存在，则复制
+          if [ -d "examples" ]; then
+            cp -r examples release-package/
+          elif [ -d "example" ]; then
+            cp -r example release-package/
+          else
+            echo "警告：examples目录不存在，跳过复制"
+            # 创建一个空的examples目录，确保有内容
+            mkdir -p release-package/examples
+            echo "# CodeNothing 示例" > release-package/examples/README.md
+          fi
+          tar -czvf codenothing-netbsd-amd64.tar.gz -C release-package .
+        shell: bash
 
       - name: 上传构建产物 (NetBSD)
         uses: actions/upload-artifact@v4
